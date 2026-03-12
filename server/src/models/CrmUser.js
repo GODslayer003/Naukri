@@ -32,6 +32,19 @@ const crmUserSchema = new mongoose.Schema(
     state: {
       type: String, // useful for State Manager
     },
+    department: {
+      type: String,
+      default: "",
+    },
+    scope: {
+      type: String,
+      default: "",
+    },
+    accessStatus: {
+      type: String,
+      enum: ["ACTIVE", "PENDING_INVITE", "RESTRICTED"],
+      default: "ACTIVE",
+    },
     isActive: {
       type: Boolean,
       default: true,

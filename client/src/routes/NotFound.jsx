@@ -33,7 +33,7 @@ export default function NotFound({ type = "404" }) {
 
         {/* Button */}
         <Link
-          to="/qr-generation"
+          to="/"
           className="inline-flex items-center gap-2 bg-lime-500 hover:bg-lime-600 text-white font-semibold px-6 py-3 rounded-lg transition duration-200 shadow-md"
         >
           <MdHome />

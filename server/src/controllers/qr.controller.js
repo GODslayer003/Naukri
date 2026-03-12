@@ -8,6 +8,9 @@ const cloudinary = require("../config/cloudinary");
 
 const { generateCompanyQRPDF } = require("../services/pdf.service");
 
+const getCandidateWebUrl = () =>
+  process.env.CANDIDATE_WEB_URL || process.env.FRONTEND_URL;
+
 /*
 ========================================
 CREATE COMPANY + JOB + QR + PDF UPLOAD
@@ -105,7 +108,7 @@ exports.createCompanyAndGenerateQR = async (req, res) => {
     */
 
     const token = crypto.randomUUID();
-    const redirectUrl = `${process.env.FRONTEND_URL}/landing/${token}`;
+    const redirectUrl = `${getCandidateWebUrl()}/landing/${token}`;
 
     const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
       redirectUrl,

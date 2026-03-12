@@ -3,7 +3,6 @@ import {
   LuBuilding2,
   LuBriefcase,
   LuPackage,
-  LuQrCode,
   LuFileText,
   LuSend,
   LuChartBar,
@@ -36,11 +35,6 @@ export const crmSidebarMenu = [
     title: "Package Management",
     path: "/crm/packages",
     icon: LuPackage,
-  },
-  {
-    title: "QR Management",
-    path: "/qr-generation",
-    icon: LuQrCode,
   },
   {
     title: "Applications",

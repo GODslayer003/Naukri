@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { FiUser, FiEye, FiEyeOff } from "react-icons/fi";
-import { MdAdminPanelSettings } from "react-icons/md";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import LogoImage from "../../assets/maven-logo.svg";
 import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../../Redux/thunks/authThunks";
@@ -12,9 +11,7 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const { loading, error } = useSelector((state) => state.auth);
-
-  const [role, setRole] = useState("RECRUITER");
+  const { loading } = useSelector((state) => state.auth);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,7 +27,7 @@ const Login = () => {
     if (result.meta.requestStatus === "fulfilled") {
       toast.success("Login successful!");
 
-      navigate("/qr-generation");
+      navigate("/");
     } else {
       toast.error(result.payload || "Invalid credentials");
     }
@@ -77,29 +74,6 @@ const Login = () => {
           <p className="text-center text-sm font-[Calibri] text-zinc-500 mt-1">
             Access your recruiter dashboard
           </p>
-
-          {/* ROLE SWITCH */}
-          {/* <div className="flex bg-gray-100 rounded-lg p-1 mt-6">
-            <button
-              onClick={() => setRole("RECRUITER")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-[Calibri]
-              ${role === "RECRUITER" ? "bg-white text-black" : "text-zinc-500"}
-            `}
-            >
-              <FiUser size={14} />
-              Recruiter
-            </button>
-
-            <button
-              onClick={() => setRole("ADMIN")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-[Calibri]
-              ${role === "ADMIN" ? "bg-white text-black" : "text-zinc-500"}
-            `}
-            >
-              <MdAdminPanelSettings size={14} />
-              Admin
-            </button>
-          </div> */}
 
           {/* EMAIL */}
           <div className="mt-6">

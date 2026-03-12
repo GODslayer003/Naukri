@@ -15,6 +15,13 @@ const userSchema = new mongoose.Schema(
       ref: "Company",
       default: null, // Only for CLIENT users
     },
+    department: { type: String, default: "" },
+    scope: { type: String, default: "" },
+    accessStatus: {
+      type: String,
+      enum: ["ACTIVE", "PENDING_INVITE", "RESTRICTED"],
+      default: "ACTIVE",
+    },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

@@ -25,6 +25,38 @@ const jobSchema = new mongoose.Schema(
     deadline: Date,
 
     description: String,
+    approvalStatus: {
+      type: String,
+      enum: ["PENDING", "APPROVED", "REJECTED"],
+      default: "APPROVED",
+    },
+    rejectionReason: {
+      type: String,
+      default: "",
+    },
+    createdBySource: {
+      type: String,
+      enum: ["CRM", "CLIENT"],
+      default: "CRM",
+    },
+    createdByCRM: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CrmUser",
+      default: null,
+    },
+    createdByClient: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    publishedByCRMAt: {
+      type: Date,
+      default: null,
+    },
+    packageSlotCount: {
+      type: Number,
+      default: 1,
+    },
 
     isActive: { type: Boolean, default: true },
   },

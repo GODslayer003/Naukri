@@ -57,6 +57,19 @@ const qrCodeSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    shareChannel: {
+      type: String,
+      enum: ["EMAIL", "APP", "MANUAL", ""],
+      default: "",
+    },
+    sharedWithEmail: {
+      type: String,
+      default: "",
+    },
+    lastSharedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

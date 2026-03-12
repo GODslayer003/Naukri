@@ -9,6 +9,15 @@ const packageSchema = new mongoose.Schema(
     },
 
     jobLimit: { type: Number, required: true }
+    ,
+    description: {
+      type: String,
+      default: "",
+    },
+    isDefaultPackage: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
 );

@@ -8,7 +8,10 @@ const companyRoutes = require("./routes/company.routes");
 const jobRoutes = require("./routes/job.routes");
 const qrRoutes = require("./routes/qr.routes");
 const crmRoutes = require("./routes/crm.routes");
+const crmPanelRoutes = require("./routes/crm-panel.routes");
 const landingRoute = require("./routes/landing.routes");
+const adminRoutes = require("./routes/admin.routes");
+const candidateRoutes = require("./routes/candidate.routes");
 
 const app = express();
 
@@ -30,7 +33,10 @@ app.use(`${BASE_ROUTE}/company`, companyRoutes);
 app.use(`${BASE_ROUTE}/job`, jobRoutes);
 app.use(`${BASE_ROUTE}/qr`, qrRoutes);
 app.use(`${BASE_ROUTE}/crm`, crmRoutes);
+app.use(`${BASE_ROUTE}/crm-panel`, crmPanelRoutes);
 app.use(`${BASE_ROUTE}/landing`, landingRoute);
+app.use(`${BASE_ROUTE}/admin`, adminRoutes);
+app.use(`${BASE_ROUTE}/candidate`, candidateRoutes);
 
 // Health Route
 app.get("/", (req, res) => {

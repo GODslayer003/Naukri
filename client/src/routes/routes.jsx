@@ -3,7 +3,6 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Unauthorized from "../pages/Auth/Unauthorized";
 import ProtectedRoute from "./ProtectedRoute";
 import Layout from "../Layout/Layout";
-import CreateCompanyQR from "../pages/CRMPanel/CreateCompanyQR";
 import Login from "../pages/Auth/Login";
 import NotFound from "./NotFound";
 
@@ -23,7 +22,7 @@ const router = createBrowserRouter([
         path: "/",
         element: <Layout />,
         children: [
-          { path: "/qr-generation", element: <CreateCompanyQR /> },
+          { index: true, element: <NotFound type="construction" /> },
         ],
       },
     ],

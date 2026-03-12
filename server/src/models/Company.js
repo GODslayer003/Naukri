@@ -46,8 +46,23 @@ const companySchema = new mongoose.Schema(
       ref: "CrmUser",
       required: true,
     },
-    
+    clientUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    packageType: {
+      type: String,
+      enum: ["STANDARD", "PREMIUM", "ELITE"],
+      default: "STANDARD",
+    },
+    jobLimit: {
+      type: Number,
+      default: 2,
+    },
     activeJobCount: { type: Number, default: 0 },
+    configurationNotes: { type: String, default: "" },
+    accountManager: { type: String, default: "" },
 
     status: {
       type: String,

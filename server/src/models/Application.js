@@ -16,15 +16,40 @@ const applicationSchema = new mongoose.Schema(
 
     candidateId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Candidate",
+      ref: "User",
       required: true,
     },
 
     status: {
       type: String,
-      enum: ["APPLIED", "SHORTLISTED", "REJECTED", "HIRED"],
+      enum: [
+        "APPLIED",
+        "SCREENING",
+        "SHORTLISTED",
+        "INTERVIEW",
+        "OFFERED",
+        "HIRED",
+        "REJECTED",
+      ],
       default: "APPLIED",
-    }
+    },
+    resumeUrl: {
+      type: String,
+      default: "",
+    },
+    resumeFileName: {
+      type: String,
+      default: "",
+    },
+    sourceQrToken: {
+      type: String,
+      default: "",
+    },
+    sourceJobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Job",
+      default: null,
+    },
   },
   { timestamps: true }
 );
