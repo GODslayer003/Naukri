@@ -802,6 +802,10 @@ const buildSectionData = async (sectionKey) => {
       Job.countDocuments({ isActive: true }),
       Application.countDocuments({ status: "HIRED" }),
     ]);
+      // Define activeCompanies for tableRows
+      const activeCompanies = totalActiveCompanies;
+      // Define activeJobs for tableRows
+      const activeJobs = totalLiveJobs;
     return {
       metrics: [
         { label: "Active clients", value: String(totalActiveCompanies) },
