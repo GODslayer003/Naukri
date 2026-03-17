@@ -229,13 +229,13 @@ export default function CompanyLandingPage() {
                             </div>
                           </div>
 
-                          <button
+                          {/* <button
                             type="button"
                             onClick={() => handleApplyNavigate(applyUrl)}
                             className="shrink-0 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#00a8b4] to-[#5cba47] px-5 py-3 text-xs font-bold text-white transition hover:opacity-90"
                           >
                             Apply now
-                          </button>
+                          </button> */}
                         </div>
                       </article>
                     );
