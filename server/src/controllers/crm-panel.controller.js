@@ -10,6 +10,7 @@ const Job = require("../models/Job");
 const Package = require("../models/Package");
 const QRCode = require("../models/QRCode");
 const Application = require("../models/Application");
+const CandidateProfile = require("../models/CandidateProfile");
 const CrmCampaign = require("../models/CrmCampaign");
 const CandidateNotification = require("../models/CandidateNotification");
 const cloudinary = require("../config/cloudinary");
@@ -211,17 +212,40 @@ const resolveQRCode = async (identifier) => {
     .populate("jobId", "title");
 };
 
-const formatApplication = (application, candidateUser) => ({
-  id: String(application._id),
-  companyName: application.companyId?.name || "Unknown company",
-  jobTitle: application.jobId?.title || "Unknown job",
-  candidateId: String(application.candidateId || ""),
-  candidateName: candidateUser?.name || "Candidate",
-  candidateEmail: candidateUser?.email || "",
-  status: application.status,
-  updatedAt: application.updatedAt,
-  lastUpdated: formatRelativeTime(application.updatedAt),
-});
+const formatApplication = (application, candidateUser, candidateProfile = null) => {
+  const profileResume = candidateProfile?.resume || {};
+  const resumeUrl = application.resumeUrl || profileResume.url || "";
+  const resumeFileName = application.resumeFileName || profileResume.fileName || "";
+
+  return {
+    id: String(application._id),
+    companyName: application.companyId?.name || "Unknown company",
+    jobTitle: application.jobId?.title || "Unknown job",
+    candidateId: String(application.candidateId || ""),
+    candidateName: candidateUser?.name || "Candidate",
+    candidateEmail: candidateUser?.email || "",
+    candidatePhone: candidateProfile?.phone || "",
+    candidateAltPhone: candidateProfile?.altPhone || "",
+    candidateDesignation: candidateProfile?.currentTitle || "",
+    candidateHeadline: candidateProfile?.headline || "",
+    candidateSummary: candidateProfile?.summary || "",
+    candidateExperience: candidateProfile?.totalExperience || "",
+    candidateCurrentCompany: candidateProfile?.currentCompany || "",
+    candidateCity: candidateProfile?.currentCity || "",
+    candidateState: candidateProfile?.currentState || "",
+    candidateCountry: candidateProfile?.currentCountry || "",
+    candidateSkills: Array.isArray(candidateProfile?.skills) ? candidateProfile.skills : [],
+    resumeUrl,
+    resumeFileName,
+    resumeStorageProvider: profileResume.storageProvider || "",
+    resumeUploadedAt: profileResume.uploadedAt || null,
+    sourceQrToken: application.sourceQrToken || "",
+    status: application.status,
+    appliedAt: application.createdAt,
+    updatedAt: application.updatedAt,
+    lastUpdated: formatRelativeTime(application.updatedAt),
+  };
+};
 
 const uploadPdfBuffer = async (pdfBuffer, { token, publicId } = {}) =>
   new Promise((resolve, reject) => {
@@ -431,11 +455,21 @@ exports.getDashboard = asyncHandler(async (req, res) => {
   const dashboardCandidateIds = [
     ...new Set(applications.map((application) => String(application.candidateId || ""))),
   ].filter(Boolean);
-  const dashboardCandidateUsers = await User.find({
-    _id: { $in: dashboardCandidateIds },
-  }).select("name email");
+  const [dashboardCandidateUsers, dashboardCandidateProfiles] = await Promise.all([
+    User.find({
+      _id: { $in: dashboardCandidateIds },
+    }).select("name email"),
+    CandidateProfile.find({
+      userId: { $in: dashboardCandidateIds },
+    }).select(
+      "userId phone altPhone currentTitle headline summary totalExperience currentCompany currentCity currentState currentCountry skills resume",
+    ),
+  ]);
   const dashboardCandidateMap = new Map(
     dashboardCandidateUsers.map((user) => [String(user._id), user]),
+  );
+  const dashboardCandidateProfileMap = new Map(
+    dashboardCandidateProfiles.map((profile) => [String(profile.userId), profile]),
   );
 
   res.status(200).json({
@@ -468,6 +502,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
         formatApplication(
           application,
           dashboardCandidateMap.get(String(application.candidateId)),
+          dashboardCandidateProfileMap.get(String(application.candidateId)),
         ),
       ),
       qrOverview: qrCodes.map(formatQRCodeRecord),
@@ -1081,14 +1116,28 @@ exports.getApplications = asyncHandler(async (req, res) => {
     .sort({ updatedAt: -1 })
     .populate("companyId", "name")
     .populate("jobId", "title");
-  const candidateIds = [...new Set(applications.map((item) => String(item.candidateId)))];
-  const candidateUsers = await User.find({ _id: { $in: candidateIds } }).select("name email");
+  const candidateIds = [...new Set(applications.map((item) => String(item.candidateId)))].filter(
+    Boolean,
+  );
+  const [candidateUsers, candidateProfiles] = await Promise.all([
+    User.find({ _id: { $in: candidateIds } }).select("name email"),
+    CandidateProfile.find({ userId: { $in: candidateIds } }).select(
+      "userId phone altPhone currentTitle headline summary totalExperience currentCompany currentCity currentState currentCountry skills resume",
+    ),
+  ]);
   const candidateMap = new Map(candidateUsers.map((user) => [String(user._id), user]));
+  const candidateProfileMap = new Map(
+    candidateProfiles.map((profile) => [String(profile.userId), profile]),
+  );
 
   res.status(200).json({
     success: true,
     data: applications.map((application) =>
-      formatApplication(application, candidateMap.get(String(application.candidateId))),
+      formatApplication(
+        application,
+        candidateMap.get(String(application.candidateId)),
+        candidateProfileMap.get(String(application.candidateId)),
+      ),
     ),
   });
 });
@@ -1105,7 +1154,12 @@ exports.updateApplicationStatus = asyncHandler(async (req, res) => {
   application.status = (req.body.status || application.status).toUpperCase();
   await application.save();
 
-  const candidateUser = await User.findById(application.candidateId).select("name email");
+  const [candidateUser, candidateProfile] = await Promise.all([
+    User.findById(application.candidateId).select("name email"),
+    CandidateProfile.findOne({ userId: application.candidateId }).select(
+      "userId phone altPhone currentTitle headline summary totalExperience currentCompany currentCity currentState currentCountry skills resume",
+    ),
+  ]);
 
   if (candidateUser) {
     await CandidateNotification.create({
@@ -1122,7 +1176,7 @@ exports.updateApplicationStatus = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    data: formatApplication(application, candidateUser),
+    data: formatApplication(application, candidateUser, candidateProfile),
   });
 });
 

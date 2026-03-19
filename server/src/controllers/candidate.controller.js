@@ -16,6 +16,17 @@ const createHttpError = (statusCode, message) => {
   return error;
 };
 
+const supportedResumeMimeTypes = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+const isValidPhoneNumber = (value = "") => {
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 15;
+};
+
 const generateToken = (id) =>
   jwt.sign({ id, type: "CANDIDATE_PANEL" }, process.env.JWT_SECRET, {
     expiresIn: "7d",
@@ -74,47 +85,47 @@ const computeProfileCompletion = (profile, user) => {
   return Math.round((checkpoints.filter(Boolean).length / checkpoints.length) * 100);
 };
 
-const formatCandidateUser = (user) => ({
-  id: String(user._id),
-  name: user.name,
-  email: user.email,
-  role: user.role,
-  designation: user.department || "",
-  accessStatus: user.accessStatus || "ACTIVE",
+const formatCandidateUser = (user = null) => ({
+  id: String(user?._id || ""),
+  name: user?.name || "",
+  email: user?.email || "",
+  role: user?.role || "CANDIDATE",
+  designation: user?.department || "",
+  accessStatus: user?.accessStatus || "ACTIVE",
 });
 
-const formatProfile = (profile, user) => ({
-  id: String(profile._id),
+const formatProfile = (profile = {}, user = null) => ({
+  id: String(profile?._id || ""),
   user: formatCandidateUser(user),
-  phone: profile.phone || "",
-  altPhone: profile.altPhone || "",
-  headline: profile.headline || "",
-  summary: profile.summary || "",
-  totalExperience: profile.totalExperience || "",
-  currentTitle: profile.currentTitle || user.department || "",
-  currentCompany: profile.currentCompany || "",
-  noticePeriod: profile.noticePeriod || "",
-  currentCity: profile.currentCity || "",
-  currentState: profile.currentState || "",
-  currentCountry: profile.currentCountry || "",
-  preferredLocations: profile.preferredLocations || [],
-  preferredRoles: profile.preferredRoles || [],
-  skills: profile.skills || [],
-  linkedInUrl: profile.linkedInUrl || "",
-  portfolioUrl: profile.portfolioUrl || "",
-  expectedSalary: profile.expectedSalary || "",
-  lastScannedQrToken: profile.lastScannedQrToken || "",
+  phone: profile?.phone || "",
+  altPhone: profile?.altPhone || "",
+  headline: profile?.headline || "",
+  summary: profile?.summary || "",
+  totalExperience: profile?.totalExperience || "",
+  currentTitle: profile?.currentTitle || user?.department || "",
+  currentCompany: profile?.currentCompany || "",
+  noticePeriod: profile?.noticePeriod || "",
+  currentCity: profile?.currentCity || "",
+  currentState: profile?.currentState || "",
+  currentCountry: profile?.currentCountry || "",
+  preferredLocations: profile?.preferredLocations || [],
+  preferredRoles: profile?.preferredRoles || [],
+  skills: profile?.skills || [],
+  linkedInUrl: profile?.linkedInUrl || "",
+  portfolioUrl: profile?.portfolioUrl || "",
+  expectedSalary: profile?.expectedSalary || "",
+  lastScannedQrToken: profile?.lastScannedQrToken || "",
   resume: {
-    fileName: profile.resume?.fileName || "",
-    url: profile.resume?.url || "",
-    storageProvider: profile.resume?.storageProvider || "",
-    sizeBytes: Number(profile.resume?.sizeBytes || 0),
-    mimeType: profile.resume?.mimeType || "",
-    uploadedAt: profile.resume?.uploadedAt || null,
+    fileName: profile?.resume?.fileName || "",
+    url: profile?.resume?.url || "",
+    storageProvider: profile?.resume?.storageProvider || "",
+    sizeBytes: Number(profile?.resume?.sizeBytes || 0),
+    mimeType: profile?.resume?.mimeType || "",
+    uploadedAt: profile?.resume?.uploadedAt || null,
   },
-  profileCompletion: computeProfileCompletion(profile, user),
-  updatedAt: profile.updatedAt,
-  lastUpdated: formatRelativeTime(profile.updatedAt),
+  profileCompletion: computeProfileCompletion(profile || {}, user || {}),
+  updatedAt: profile?.updatedAt,
+  lastUpdated: formatRelativeTime(profile?.updatedAt),
 });
 
 const formatJob = (job, applicationMap = new Map()) => {
@@ -344,76 +355,144 @@ const sendCsv = (res, fileName, headers, rows) => {
 };
 
 exports.register = asyncHandler(async (req, res) => {
-  const { name = "", designation = "", email = "", password = "", qrToken = "" } = req.body;
+  const requestBody = req.body && typeof req.body === "object" ? req.body : {};
+  const {
+    name = "",
+    designation = "",
+    phone = "",
+    email = "",
+    password = "",
+    qrToken = "",
+  } = requestBody;
 
-  if (!name.trim() || !designation.trim() || !email.trim() || !password.trim()) {
-    throw createHttpError(400, "Name, designation, email, and password are required");
+  if (!Object.keys(requestBody).length) {
+    throw createHttpError(
+      400,
+      "Invalid registration payload. Send multipart/form-data with candidate fields and resume file.",
+    );
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  if (!name.trim() || !designation.trim() || !phone.trim() || !email.trim() || !password.trim()) {
+    throw createHttpError(
+      400,
+      "Name, designation, phone number, email, password, and CV are required",
+    );
+  }
+
+  if (!isValidPhoneNumber(phone)) {
+    throw createHttpError(400, "Phone number must contain 10 to 15 digits");
+  }
+
+  if (!req.file) {
+    throw createHttpError(400, "Resume file is required");
+  }
+
+  if (!supportedResumeMimeTypes.has(req.file.mimetype)) {
+    throw createHttpError(400, "Only PDF, DOC, and DOCX files are supported");
+  }
+
+  const normalizedEmail = String(email).trim().toLowerCase();
   const existingUser = await User.findOne({ email: normalizedEmail });
 
   if (existingUser) {
     throw createHttpError(409, "Email already exists");
   }
 
-  const user = await User.create({
-    name: name.trim(),
-    email: normalizedEmail,
-    password: await bcrypt.hash(password, 10),
-    role: "CANDIDATE",
-    department: designation.trim(),
-    accessStatus: "ACTIVE",
-    isActive: true,
-  });
+  let user = null;
 
-  const profile = await CandidateProfile.create({
-    userId: user._id,
-    currentTitle: designation.trim(),
-    lastScannedQrToken: qrToken.trim(),
-  });
-
-  const changedFields = [];
-  const changes = [];
-
-  if (designation.trim()) {
-    changedFields.push("currentTitle");
-    changes.push({
-      field: "currentTitle",
-      previousValue: "",
-      nextValue: designation.trim(),
+  try {
+    user = await User.create({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: await bcrypt.hash(password, 10),
+      role: "CANDIDATE",
+      department: designation.trim(),
+      accessStatus: "ACTIVE",
+      isActive: true,
     });
-  }
 
-  if (qrToken.trim()) {
-    changedFields.push("lastScannedQrToken");
-    changes.push({
-      field: "lastScannedQrToken",
-      previousValue: "",
-      nextValue: qrToken.trim(),
+    const uploadedResume = await uploadResumeFile(req.file, user._id);
+    const profile = await CandidateProfile.create({
+      userId: user._id,
+      phone: phone.trim(),
+      currentTitle: designation.trim(),
+      lastScannedQrToken: qrToken.trim(),
+      resume: {
+        ...uploadedResume,
+        uploadedAt: new Date(),
+      },
     });
+
+    const changedFields = [];
+    const changes = [];
+
+    if (designation.trim()) {
+      changedFields.push("currentTitle");
+      changes.push({
+        field: "currentTitle",
+        previousValue: "",
+        nextValue: designation.trim(),
+      });
+    }
+
+    if (phone.trim()) {
+      changedFields.push("phone");
+      changes.push({
+        field: "phone",
+        previousValue: "",
+        nextValue: phone.trim(),
+      });
+    }
+
+    if (qrToken.trim()) {
+      changedFields.push("lastScannedQrToken");
+      changes.push({
+        field: "lastScannedQrToken",
+        previousValue: "",
+        nextValue: qrToken.trim(),
+      });
+    }
+
+    changedFields.push("resume");
+    changes.push({
+      field: "resume",
+      previousValue: { fileName: "", url: "" },
+      nextValue: {
+        fileName: uploadedResume.fileName,
+        url: uploadedResume.url,
+        storageProvider: uploadedResume.storageProvider,
+      },
+    });
+
+    await CandidateProfileHistory.create({
+      candidateId: user._id,
+      profileId: profile._id,
+      action: "CREATE",
+      changedFields,
+      changes,
+      actorType: "CANDIDATE",
+      actorId: user._id,
+    });
+
+    res.status(201).json({
+      success: true,
+      token: generateToken(user._id),
+      user: formatCandidateUser(user),
+      profile: formatProfile(profile, user),
+    });
+  } catch (error) {
+    if (user?._id) {
+      await CandidateProfile.deleteOne({ userId: user._id }).catch(() => null);
+      await CandidateProfileHistory.deleteMany({ candidateId: user._id }).catch(() => null);
+      await User.deleteOne({ _id: user._id }).catch(() => null);
+    }
+    throw error;
   }
-
-  await CandidateProfileHistory.create({
-    candidateId: user._id,
-    profileId: profile._id,
-    action: "CREATE",
-    changedFields,
-    changes,
-    actorType: "CANDIDATE",
-    actorId: user._id,
-  });
-
-  res.status(201).json({
-    success: true,
-    token: generateToken(user._id),
-    user: formatCandidateUser(user),
-    profile: formatProfile(profile, user),
-  });
 });
 
 exports.login = asyncHandler(async (req, res) => {
-  const { email = "", password = "" } = req.body;
+  const requestBody = req.body && typeof req.body === "object" ? req.body : {};
+  const { email = "", password = "" } = requestBody;
 
   if (!email.trim() || !password.trim()) {
     throw createHttpError(400, "Email and password are required");
@@ -626,7 +705,8 @@ exports.getSimilarJobs = asyncHandler(async (req, res) => {
 });
 
 exports.createApplication = asyncHandler(async (req, res) => {
-  const { jobId = "", qrToken = "", sourceJobId = "" } = req.body;
+  const requestBody = req.body && typeof req.body === "object" ? req.body : {};
+  const { jobId = "", qrToken = "", sourceJobId = "" } = requestBody;
 
   if (!jobId) {
     throw createHttpError(400, "Job is required");
@@ -655,7 +735,7 @@ exports.createApplication = asyncHandler(async (req, res) => {
 
   const application = await Application.create({
     candidateId: req.user._id,
-    companyId: job.companyId._id,
+    companyId: job.companyId?._id || job.companyId,
     jobId: job._id,
     status: "APPLIED",
     resumeUrl: profile.resume.url,
@@ -671,11 +751,13 @@ exports.createApplication = asyncHandler(async (req, res) => {
 
   await CandidateNotification.create({
     candidateId: req.user._id,
-    companyId: job.companyId._id,
+    companyId: job.companyId?._id || job.companyId,
     jobId: job._id,
     applicationId: application._id,
     title: "Application submitted",
-    message: `Your application for ${job.title} at ${job.companyId.name} has been submitted successfully.`,
+    message: `Your application for ${job.title} at ${
+      job.companyId?.name || "the company"
+    } has been submitted successfully.`,
     category: "APPLICATION",
     actionUrl: "/candidate/applications",
   });
@@ -719,6 +801,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
 
 exports.updateProfile = asyncHandler(async (req, res) => {
   const profile = await ensureCandidateProfile(req.user);
+  const requestBody = req.body && typeof req.body === "object" ? req.body : {};
   const changes = [];
 
   const syncField = (field, value, transform = (item) => item) => {
@@ -739,32 +822,40 @@ exports.updateProfile = asyncHandler(async (req, res) => {
     }
   };
 
-  if (req.body.name !== undefined && req.body.name.trim() && req.body.name.trim() !== req.user.name) {
-    changes.push({ field: "name", previousValue: req.user.name, nextValue: req.body.name.trim() });
-    req.user.name = req.body.name.trim();
+  if (
+    requestBody.name !== undefined &&
+    String(requestBody.name).trim() &&
+    String(requestBody.name).trim() !== req.user.name
+  ) {
+    changes.push({
+      field: "name",
+      previousValue: req.user.name,
+      nextValue: String(requestBody.name).trim(),
+    });
+    req.user.name = String(requestBody.name).trim();
     await req.user.save();
   }
 
-  syncField("phone", req.body.phone, (value) => String(value).trim());
-  syncField("altPhone", req.body.altPhone, (value) => String(value).trim());
-  syncField("headline", req.body.headline, (value) => String(value).trim());
-  syncField("summary", req.body.summary, (value) => String(value).trim());
-  syncField("totalExperience", req.body.totalExperience, (value) => String(value).trim());
-  syncField("currentTitle", req.body.currentTitle, (value) => String(value).trim());
-  syncField("currentCompany", req.body.currentCompany, (value) => String(value).trim());
-  syncField("noticePeriod", req.body.noticePeriod, (value) => String(value).trim());
-  syncField("currentCity", req.body.currentCity, (value) => String(value).trim());
-  syncField("currentState", req.body.currentState, (value) => String(value).trim());
-  syncField("currentCountry", req.body.currentCountry, (value) => String(value).trim());
-  syncField("preferredLocations", req.body.preferredLocations, toArray);
-  syncField("preferredRoles", req.body.preferredRoles, toArray);
-  syncField("skills", req.body.skills, toArray);
-  syncField("linkedInUrl", req.body.linkedInUrl, (value) => String(value).trim());
-  syncField("portfolioUrl", req.body.portfolioUrl, (value) => String(value).trim());
-  syncField("expectedSalary", req.body.expectedSalary, (value) => String(value).trim());
+  syncField("phone", requestBody.phone, (value) => String(value).trim());
+  syncField("altPhone", requestBody.altPhone, (value) => String(value).trim());
+  syncField("headline", requestBody.headline, (value) => String(value).trim());
+  syncField("summary", requestBody.summary, (value) => String(value).trim());
+  syncField("totalExperience", requestBody.totalExperience, (value) => String(value).trim());
+  syncField("currentTitle", requestBody.currentTitle, (value) => String(value).trim());
+  syncField("currentCompany", requestBody.currentCompany, (value) => String(value).trim());
+  syncField("noticePeriod", requestBody.noticePeriod, (value) => String(value).trim());
+  syncField("currentCity", requestBody.currentCity, (value) => String(value).trim());
+  syncField("currentState", requestBody.currentState, (value) => String(value).trim());
+  syncField("currentCountry", requestBody.currentCountry, (value) => String(value).trim());
+  syncField("preferredLocations", requestBody.preferredLocations, toArray);
+  syncField("preferredRoles", requestBody.preferredRoles, toArray);
+  syncField("skills", requestBody.skills, toArray);
+  syncField("linkedInUrl", requestBody.linkedInUrl, (value) => String(value).trim());
+  syncField("portfolioUrl", requestBody.portfolioUrl, (value) => String(value).trim());
+  syncField("expectedSalary", requestBody.expectedSalary, (value) => String(value).trim());
 
-  const nextDesignation = String(req.body.currentTitle || "").trim();
-  if (req.body.currentTitle !== undefined && req.user.department !== nextDesignation) {
+  const nextDesignation = String(requestBody.currentTitle || "").trim();
+  if (requestBody.currentTitle !== undefined && req.user.department !== nextDesignation) {
     changes.push({
       field: "designation",
       previousValue: req.user.department || "",
@@ -815,13 +906,7 @@ exports.uploadResume = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Resume file is required");
   }
 
-  if (
-    ![
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ].includes(req.file.mimetype)
-  ) {
+  if (!supportedResumeMimeTypes.has(req.file.mimetype)) {
     throw createHttpError(400, "Only PDF, DOC, and DOCX files are supported");
   }
 

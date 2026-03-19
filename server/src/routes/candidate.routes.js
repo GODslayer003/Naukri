@@ -15,7 +15,7 @@ const upload = multer({
   },
 });
 
-router.post("/auth/register", candidateController.register);
+router.post("/auth/register", upload.single("resume"), candidateController.register);
 router.post("/auth/login", candidateController.login);
 router.get("/landing/:token", candidateController.getLanding);
 

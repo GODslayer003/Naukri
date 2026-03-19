@@ -8,10 +8,12 @@ export default function Register() {
   const [form, setForm] = useState({
     name: "",
     designation: "",
+    phone: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
+  const [resumeFile, setResumeFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -22,16 +24,26 @@ export default function Register() {
     setForm((current) => ({ ...current, [field]: event.target.value }));
   };
 
+  const handleResumeChange = (event) => {
+    setResumeFile(event.target.files?.[0] || null);
+  };
+
+  const isValidPhone = (value) => {
+    const digits = String(value || "").replace(/\D/g, "");
+    return digits.length >= 10 && digits.length <= 15;
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (
       !form.name.trim() ||
       !form.designation.trim() ||
+      !form.phone.trim() ||
       !form.email.trim() ||
       !form.password.trim()
     ) {
-      setError("Name, designation, email, and password are required.");
+      setError("Name, designation, phone number, email, password, and CV are required.");
       return;
     }
 
@@ -40,18 +52,47 @@ export default function Register() {
       return;
     }
 
+    if (!isValidPhone(form.phone)) {
+      setError("Enter a valid phone number with 10 to 15 digits.");
+      return;
+    }
+
+    if (!resumeFile) {
+      setError("Please upload your CV to continue.");
+      return;
+    }
+
+    if (
+      ![
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ].includes(resumeFile.type)
+    ) {
+      setError("Only PDF, DOC, and DOCX files are supported.");
+      return;
+    }
+
+    if (resumeFile.size > 8 * 1024 * 1024) {
+      setError("CV file size must be 8MB or less.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
 
     try {
       const designation = form.designation.trim();
-      const response = await registerCandidate({
-        name: form.name.trim(),
-        designation,
-        email: form.email.trim(),
-        password: form.password,
-        qrToken: token,
-      });
+      const payload = new FormData();
+      payload.append("name", form.name.trim());
+      payload.append("designation", designation);
+      payload.append("phone", form.phone.trim());
+      payload.append("email", form.email.trim());
+      payload.append("password", form.password);
+      payload.append("qrToken", token);
+      payload.append("resume", resumeFile);
+
+      const response = await registerCandidate(payload);
 
       setStoredSession({
         token: response.token,
@@ -182,6 +223,19 @@ export default function Register() {
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700">
+                  Phone number
+                </label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={handleChange("phone")}
+                  placeholder="+91 98765 43210"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#163060] focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700">
                   Password
                 </label>
                 <input
@@ -191,6 +245,21 @@ export default function Register() {
                   placeholder="Create password"
                   className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#163060] focus:bg-white"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Upload CV
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={handleResumeChange}
+                  className="mt-2 block w-full cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-[#163060] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-[#1d3f7f] focus:border-[#163060] focus:bg-white"
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  Accepted formats: PDF, DOC, DOCX. Max size 8MB.
+                </p>
               </div>
 
               <div>

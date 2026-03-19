@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { LuFileCheck2, LuSearch, LuUsers } from "react-icons/lu";
+import { LuDownload, LuFileCheck2, LuSearch, LuUsers } from "react-icons/lu";
 import {
   Badge,
   EmptyState,
   MetricCard,
+  ModalShell,
   PageState,
   PanelCard,
   SectionHeading,
@@ -31,12 +32,15 @@ export default function ApplicationsPage() {
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
+  const [selectedApplication, setSelectedApplication] = useState(null);
 
   const filteredApplications = useMemo(() => {
     return applications.filter((application) => {
       const haystack = [
         application.candidateName,
         application.candidateEmail,
+        application.candidatePhone,
+        application.candidateDesignation,
         application.companyName,
         application.jobTitle,
       ]
@@ -115,6 +119,14 @@ export default function ApplicationsPage() {
     }
   };
 
+  const openCandidateModal = (application) => {
+    setSelectedApplication(application);
+  };
+
+  const closeCandidateModal = () => {
+    setSelectedApplication(null);
+  };
+
   if (isLoading) {
     return <PageState title="Loading applications..." />;
   }
@@ -180,7 +192,13 @@ export default function ApplicationsPage() {
                 className="grid grid-cols-[1.1fr_1fr_0.8fr_0.85fr_0.8fr] gap-3 border-t border-slate-200 px-5 py-4 text-sm text-slate-600 transition hover:bg-lime-50/30"
               >
                 <div>
-                  <p className="font-semibold text-slate-900">{application.candidateName}</p>
+                  <button
+                    type="button"
+                    onClick={() => openCandidateModal(application)}
+                    className="font-semibold text-slate-900 underline-offset-2 transition hover:text-[#163060] hover:underline"
+                  >
+                    {application.candidateName}
+                  </button>
                   <p className="mt-1 text-xs text-slate-500">{application.candidateEmail}</p>
                 </div>
                 <div>
@@ -221,6 +239,197 @@ export default function ApplicationsPage() {
           )}
         </div>
       </PanelCard>
+
+      <ModalShell
+        open={Boolean(selectedApplication)}
+        onClose={closeCandidateModal}
+        title={selectedApplication?.candidateName || "Candidate Details"}
+        description="Candidate profile and application details from the central system record."
+      >
+        {selectedApplication ? (
+          <div className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Email
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.candidateEmail || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Phone
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.candidatePhone || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Alternate phone
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.candidateAltPhone || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Designation
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.candidateDesignation || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Current company
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.candidateCurrentCompany || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Experience
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.candidateExperience || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Location
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {[
+                    selectedApplication.candidateCity,
+                    selectedApplication.candidateState,
+                    selectedApplication.candidateCountry,
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Application status
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {titleCase(selectedApplication.status)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Job
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.jobTitle || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Company
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.companyName || "Unavailable"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Applied at
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {formatDateTime(selectedApplication.appliedAt)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Last updated
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {formatDateTime(selectedApplication.updatedAt)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Source QR token
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  {selectedApplication.sourceQrToken || "Unavailable"}
+                </p>
+              </div>
+            </div>
+
+            {selectedApplication.candidateHeadline ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Headline
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {selectedApplication.candidateHeadline}
+                </p>
+              </div>
+            ) : null}
+
+            {selectedApplication.candidateSummary ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Profile summary
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {selectedApplication.candidateSummary}
+                </p>
+              </div>
+            ) : null}
+
+            {selectedApplication.candidateSkills?.length ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Skills
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {selectedApplication.candidateSkills.join(", ")}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={selectedApplication.resumeUrl || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-disabled={!selectedApplication.resumeUrl}
+                onClick={(event) => {
+                  if (!selectedApplication.resumeUrl) {
+                    event.preventDefault();
+                  }
+                }}
+                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                  selectedApplication.resumeUrl
+                    ? "bg-[#163060] text-white hover:bg-[#1d3f7f]"
+                    : "cursor-not-allowed bg-slate-200 text-slate-500"
+                }`}
+              >
+                <LuDownload size={16} />
+                {selectedApplication.resumeUrl
+                  ? "Download Candidate CV"
+                  : "CV not available"}
+              </a>
+              {selectedApplication.resumeFileName ? (
+                <p className="text-xs text-slate-500">
+                  File: {selectedApplication.resumeFileName}
+                </p>
+              ) : null}
+              {selectedApplication.resumeUploadedAt ? (
+                <p className="text-xs text-slate-500">
+                  Uploaded: {formatDateTime(selectedApplication.resumeUploadedAt)}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </ModalShell>
     </div>
   );
 }
