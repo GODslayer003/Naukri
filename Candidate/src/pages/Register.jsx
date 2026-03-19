@@ -43,43 +43,36 @@ export default function Register() {
       !form.email.trim() ||
       !form.password.trim()
     ) {
-      setError("Name, designation, phone number, email, password, and CV are required.");
+      alert("Name, designation, phone number, email, password, and CV are required.");
       return;
     }
 
     if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
+      alert("Passwords do not match.");
       return;
     }
 
     if (!isValidPhone(form.phone)) {
-      setError("Enter a valid phone number with 10 to 15 digits.");
+      alert("Enter a valid phone number with 10 to 15 digits.");
       return;
     }
 
     if (!resumeFile) {
-      setError("Please upload your CV to continue.");
+      alert("Please upload your CV to continue.");
       return;
     }
 
-    if (
-      ![
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ].includes(resumeFile.type)
-    ) {
-      setError("Only PDF, DOC, and DOCX files are supported.");
+    if (resumeFile.type !== "application/pdf") {
+      alert("Only PDF files are supported.");
       return;
     }
 
     if (resumeFile.size > 8 * 1024 * 1024) {
-      setError("CV file size must be 8MB or less.");
+      alert("CV file size must be 8MB or less.");
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       const designation = form.designation.trim();
@@ -100,8 +93,6 @@ export default function Register() {
         profile: response.profile,
       });
 
-      // Production-safe fallback: ensure designation is persisted in profile even if
-      // register response from older backend does not hydrate currentTitle.
       let syncedProfile = response.profile;
       if (designation && !response.profile?.currentTitle) {
         try {
@@ -142,7 +133,7 @@ export default function Register() {
         navigate("/candidate/dashboard", { replace: true });
       }
     } catch (requestError) {
-      setError(requestError.message || "Unable to create your account.");
+      alert(requestError.message || "Unable to create your account.");
     } finally {
       setIsSubmitting(false);
     }
@@ -253,12 +244,12 @@ export default function Register() {
                 </label>
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf"
                   onChange={handleResumeChange}
                   className="mt-2 block w-full cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-[#163060] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-[#1d3f7f] focus:border-[#163060] focus:bg-white"
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  Accepted formats: PDF, DOC, DOCX. Max size 8MB.
+                  Accepted format: PDF only. Max size 8MB.
                 </p>
               </div>
 
@@ -275,11 +266,7 @@ export default function Register() {
                 />
               </div>
 
-              {error ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-                  {error}
-                </div>
-              ) : null}
+
 
               <button
                 type="submit"

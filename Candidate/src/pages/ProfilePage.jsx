@@ -288,7 +288,7 @@ export default function ProfilePage() {
             <SectionHeading
               eyebrow="Resume"
               title="Upload your latest CV"
-              description="PDF, DOC, and DOCX are supported. Resume storage is handled securely through the configured backend provider."
+              description="Only PDF files are supported. Resume storage is handled securely through the configured backend provider."
             />
 
             <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
@@ -297,13 +297,13 @@ export default function ProfilePage() {
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 {state.profile.resume.uploadedAt
                   ? `Uploaded on ${formatDateTime(state.profile.resume.uploadedAt)}`
-                  : "Upload a resume to unlock applications."}
+                  : "Upload a resume as PDF to unlock applications."}
               </p>
               <label className="mt-5 inline-flex cursor-pointer items-center rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-lime-300 hover:bg-lime-50 hover:text-[#163060]">
                 {isUploading ? "Uploading..." : "Upload resume"}
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf"
                   className="hidden"
                   onChange={handleResumeUpload}
                 />

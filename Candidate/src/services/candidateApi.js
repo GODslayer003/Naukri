@@ -47,10 +47,15 @@ function getStoredToken() {
   return getStoredSession()?.token || "";
 }
 
+const isFormDataPayload = (value) => 
+  value instanceof FormData || 
+  (Boolean(value) && typeof value === 'object' && typeof value.append === 'function');
+
 async function request(path, { method = "GET", body, auth = true } = {}) {
   const headers = {};
+  const isFormData = isFormDataPayload(body);
 
-  if (body && !(body instanceof FormData)) {
+  if (body && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -67,12 +72,7 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
   const response = await fetch(`${API_ROOT}${path}`, {
     method,
     headers,
-    body:
-      body instanceof FormData
-        ? body
-        : body
-          ? JSON.stringify(body)
-          : undefined,
+    body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   });
 
   const payload = await parseJsonSafely(response);
@@ -88,12 +88,21 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
   return payload;
 }
 
-export function registerCandidate(payload) {
-  return request("/auth/register", {
+export async function registerCandidate(payload) {
+  const response = await fetch(`${API_ROOT}/auth/register`, {
     method: "POST",
     body: payload,
-    auth: false,
+    // The browser natively handles FormData payloads and applies the correct 
+    // Content-Type: multipart/form-data boundary automatically without JSON serialization.
   });
+
+  const parsed = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    throw new Error(parsed.message || "Registration failed");
+  }
+
+  return parsed;
 }
 
 export function loginCandidate(payload) {

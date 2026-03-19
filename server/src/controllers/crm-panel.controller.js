@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const streamifier = require("streamifier");
 const asyncHandler = require("../middleware/async.middleware");
@@ -217,6 +218,21 @@ const formatApplication = (application, candidateUser, candidateProfile = null) 
   const resumeUrl = application.resumeUrl || profileResume.url || "";
   const resumeFileName = application.resumeFileName || profileResume.fileName || "";
 
+  // For old documents created before timestamps were enforced, derive the
+  // creation time from the ObjectId hex prefix (12-byte BSON, first 4 bytes = epoch seconds)
+  const derivedCreatedAt = (() => {
+    if (application.createdAt) return application.createdAt;
+    if (application.updatedAt) return application.updatedAt;
+    try {
+      const hexTimestamp = String(application._id).substring(0, 8);
+      const epochSeconds = parseInt(hexTimestamp, 16);
+      if (epochSeconds > 0) return new Date(epochSeconds * 1000);
+    } catch {
+      // ignore
+    }
+    return null;
+  })();
+
   return {
     id: String(application._id),
     companyName: application.companyId?.name || "Unknown company",
@@ -240,10 +256,11 @@ const formatApplication = (application, candidateUser, candidateProfile = null) 
     resumeStorageProvider: profileResume.storageProvider || "",
     resumeUploadedAt: profileResume.uploadedAt || null,
     sourceQrToken: application.sourceQrToken || "",
+    sourceJobId: application.sourceJobId ? String(application.sourceJobId) : "",
     status: application.status,
-    appliedAt: application.createdAt,
-    updatedAt: application.updatedAt,
-    lastUpdated: formatRelativeTime(application.updatedAt),
+    appliedAt: derivedCreatedAt,
+    updatedAt: application.updatedAt || derivedCreatedAt,
+    lastUpdated: formatRelativeTime(application.updatedAt || derivedCreatedAt),
   };
 };
 
@@ -1142,6 +1159,44 @@ exports.getApplications = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getCandidateProfile = asyncHandler(async (req, res) => {
+  const candidateId = req.params.candidateId;
+
+  const [candidateUser, candidateProfile] = await Promise.all([
+    User.findById(candidateId).select("name email"),
+    CandidateProfile.findOne({ userId: candidateId }).select(
+      "userId phone altPhone currentTitle headline summary totalExperience currentCompany currentCity currentState currentCountry skills resume",
+    ),
+  ]);
+
+  if (!candidateUser) {
+    throw createHttpError(404, "Candidate not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      candidateName: candidateUser.name || "",
+      candidateEmail: candidateUser.email || "",
+      candidatePhone: candidateProfile?.phone || "",
+      candidateAltPhone: candidateProfile?.altPhone || "",
+      candidateDesignation: candidateProfile?.currentTitle || "",
+      candidateHeadline: candidateProfile?.headline || "",
+      candidateSummary: candidateProfile?.summary || "",
+      candidateExperience: candidateProfile?.totalExperience || "",
+      candidateCurrentCompany: candidateProfile?.currentCompany || "",
+      candidateCity: candidateProfile?.currentCity || "",
+      candidateState: candidateProfile?.currentState || "",
+      candidateCountry: candidateProfile?.currentCountry || "",
+      candidateSkills: Array.isArray(candidateProfile?.skills) ? candidateProfile.skills : [],
+      resumeUrl: candidateProfile?.resume?.url || "",
+      resumeFileName: candidateProfile?.resume?.fileName || "",
+      resumeStorageProvider: candidateProfile?.resume?.storageProvider || "",
+      resumeUploadedAt: candidateProfile?.resume?.uploadedAt || null,
+    },
+  });
+});
+
 exports.updateApplicationStatus = asyncHandler(async (req, res) => {
   const application = await Application.findById(req.params.id)
     .populate("companyId", "name")
@@ -1318,4 +1373,34 @@ exports.updateSettings = asyncHandler(async (req, res) => {
     success: true,
     data: formatCrmUser(req.user),
   });
+});
+
+exports.downloadResume = asyncHandler(async (req, res) => {
+  const { candidateId } = req.params;
+
+  const profile = await CandidateProfile.findOne({ userId: candidateId }).select("resume");
+
+  if (!profile || !profile.resume?.url) {
+    return res.status(404).json({ success: false, message: "Resume not found for this candidate" });
+  }
+
+  const resumeUrl = profile.resume.url;
+  const fileName = profile.resume.fileName || "Resume.pdf";
+  const safeFileName = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+
+  try {
+    const response = await axios({
+      method: "get",
+      url: resumeUrl,
+      responseType: "stream",
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${safeFileName}"`);
+
+    response.data.pipe(res);
+  } catch (error) {
+    console.error("Error proxying resume download:", error.message);
+    res.status(500).json({ success: false, message: "Unable to download resume. Please try again later." });
+  }
 });

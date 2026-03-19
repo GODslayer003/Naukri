@@ -11,7 +11,7 @@ import {
   SelectField,
   ToolbarInput,
 } from "../components/Ui";
-import { getApplications, updateApplicationStatus } from "../services/crmApi";
+import { downloadResume, getApplications, getCandidateProfile, updateApplicationStatus } from "../services/crmApi";
 import { formatDateTime, formatNumber, titleCase } from "../utils/formatters";
 
 const statusOptions = [
@@ -33,6 +33,8 @@ export default function ApplicationsPage() {
   const [actionError, setActionError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [selectedApplication, setSelectedApplication] = useState(null);
+  const [liveProfile, setLiveProfile] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   const filteredApplications = useMemo(() => {
     return applications.filter((application) => {
@@ -119,12 +121,52 @@ export default function ApplicationsPage() {
     }
   };
 
-  const openCandidateModal = (application) => {
+  const [isDownloadingCv, setIsDownloadingCv] = useState(false);
+
+  const handleDownloadResume = async () => {
+    if (!liveProfile?.resume?.url && !selectedApplication?.resumeUrl) return;
+    
+    setIsDownloadingCv(true);
+    try {
+      const blob = await downloadResume(selectedApplication.candidateId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      // To show in browser (inline), we just open it
+      window.open(url, "_blank");
+      // Clean up the URL after a short delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+    } catch (err) {
+      console.error("Failed to download resume:", err);
+      alert("Unable to load resume. Please try again.");
+    } finally {
+      setIsDownloadingCv(false);
+    }
+  };
+
+  const openCandidateModal = async (application) => {
     setSelectedApplication(application);
+    setLiveProfile(null);
+
+    if (!application.candidateId) return;
+
+    setIsLoadingProfile(true);
+
+    try {
+      const response = await getCandidateProfile(application.candidateId);
+      setLiveProfile(response.data || null);
+    } catch (err) {
+      console.error("Failed to fetch live candidate profile:", err);
+      // Fall back silently to application-level data if profile fetch fails
+      setLiveProfile(null);
+    } finally {
+      setIsLoadingProfile(false);
+    }
   };
 
   const closeCandidateModal = () => {
     setSelectedApplication(null);
+    setLiveProfile(null);
   };
 
   if (isLoading) {
@@ -243,190 +285,202 @@ export default function ApplicationsPage() {
       <ModalShell
         open={Boolean(selectedApplication)}
         onClose={closeCandidateModal}
-        title={selectedApplication?.candidateName || "Candidate Details"}
+        title={
+          liveProfile?.candidateName ||
+          selectedApplication?.candidateName ||
+          "Candidate Details"
+        }
         description="Candidate profile and application details from the central system record."
       >
         {selectedApplication ? (
           <div className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Email
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.candidateEmail || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Phone
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.candidatePhone || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Alternate phone
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.candidateAltPhone || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Designation
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.candidateDesignation || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Current company
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.candidateCurrentCompany || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Experience
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.candidateExperience || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Location
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {[
-                    selectedApplication.candidateCity,
-                    selectedApplication.candidateState,
-                    selectedApplication.candidateCountry,
-                  ]
-                    .filter(Boolean)
-                    .join(", ") || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Application status
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {titleCase(selectedApplication.status)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Job
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.jobTitle || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Company
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.companyName || "Unavailable"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Applied at
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {formatDateTime(selectedApplication.appliedAt)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Last updated
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {formatDateTime(selectedApplication.updatedAt)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Source QR token
-                </p>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {selectedApplication.sourceQrToken || "Unavailable"}
-                </p>
-              </div>
-            </div>
-
-            {selectedApplication.candidateHeadline ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Headline
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {selectedApplication.candidateHeadline}
-                </p>
-              </div>
+            {isLoadingProfile ? (
+              <p className="text-xs text-slate-400">Loading latest profile data…</p>
             ) : null}
 
-            {selectedApplication.candidateSummary ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Profile summary
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {selectedApplication.candidateSummary}
-                </p>
-              </div>
-            ) : null}
+            {(() => {
+              // Merge live profile over cached application data
+              const p = liveProfile || {};
+              const a = selectedApplication;
+              const phone = p.candidatePhone || a.candidatePhone || "";
+              const altPhone = p.candidateAltPhone || a.candidateAltPhone || "";
+              const designation = p.candidateDesignation || a.candidateDesignation || "";
+              const currentCompany = p.candidateCurrentCompany || a.candidateCurrentCompany || "";
+              const experience = p.candidateExperience || a.candidateExperience || "";
+              const city = p.candidateCity || a.candidateCity || "";
+              const state = p.candidateState || a.candidateState || "";
+              const country = p.candidateCountry || a.candidateCountry || "";
+              const headline = p.candidateHeadline || a.candidateHeadline || "";
+              const summary = p.candidateSummary || a.candidateSummary || "";
+              const skills = (p.candidateSkills?.length ? p.candidateSkills : a.candidateSkills) || [];
+              const resumeUrl = p.resumeUrl || a.resumeUrl || "";
+              const resumeFileName = p.resumeFileName || a.resumeFileName || "";
+              const resumeUploadedAt = p.resumeUploadedAt || a.resumeUploadedAt || null;
+              const location = [city, state, country].filter(Boolean).join(", ");
 
-            {selectedApplication.candidateSkills?.length ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Skills
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {selectedApplication.candidateSkills.join(", ")}
-                </p>
-              </div>
-            ) : null}
+              return (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Email
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {p.candidateEmail || a.candidateEmail || "Unavailable"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Phone
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${phone ? "text-slate-700" : "text-amber-500"}`}>
+                        {phone || "Not filled yet"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Alternate phone
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${altPhone ? "text-slate-700" : "text-amber-500"}`}>
+                        {altPhone || "Not filled yet"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Designation
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${designation ? "text-slate-700" : "text-amber-500"}`}>
+                        {designation || "Not filled yet"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Current company
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${currentCompany ? "text-slate-700" : "text-amber-500"}`}>
+                        {currentCompany || "Not filled yet"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Experience
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${experience ? "text-slate-700" : "text-amber-500"}`}>
+                        {experience || "Not filled yet"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Location
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${location ? "text-slate-700" : "text-amber-500"}`}>
+                        {location || "Not filled yet"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Application status
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {titleCase(a.status)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Job
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {a.jobTitle || "Unavailable"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Company
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {a.companyName || "Unavailable"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Applied at
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${a.appliedAt ? "text-slate-700" : "text-amber-500"}`}>
+                        {a.appliedAt ? formatDateTime(a.appliedAt) : "Not captured"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Last updated
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {formatDateTime(a.updatedAt)}
+                      </p>
+                    </div>
+                  </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <a
-                href={selectedApplication.resumeUrl || "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-disabled={!selectedApplication.resumeUrl}
-                onClick={(event) => {
-                  if (!selectedApplication.resumeUrl) {
-                    event.preventDefault();
-                  }
-                }}
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-                  selectedApplication.resumeUrl
-                    ? "bg-[#163060] text-white hover:bg-[#1d3f7f]"
-                    : "cursor-not-allowed bg-slate-200 text-slate-500"
-                }`}
-              >
-                <LuDownload size={16} />
-                {selectedApplication.resumeUrl
-                  ? "Download Candidate CV"
-                  : "CV not available"}
-              </a>
-              {selectedApplication.resumeFileName ? (
-                <p className="text-xs text-slate-500">
-                  File: {selectedApplication.resumeFileName}
-                </p>
-              ) : null}
-              {selectedApplication.resumeUploadedAt ? (
-                <p className="text-xs text-slate-500">
-                  Uploaded: {formatDateTime(selectedApplication.resumeUploadedAt)}
-                </p>
-              ) : null}
-            </div>
+                  {headline ? (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Headline
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{headline}</p>
+                    </div>
+                  ) : null}
+
+                  {summary ? (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Profile summary
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{summary}</p>
+                    </div>
+                  ) : null}
+
+                  {skills.length ? (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Skills
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={!resumeUrl || isDownloadingCv}
+                      onClick={handleDownloadResume}
+                      className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold transition ${
+                        resumeUrl
+                          ? "border-slate-200 bg-slate-50 text-slate-800 hover:border-slate-300 hover:bg-slate-100 disabled:opacity-50"
+                          : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+                      }`}
+                    >
+                      <LuDownload size={16} className={isDownloadingCv ? "animate-bounce" : ""} />
+                      {isDownloadingCv ? "Loading PDF..." : resumeUrl ? "Download Candidate CV" : "CV not available"}
+                    </button>
+                    {resumeFileName ? (
+                      <p className="text-xs text-slate-500">File: {resumeFileName}</p>
+                    ) : null}
+                    {resumeUploadedAt ? (
+                      <p className="text-xs text-slate-500">
+                        Uploaded: {formatDateTime(resumeUploadedAt)}
+                      </p>
+                    ) : null}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         ) : null}
       </ModalShell>

@@ -45,6 +45,18 @@ router.patch(
   crmPanelController.updateApplicationStatus,
 );
 
+router.get(
+  "/candidates/:candidateId/profile",
+  protectCrmPanel,
+  crmPanelController.getCandidateProfile,
+);
+
+router.get(
+  "/candidates/:candidateId/resume/download",
+  protectCrmPanel,
+  crmPanelController.downloadResume,
+);
+
 router.get("/notifications", protectCrmPanel, crmPanelController.getNotifications);
 router.post("/notifications", protectCrmPanel, crmPanelController.createNotification);
 

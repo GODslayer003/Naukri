@@ -17,9 +17,7 @@ const createHttpError = (statusCode, message) => {
 };
 
 const supportedResumeMimeTypes = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/pdf"
 ]);
 
 const isValidPhoneNumber = (value = "") => {
@@ -388,7 +386,7 @@ exports.register = asyncHandler(async (req, res) => {
   }
 
   if (!supportedResumeMimeTypes.has(req.file.mimetype)) {
-    throw createHttpError(400, "Only PDF, DOC, and DOCX files are supported");
+    throw createHttpError(400, "Only PDF files are supported");
   }
 
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -907,7 +905,7 @@ exports.uploadResume = asyncHandler(async (req, res) => {
   }
 
   if (!supportedResumeMimeTypes.has(req.file.mimetype)) {
-    throw createHttpError(400, "Only PDF, DOC, and DOCX files are supported");
+    throw createHttpError(400, "Only PDF files are supported");
   }
 
   const profile = await ensureCandidateProfile(req.user);

@@ -213,6 +213,25 @@ export function updateApplicationStatus(id, payload) {
   });
 }
 
+export function getCandidateProfile(candidateId) {
+  return request(`/candidates/${candidateId}/profile`);
+}
+
+export async function downloadResume(candidateId) {
+  const token = getStoredToken();
+  const response = await fetch(`${API_ROOT}/candidates/${candidateId}/resume/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to download resume");
+  }
+
+  return response.blob();
+}
+
 export function getNotifications() {
   return request("/notifications");
 }

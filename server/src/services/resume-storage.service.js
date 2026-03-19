@@ -110,11 +110,5 @@ const uploadToCloudinary = async (file, userId) =>
   });
 
 exports.uploadResumeFile = async (file, userId) => {
-  const awsUpload = await uploadToAws(file, userId);
-
-  if (awsUpload) {
-    return awsUpload;
-  }
-
   return uploadToCloudinary(file, userId);
 };
