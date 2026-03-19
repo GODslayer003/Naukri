@@ -79,6 +79,7 @@ const formatCandidateUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  designation: user.department || "",
   accessStatus: user.accessStatus || "ACTIVE",
 });
 
@@ -90,7 +91,7 @@ const formatProfile = (profile, user) => ({
   headline: profile.headline || "",
   summary: profile.summary || "",
   totalExperience: profile.totalExperience || "",
-  currentTitle: profile.currentTitle || "",
+  currentTitle: profile.currentTitle || user.department || "",
   currentCompany: profile.currentCompany || "",
   noticePeriod: profile.noticePeriod || "",
   currentCity: profile.currentCity || "",
@@ -191,6 +192,11 @@ const ensureCandidateProfile = async (user) => {
       changes: [],
       actorType: "SYSTEM",
     });
+  }
+
+  if (!String(profile.currentTitle || "").trim() && String(user.department || "").trim()) {
+    profile.currentTitle = String(user.department).trim();
+    await profile.save();
   }
 
   return profile;
@@ -338,10 +344,10 @@ const sendCsv = (res, fileName, headers, rows) => {
 };
 
 exports.register = asyncHandler(async (req, res) => {
-  const { name = "", email = "", password = "", qrToken = "" } = req.body;
+  const { name = "", designation = "", email = "", password = "", qrToken = "" } = req.body;
 
-  if (!name.trim() || !email.trim() || !password.trim()) {
-    throw createHttpError(400, "Name, email, and password are required");
+  if (!name.trim() || !designation.trim() || !email.trim() || !password.trim()) {
+    throw createHttpError(400, "Name, designation, email, and password are required");
   }
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -356,23 +362,44 @@ exports.register = asyncHandler(async (req, res) => {
     email: normalizedEmail,
     password: await bcrypt.hash(password, 10),
     role: "CANDIDATE",
+    department: designation.trim(),
     accessStatus: "ACTIVE",
     isActive: true,
   });
 
   const profile = await CandidateProfile.create({
     userId: user._id,
+    currentTitle: designation.trim(),
     lastScannedQrToken: qrToken.trim(),
   });
+
+  const changedFields = [];
+  const changes = [];
+
+  if (designation.trim()) {
+    changedFields.push("currentTitle");
+    changes.push({
+      field: "currentTitle",
+      previousValue: "",
+      nextValue: designation.trim(),
+    });
+  }
+
+  if (qrToken.trim()) {
+    changedFields.push("lastScannedQrToken");
+    changes.push({
+      field: "lastScannedQrToken",
+      previousValue: "",
+      nextValue: qrToken.trim(),
+    });
+  }
 
   await CandidateProfileHistory.create({
     candidateId: user._id,
     profileId: profile._id,
     action: "CREATE",
-    changedFields: qrToken.trim() ? ["lastScannedQrToken"] : [],
-    changes: qrToken.trim()
-      ? [{ field: "lastScannedQrToken", previousValue: "", nextValue: qrToken.trim() }]
-      : [],
+    changedFields,
+    changes,
     actorType: "CANDIDATE",
     actorId: user._id,
   });
@@ -735,6 +762,17 @@ exports.updateProfile = asyncHandler(async (req, res) => {
   syncField("linkedInUrl", req.body.linkedInUrl, (value) => String(value).trim());
   syncField("portfolioUrl", req.body.portfolioUrl, (value) => String(value).trim());
   syncField("expectedSalary", req.body.expectedSalary, (value) => String(value).trim());
+
+  const nextDesignation = String(req.body.currentTitle || "").trim();
+  if (req.body.currentTitle !== undefined && req.user.department !== nextDesignation) {
+    changes.push({
+      field: "designation",
+      previousValue: req.user.department || "",
+      nextValue: nextDesignation,
+    });
+    req.user.department = nextDesignation;
+    await req.user.save();
+  }
 
   if (!changes.length) {
     res.status(200).json({

@@ -4,7 +4,7 @@ import LogoImage from "../../assets/maven-logo.svg";
 import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../../Redux/thunks/authThunks";
 import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import LoginIllustration from "../../assets/Character.svg";
 
 const Login = () => {
@@ -15,6 +15,14 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  const getRoleDestination = (role) => {
+    if (["LEAD_GENERATOR", "STATE_MANAGER", "APPROVER", "ADMIN"].includes(role)) {
+      return "/lead-generator/dashboard";
+    }
+
+    return "/";
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -27,7 +35,7 @@ const Login = () => {
     if (result.meta.requestStatus === "fulfilled") {
       toast.success("Login successful!");
 
-      navigate("/");
+      navigate(getRoleDestination(result.payload.user.role));
     } else {
       toast.error(result.payload || "Invalid credentials");
     }

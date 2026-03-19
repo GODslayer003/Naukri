@@ -1,13 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 import { LuBell, LuMenu, LuUser, LuSettings, LuLogOut } from "react-icons/lu";
 import { getMyProfile } from "../../Redux/thunks/crmThunks";
+import { logoutUser } from "../../Redux/thunks/authThunks";
+import { clearProfile } from "../../Redux/slices/crmSlice";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 
 export default function Header({ toggleSidebar }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { profile } = useSelector((state) => state.crm);
 
   useEffect(() => {
@@ -36,6 +40,12 @@ export default function Header({ toggleSidebar }) {
       .split("_")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
+  };
+
+  const handleLogout = async () => {
+    dispatch(clearProfile());
+    await dispatch(logoutUser());
+    navigate("/login");
   };
 
   return (
@@ -93,7 +103,10 @@ export default function Header({ toggleSidebar }) {
 
               <div className=" my-2"></div>
 
-              <button className="flex items-center gap-3 px-4 py-2 text-sm text-red-500 hover:bg-red-50 w-full text-left">
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-4 py-2 text-sm text-red-500 hover:bg-red-50 w-full text-left"
+              >
                 <LuLogOut size={16} />
                 Logout
               </button>

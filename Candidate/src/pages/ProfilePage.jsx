@@ -51,7 +51,7 @@ export default function ProfilePage() {
       headline: profile.headline || "",
       summary: profile.summary || "",
       totalExperience: profile.totalExperience || "",
-      currentTitle: profile.currentTitle || "",
+      currentTitle: profile.currentTitle || profile.user?.designation || "",
       currentCompany: profile.currentCompany || "",
       noticePeriod: profile.noticePeriod || "",
       currentCity: profile.currentCity || "",
@@ -247,7 +247,7 @@ export default function ProfilePage() {
             <TextField label="Alternate phone" value={form.altPhone} onChange={handleChange("altPhone")} />
             <TextField label="Headline" value={form.headline} onChange={handleChange("headline")} />
             <TextField label="Total experience" value={form.totalExperience} onChange={handleChange("totalExperience")} />
-            <TextField label="Current title" value={form.currentTitle} onChange={handleChange("currentTitle")} />
+            <TextField label="Designation" value={form.currentTitle} onChange={handleChange("currentTitle")} />
             <TextField label="Current company" value={form.currentCompany} onChange={handleChange("currentCompany")} />
             <TextField label="Notice period" value={form.noticePeriod} onChange={handleChange("noticePeriod")} />
             <TextField label="Current city" value={form.currentCity} onChange={handleChange("currentCity")} />

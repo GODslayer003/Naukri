@@ -1,10 +1,12 @@
 import { NavLink } from "react-router-dom";
 import logo from "../../assets/maven-logo.svg";
-import { crmSidebarMenu } from "../../config/crmMenuConfig";
+import { getSidebarMenuForRole } from "../../config/crmMenuConfig";
 import { useSelector } from "react-redux";
 
-export default function Sidebar({ isOpen }) {
+export default function Sidebar({ isOpen, closeSidebar }) {
   const { profile } = useSelector((state) => state.crm);
+  const authRole = useSelector((state) => state.auth.role);
+  const sidebarMenu = getSidebarMenuForRole(profile?.role || authRole);
 
   const normalizeRole = (role) => {
     if (!role) return "";
@@ -31,13 +33,14 @@ export default function Sidebar({ isOpen }) {
 
       {/* Navigation */}
       <div className="px-4 mt-6 space-y-2 overflow-y-auto h-[calc(100vh-160px)]">
-        {crmSidebarMenu.map((item, index) => {
+        {sidebarMenu.map((item, index) => {
           const Icon = item.icon;
 
           return (
             <NavLink
               key={index}
               to={item.path}
+              onClick={closeSidebar}
               className={({ isActive }) =>
                 `${navClass} ${
                   isActive ? "bg-lime-400 text-black" : "hover:bg-white/10"
@@ -61,7 +64,9 @@ export default function Sidebar({ isOpen }) {
             <p className="text-sm font-semibold">
               {normalizeRole(profile?.role)}
             </p>
-            <p className="text-xs text-gray-300">Sales Department</p>
+            <p className="text-xs text-gray-300">
+              {profile?.state || profile?.department || "Lead Operations"}
+            </p>
           </div>
         </div>
       </div>

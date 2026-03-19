@@ -5,7 +5,7 @@ export default function AppLayout({ children, headerProps = {} }) {
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-gradient-to-br from-[#f4f7ff] via-[#eef3ff] to-[#f9fbff]">
       <Header {...headerProps} />
-      <main className="flex-1 overflow-hidden">{children}</main>
+      <main className="flex-1 overflow-y-auto">{children}</main>
       <Footer />
     </div>
   );

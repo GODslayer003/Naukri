@@ -13,7 +13,7 @@ export const getMyProfile = createAsyncThunk(
     try {
       const { data } = await api.get("/crm/me");
 
-      return data.data; // returning only profile object
+      return data.user;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Failed to fetch profile"

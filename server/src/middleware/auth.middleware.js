@@ -55,7 +55,7 @@ const protectCRM = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid token" });
     }
 
-    if (!user.isActive) {
+    if (!user.isActive || user.accessStatus === "RESTRICTED") {
       return res.status(403).json({ message: "CRM account inactive" });
     }
 

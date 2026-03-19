@@ -37,7 +37,7 @@ export const logoutUser = createAsyncThunk(
       sessionStorage.removeItem("user");
 
       return true;
-    } catch (error) {
+    } catch {
       return rejectWithValue("Logout failed");
     }
   },

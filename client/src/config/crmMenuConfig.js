@@ -2,6 +2,7 @@ import {
   LuLayoutDashboard,
   LuBuilding2,
   LuBriefcase,
+  LuCirclePlus,
   LuPackage,
   LuFileText,
   LuSend,
@@ -57,3 +58,24 @@ export const crmSidebarMenu = [
     icon: LuSettings,
   },
 ];
+
+const leadGeneratorSidebarMenu = [
+  {
+    title: "Dashboard",
+    path: "/lead-generator/dashboard",
+    icon: LuLayoutDashboard,
+  },
+  {
+    title: "Add Lead",
+    path: "/lead-generator/add-lead",
+    icon: LuCirclePlus,
+  },
+];
+
+export const getSidebarMenuForRole = (role) => {
+  if (["LEAD_GENERATOR", "STATE_MANAGER", "APPROVER", "ADMIN"].includes(role)) {
+    return leadGeneratorSidebarMenu;
+  }
+
+  return crmSidebarMenu;
+};

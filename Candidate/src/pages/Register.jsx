@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { LuUserRoundPlus } from "react-icons/lu";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { registerCandidate, setStoredSession } from "../services/candidateApi";
+import { registerCandidate, setStoredSession, updateProfile } from "../services/candidateApi";
 
 export default function Register() {
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState({
     name: "",
+    designation: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -24,8 +25,13 @@ export default function Register() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-      setError("Name, email, and password are required.");
+    if (
+      !form.name.trim() ||
+      !form.designation.trim() ||
+      !form.email.trim() ||
+      !form.password.trim()
+    ) {
+      setError("Name, designation, email, and password are required.");
       return;
     }
 
@@ -38,8 +44,10 @@ export default function Register() {
     setError("");
 
     try {
+      const designation = form.designation.trim();
       const response = await registerCandidate({
         name: form.name.trim(),
+        designation,
         email: form.email.trim(),
         password: form.password,
         qrToken: token,
@@ -50,6 +58,32 @@ export default function Register() {
         user: response.user,
         profile: response.profile,
       });
+
+      // Production-safe fallback: ensure designation is persisted in profile even if
+      // register response from older backend does not hydrate currentTitle.
+      let syncedProfile = response.profile;
+      if (designation && !response.profile?.currentTitle) {
+        try {
+          const profileResponse = await updateProfile({ currentTitle: designation });
+          syncedProfile = profileResponse.data || response.profile;
+        } catch {
+          syncedProfile = {
+            ...response.profile,
+            currentTitle: designation,
+          };
+        }
+
+        setStoredSession({
+          token: response.token,
+          user: {
+            ...response.user,
+            designation:
+              response.user?.designation ||
+              designation,
+          },
+          profile: syncedProfile,
+        });
+      }
 
       if (token) {
         const query = new URLSearchParams();
@@ -116,6 +150,19 @@ export default function Register() {
                   value={form.name}
                   onChange={handleChange("name")}
                   placeholder="Your full name"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#163060] focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Designation
+                </label>
+                <input
+                  type="text"
+                  value={form.designation}
+                  onChange={handleChange("designation")}
+                  placeholder="e.g. Software Engineer"
                   className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#163060] focus:bg-white"
                 />
               </div>

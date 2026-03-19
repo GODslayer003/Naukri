@@ -6,16 +6,14 @@ import AppLayout from "../Layout/AppLayout";
 import { fetchLandingData } from "../Redux/thunks/landingThunks";
 
 const normalizeBaseUrl = (value) => String(value || "").trim().replace(/\/+$/, "");
+const DEFAULT_CANDIDATE_APP_URL = "https://naukri-3.vercel.app";
 
 const getCandidateAppBaseUrl = (fallbackUrl = "") => {
-  const envValue = normalizeBaseUrl(import.meta.env.VITE_CANDIDATE_APP_URL);
-  if (envValue) return envValue;
-
   const fallbackValue = normalizeBaseUrl(fallbackUrl);
   if (fallbackValue) return fallbackValue;
 
   if (typeof window === "undefined") {
-    return "";
+    return DEFAULT_CANDIDATE_APP_URL;
   }
 
   const { protocol, hostname, port } = window.location;
@@ -25,16 +23,12 @@ const getCandidateAppBaseUrl = (fallbackUrl = "") => {
     if (port === "5174") return `${protocol}//${hostname}:5173`;
   }
 
-  return "";
+  return DEFAULT_CANDIDATE_APP_URL;
 };
 
-const buildCandidateJobUrl = ({ token, jobId, baseUrl }) => {
-  const resolvedBaseUrl = baseUrl || getCandidateAppBaseUrl();
-  const safeToken = encodeURIComponent(token);
-  const params = new URLSearchParams();
-  params.set("jobId", jobId);
-  params.set("applyJobId", jobId);
-  return `${resolvedBaseUrl}/landing/${safeToken}?${params.toString()}`;
+const buildCandidateJobUrl = ({ baseUrl }) => {
+  const resolvedBaseUrl = normalizeBaseUrl(baseUrl) || DEFAULT_CANDIDATE_APP_URL;
+  return resolvedBaseUrl;
 };
 
 export default function CompanyLandingPage() {
@@ -45,14 +39,14 @@ export default function CompanyLandingPage() {
   );
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [actionError, setActionError] = useState("");
-  const candidateBaseUrl = getCandidateAppBaseUrl(candidateWebUrl);
-  const hasExplicitCandidateUrl = Boolean(
-    normalizeBaseUrl(import.meta.env.VITE_CANDIDATE_APP_URL) ||
-      normalizeBaseUrl(candidateWebUrl),
-  );
+  const explicitCandidateUrl = normalizeBaseUrl(candidateWebUrl);
+  const candidateBaseUrl = getCandidateAppBaseUrl(explicitCandidateUrl);
+  const hasExplicitCandidateUrl = Boolean(explicitCandidateUrl);
 
   useEffect(() => {
-    if (!token || typeof window === "undefined") return;
+    if (!token || !hasExplicitCandidateUrl || typeof window === "undefined") {
+      return;
+    }
 
     const baseUrl = candidateBaseUrl;
     if (!baseUrl) return;
@@ -138,9 +132,9 @@ export default function CompanyLandingPage() {
 
   return (
     <AppLayout headerProps={{ companyName: company.name }}>
-      <div className="h-full">
-        <div className="h-full max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6">
-          <section className="rounded-3xl border border-[#e6ecff] bg-white px-6 py-6 shadow-[0_12px_35px_rgba(15,23,42,0.06)]">
+      <div className="min-h-full">
+        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6">
+          <section className="rounded-[36px] border border-[#e6ecff] bg-white px-8 py-7 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
             <div className="flex flex-col gap-3">
               <h1 className="text-3xl md:text-4xl font-extrabold text-[#1a3c7a]">
                 {company.name}
@@ -163,14 +157,7 @@ export default function CompanyLandingPage() {
             </div>
           </section>
 
-          {!hasExplicitCandidateUrl ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
-              Candidate app URL is not configured. Set `VITE_CANDIDATE_APP_URL`
-              for this QR landing build so Apply can redirect correctly.
-            </div>
-          ) : null}
-
-          <section className="flex-1 overflow-hidden rounded-3xl border border-[#e6ecff] bg-white shadow-[0_12px_35px_rgba(15,23,42,0.06)]">
+          <section className="rounded-[36px] border border-[#e6ecff] bg-white shadow-[0_12px_35px_rgba(15,23,42,0.06)]">
             <div className="flex items-center justify-between gap-4 border-b border-[#e6ecff] px-6 py-4">
               <h2 className="text-[18px] font-bold text-[#1a3c7a]">
                 Open Positions
@@ -180,7 +167,7 @@ export default function CompanyLandingPage() {
               </div>
             </div>
 
-            <div className="h-full overflow-y-auto px-6 py-5">
+            <div className="px-6 py-5">
               {actionError ? (
                 <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
                   {actionError}
@@ -190,14 +177,9 @@ export default function CompanyLandingPage() {
                 <div className="grid gap-4">
                   {jobs.map((job) => {
                     const jobId = String(job._id || job.id || "");
-                    const applyUrl =
-                      candidateBaseUrl && token && jobId
-                        ? buildCandidateJobUrl({
-                            token,
-                            jobId,
-                            baseUrl: candidateBaseUrl,
-                          })
-                        : "#";
+                    const applyUrl = buildCandidateJobUrl({
+                      baseUrl: candidateBaseUrl,
+                    });
 
                     return (
                       <article
@@ -229,13 +211,13 @@ export default function CompanyLandingPage() {
                             </div>
                           </div>
 
-                          {/* <button
+                          <button
                             type="button"
-                            onClick={() => handleApplyNavigate(applyUrl)}
-                            className="shrink-0 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#00a8b4] to-[#5cba47] px-5 py-3 text-xs font-bold text-white transition hover:opacity-90"
+                            onClick={() => handleApplyNavigate("https://naukri-3.vercel.app")}
+                            className="shrink-0 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#00a8b4] to-[#5cba47] px-5 py-3 text-xs font-bold text-white transition hover:opacity-90"
                           >
                             Apply now
-                          </button> */}
+                          </button>
                         </div>
                       </article>
                     );
