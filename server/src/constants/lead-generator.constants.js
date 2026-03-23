@@ -22,6 +22,8 @@ const LEAD_STATUSES = [
   "FOLLOW_UP",
   "WON",
   "LOST",
+  "CONVERTED",
+  "FORWARDED",
 ];
 
 const LEAD_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];

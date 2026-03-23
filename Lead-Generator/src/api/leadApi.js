@@ -73,3 +73,8 @@ export async function createLead(payload) {
   const { data } = await http.post("/leads", payload);
   return data.data;
 }
+
+export async function updateLeadStatus(leadId, status) {
+  const { data } = await http.patch(`/leads/${leadId}/status`, { status });
+  return data.data;
+}

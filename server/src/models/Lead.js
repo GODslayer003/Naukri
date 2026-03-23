@@ -118,17 +118,15 @@ leadSchema.index({ businessCategory: 1, createdAt: -1 });
 leadSchema.index({ phone: 1 });
 leadSchema.index({ email: 1 });
 
-leadSchema.pre("validate", function assignLeadCode(next) {
+leadSchema.pre("validate", async function () {
   if (!this.leadCode) {
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const suffix = crypto.randomBytes(3).toString("hex").toUpperCase();
     this.leadCode = `LD-${stamp}-${suffix}`;
   }
-
-  next();
 });
 
-leadSchema.pre("save", function normalizeLeadFields(next) {
+leadSchema.pre("save", async function () {
   this.phone = normalizePhoneNumber(this.phone);
   this.alternatePhone = normalizePhoneNumber(this.alternatePhone);
   this.email = (this.email || "").trim().toLowerCase();
@@ -139,7 +137,6 @@ leadSchema.pre("save", function normalizeLeadFields(next) {
   this.address = (this.address || "").trim();
   this.notes = (this.notes || "").trim();
   this.pincode = (this.pincode || "").trim();
-  next();
 });
 
 leadSchema.statics.normalizePhoneNumber = normalizePhoneNumber;

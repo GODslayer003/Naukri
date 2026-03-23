@@ -1,4 +1,7 @@
 const asyncHandler = require("../middleware/async.middleware");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const CrmUser = require("../models/CrmUser");
 const Lead = require("../models/Lead");
 const {
   BUSINESS_CATEGORIES,
@@ -12,6 +15,11 @@ const createHttpError = (statusCode, message) => {
   error.statusCode = statusCode;
   return error;
 };
+
+const generateToken = (id) =>
+  jwt.sign({ id, type: "CRM_PANEL" }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
 
 const escapeRegExp = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -342,5 +350,129 @@ exports.createLead = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     data: formatLead(hydratedLead),
+  });
+});
+
+exports.updateLeadStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const ALLOWED_STATUSES = ["CONVERTED", "FORWARDED"];
+
+  if (!status || !ALLOWED_STATUSES.includes(String(status).toUpperCase())) {
+    throw createHttpError(400, `Status must be one of: ${ALLOWED_STATUSES.join(", ")}`);
+  }
+
+  const lead = await Lead.findById(id);
+
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  // Only the creator or admin/approver can update the status
+  const isOwner = String(lead.createdBy) === String(req.user._id);
+  const isPrivileged = ["ADMIN", "APPROVER", "STATE_MANAGER"].includes(req.user.role);
+
+  if (!isOwner && !isPrivileged) {
+    throw createHttpError(403, "You do not have permission to update this lead");
+  }
+
+  lead.status = String(status).toUpperCase();
+  lead.updatedBy = req.user._id;
+  await lead.save();
+
+  const updated = await Lead.findById(lead._id).populate("createdBy", "fullName role");
+
+  res.status(200).json({
+    success: true,
+    data: formatLead(updated),
+  });
+});
+
+exports.signup = asyncHandler(async (req, res) => {
+  const { email, zone, password, confirmPassword } = req.body;
+
+  if (!email || !zone || !password || !confirmPassword) {
+    throw createHttpError(400, "All fields are required (email, zone, password, confirmPassword)");
+  }
+
+  if (password !== confirmPassword) {
+    throw createHttpError(400, "Passwords do not match");
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const existingUser = await CrmUser.findOne({ email: normalizedEmail });
+  
+  if (existingUser) {
+    throw createHttpError(409, "User with this email already exists");
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const user = await CrmUser.create({
+    fullName: "Lead Generator",
+    email: normalizedEmail,
+    password: hashedPassword,
+    role: "LEAD_GENERATOR",
+    territory: zone.trim(), // mapping 'Zone' to 'territory'
+    accessStatus: "ACTIVE",
+    isActive: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "Registration successful. You can now log in.",
+    token: generateToken(user._id),
+    user: {
+      id: user._id,
+      email: user.email,
+      zone: user.territory,
+      role: user.role,
+    },
+  });
+});
+
+exports.login = asyncHandler(async (req, res) => {
+  const { email, zone, password } = req.body;
+
+  if (!email || !zone || !password) {
+    throw createHttpError(400, "All fields are required (email, zone, password)");
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await CrmUser.findOne({ email: normalizedEmail });
+
+  if (!user) {
+    throw createHttpError(401, "Invalid credentials or zone");
+  }
+
+  if (user.role !== "LEAD_GENERATOR") {
+    throw createHttpError(403, "Access denied. Only Lead Generators can log in here.");
+  }
+
+  if (user.territory !== zone.trim()) {
+    throw createHttpError(401, "Invalid zone selection for this account.");
+  }
+
+  if (!user.isActive || user.accessStatus === "RESTRICTED") {
+    throw createHttpError(403, "Account is inactive or restricted.");
+  }
+
+  const passwordMatches = await bcrypt.hash(password, 10).then(() => bcrypt.compare(password, user.password));
+
+  if (!passwordMatches) {
+    throw createHttpError(401, "Invalid credentials or zone");
+  }
+
+  res.status(200).json({
+    success: true,
+    token: generateToken(user._id),
+    user: {
+      id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      zone: user.territory,
+      role: user.role,
+    },
   });
 });
