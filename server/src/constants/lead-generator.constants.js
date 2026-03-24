@@ -24,6 +24,7 @@ const LEAD_STATUSES = [
   "LOST",
   "CONVERTED",
   "FORWARDED",
+  "ASSIGNED",
 ];
 
 const LEAD_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];

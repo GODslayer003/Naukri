@@ -83,7 +83,7 @@ const formatLead = (lead) => ({
   email: lead.email || "",
   businessCategory: lead.businessCategory,
   leadSource: lead.leadSource,
-  status: lead.status,
+  status: lead.isForwardedToSM ? "FORWARDED" : lead.status,
   priority: lead.priority,
   city: lead.city,
   state: lead.state,
@@ -92,6 +92,7 @@ const formatLead = (lead) => ({
   notes: lead.notes || "",
   nextFollowUpAt: lead.nextFollowUpAt,
   lastContactedAt: lead.lastContactedAt,
+  activities: lead.activities || [],
   createdAt: lead.createdAt,
   updatedAt: lead.updatedAt,
   createdBy:
@@ -377,6 +378,10 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
     throw createHttpError(403, "You do not have permission to update this lead");
   }
 
+  if (String(status).toUpperCase() === "FORWARDED") {
+    lead.isForwardedToSM = true;
+  }
+  
   lead.status = String(status).toUpperCase();
   lead.updatedBy = req.user._id;
   await lead.save();
@@ -474,5 +479,109 @@ exports.login = asyncHandler(async (req, res) => {
       zone: user.territory,
       role: user.role,
     },
+  });
+});
+
+exports.changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    throw createHttpError(400, "Current password and new password are required.");
+  }
+
+  if (newPassword.length < 8) {
+    throw createHttpError(400, "New password must be at least 8 characters.");
+  }
+
+  const user = await CrmUser.findById(req.user._id);
+
+  if (!user) {
+    throw createHttpError(404, "User not found.");
+  }
+
+  const passwordMatches = await bcrypt.compare(currentPassword, user.password);
+
+  if (!passwordMatches) {
+    throw createHttpError(401, "Current password is incorrect.");
+  }
+
+  user.password = await bcrypt.hash(newPassword, 10);
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Password updated successfully.",
+  });
+});
+
+exports.logLeadActivity = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { outcome, notes, nextFollowUpAt, activityIndex } = req.body;
+
+  if (!outcome || !notes) {
+    throw createHttpError(400, "Outcome and notes are required");
+  }
+
+  const lead = await Lead.findById(id);
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  const activityData = {
+    outcome,
+    notes,
+    nextFollowUpAt: nextFollowUpAt || null,
+    date: new Date(),
+  };
+
+  if (activityIndex !== undefined && activityIndex !== null) {
+    // Update existing activity
+    if (!lead.activities[activityIndex]) {
+      throw createHttpError(404, "Activity not found");
+    }
+    lead.activities[activityIndex] = {
+      ...lead.activities[activityIndex].toObject(),
+      ...activityData,
+      date: lead.activities[activityIndex].date, // Keep original date
+    };
+  } else {
+    // Add new activity
+    lead.activities.push(activityData);
+  }
+
+  // Also update lead's main follow-up date and last contacted date
+  if (nextFollowUpAt) {
+    lead.nextFollowUpAt = nextFollowUpAt;
+  }
+  lead.lastContactedAt = new Date();
+  lead.updatedBy = req.user._id;
+
+  await lead.save();
+
+  res.status(200).json({
+    success: true,
+    data: formatLead(lead),
+  });
+});
+
+exports.deleteLeadActivity = asyncHandler(async (req, res) => {
+  const { id, index } = req.params;
+
+  const lead = await Lead.findById(id);
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  if (!lead.activities[index]) {
+    throw createHttpError(404, "Activity not found");
+  }
+
+  lead.activities.splice(index, 1);
+  lead.updatedBy = req.user._id;
+  await lead.save();
+
+  res.status(200).json({
+    success: true,
+    data: formatLead(lead),
   });
 });

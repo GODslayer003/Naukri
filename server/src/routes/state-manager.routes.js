@@ -1,0 +1,25 @@
+const express = require("express");
+const router = express.Router();
+const controller = require("../controllers/state-manager.controller");
+const leadGeneratorController = require("../controllers/lead-generator.controller");
+const { protectCRM } = require("../middleware/auth.middleware");
+const role = require("../middleware/role.middleware");
+
+// Public routes for State Manager Portal
+router.post("/auth/signup", controller.signup);
+router.post("/auth/login", controller.login);
+
+router.use(protectCRM);
+router.use(role("STATE_MANAGER", "ADMIN"));
+
+router.patch("/auth/change-password", controller.changePassword);
+
+// Leads
+router.get("/dashboard", controller.getDashboard);
+router.get("/leads", controller.getLeads);
+router.patch("/leads/:id/assign", controller.assignLead);
+router.patch("/leads/:id/status", controller.updateLeadStatus);
+router.post("/leads/:id/activity", leadGeneratorController.logLeadActivity);
+router.delete("/leads/:id/activity/:index", leadGeneratorController.deleteLeadActivity);
+
+module.exports = router;

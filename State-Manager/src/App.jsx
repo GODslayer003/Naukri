@@ -7,11 +7,12 @@ import {
   LuLogOut,
   LuPlus,
   LuUser,
+  LuSearch,
 } from "react-icons/lu";
 import logo from "./assets/maven-logo.svg";
 import Dashboard from "./pages/Dashboard";
 import AddLead from "./pages/AddLead";
-import MyLeads from "./pages/MyLeads";
+import ValidationQueue from "./pages/ValidationQueue";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
@@ -39,8 +40,8 @@ export default function App() {
   const navigate = useNavigate();
   const session = getStoredSession();
   const user = session?.user;
-  const displayName = user?.name || user?.email || "Lead Generator";
-  const displayRole = user?.role || "Sales Team";
+  const displayName = user?.name || user?.email || "State Manager";
+  const displayRole = user?.role || "Sales Manager";
 
   const handleLogout = () => {
     sessionStorage.removeItem(SESSION_KEY);
@@ -72,19 +73,11 @@ export default function App() {
                   </NavLink>
 
                   <NavLink
-                    to="/add-lead"
-                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
-                  >
-                    <LuPlus />
-                    Add Lead
-                  </NavLink>
-
-                  <NavLink
-                    to="/my-leads"
+                    to="/validation-queue"
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
                     <LuList />
-                    My Leads
+                    Validation Queue
                   </NavLink>
 
                   <NavLink
@@ -127,8 +120,9 @@ export default function App() {
 
               <main className="page-shell">
                 <header className="top-bar">
-                  <div className="search-wrap">
-                    <input type="text" placeholder="Search by name or email..." />
+                  <div className="search-wrap" style={{ position: "relative" }}>
+                    <LuSearch style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} size={18} />
+                    <input type="text" placeholder="Global search..." style={{ paddingLeft: "38px" }} />
                   </div>
 
                   <div className="top-bar-actions">
@@ -149,8 +143,7 @@ export default function App() {
 
                 <Routes>
                   <Route index element={<Dashboard />} />
-                  <Route path="/add-lead" element={<AddLead />} />
-                  <Route path="/my-leads" element={<MyLeads />} />
+                  <Route path="/validation-queue" element={<ValidationQueue />} />
                   <Route path="/profile" element={<Profile />} />
                 </Routes>
               </main>

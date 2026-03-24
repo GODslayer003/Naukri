@@ -109,6 +109,18 @@ const leadSchema = new mongoose.Schema(
       ref: "CrmUser",
       required: true,
     },
+    isForwardedToSM: {
+      type: Boolean,
+      default: false,
+    },
+    activities: [
+      {
+        outcome: { type: String, required: true },
+        notes: { type: String, required: true },
+        nextFollowUpAt: { type: Date },
+        date: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true },
 );

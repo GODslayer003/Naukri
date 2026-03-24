@@ -9,7 +9,7 @@ import {
   LuRefreshCw,
   LuSend
 } from "react-icons/lu";
-import { fetchLeads, updateLeadStatus } from "../api/leadApi";
+import { fetchLeads, updateLeadStatus, logLeadActivity, deleteLeadActivity } from "../api/leadApi";
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
 
@@ -105,6 +105,16 @@ export default function MyLeads() {
         }));
 
         setRows(mappedRows);
+        
+        // Sync activities state
+        const initialActivities = {};
+        mappedRows.forEach(lead => {
+          if (lead.activities) {
+            initialActivities[lead._id || lead.id] = lead.activities;
+          }
+        });
+        setActivities(initialActivities);
+
         setError("");
       } catch (requestError) {
         if (mounted) {
@@ -142,45 +152,58 @@ export default function MyLeads() {
     setShowActivityModal(true);
   };
 
-  const handleDeleteActivity = (index) => {
+  const handleDeleteActivity = async (index) => {
     const leadId = selectedLead._id || selectedLead.id;
-    setActivities(prev => {
-      const updatedLeadActivities = [...(prev[leadId] || [])];
-      updatedLeadActivities.splice(index, 1);
-      return {
-        ...prev,
-        [leadId]: updatedLeadActivities
-      };
-    });
+    try {
+      await deleteLeadActivity(leadId, index);
+      // We don't have a loadLeads standalone function here, we rely on the useEffect.
+      // Easiest way to trigger refetch is to reload or manually update.
+      // In MyLeads, let's just update local state if we want it to be snappy,
+      // or we can just trigger the same logic as useEffect.
+      setActivities(prev => {
+        const updatedLeadActivities = [...(prev[leadId] || [])];
+        updatedLeadActivities.splice(index, 1);
+        return {
+          ...prev,
+          [leadId]: updatedLeadActivities
+        };
+      });
+    } catch (err) {
+      alert("Failed to delete activity.");
+    }
   };
 
-  const handleActivitySubmit = (data) => {
+  const handleActivitySubmit = async (data) => {
     const leadId = selectedLead._id || selectedLead.id;
 
-    setActivities(prev => {
-      const currentActivities = [...(prev[leadId] || [])];
-
-      if (editingActivityIndex !== null) {
-        // Update existing activity
-        currentActivities[editingActivityIndex] = {
-          ...currentActivities[editingActivityIndex],
-          ...data,
-          // keep original date, potentially update modified date if tracked
-        };
-      } else {
-        // Add new activity
-        currentActivities.push({ ...data, date: new Date().toISOString() });
-      }
-
-      return {
-        ...prev,
-        [leadId]: currentActivities
-      };
-    });
-
-    setShowActivityModal(false);
-    setEditingActivityIndex(null);
-    setShowDetailModal(true);
+    try {
+      await logLeadActivity(leadId, {
+        ...data,
+        activityIndex: editingActivityIndex,
+        nextFollowUpAt: data.nextFollowUp // The backend expects nextFollowUpAt
+      });
+      
+      setShowActivityModal(false);
+      setEditingActivityIndex(null);
+      
+      // Update local state for immediate feedback
+      setActivities(prev => {
+        const currentActivities = [...(prev[leadId] || [])];
+        if (editingActivityIndex !== null) {
+          currentActivities[editingActivityIndex] = {
+            ...currentActivities[editingActivityIndex],
+            ...data,
+          };
+        } else {
+          currentActivities.push({ ...data, date: new Date().toISOString() });
+        }
+        return { ...prev, [leadId]: currentActivities };
+      });
+      
+      setShowDetailModal(true);
+    } catch (err) {
+      alert("Failed to log activity.");
+    }
   };
 
   const handleConvert = async (e, lead) => {

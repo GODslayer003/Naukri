@@ -18,7 +18,7 @@ const getAuthToken = () => {
 
 const http = axios.create({
   baseURL:
-    import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1/lead-generator",
+    import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1/state-manager",
 });
 
 http.interceptors.request.use((config) => {
@@ -65,6 +65,14 @@ export async function fetchLeads(params = {}) {
     normalizedParams.leadSource = params.leadSource.trim();
   }
 
+  if (params.location?.trim()) {
+    normalizedParams.location = params.location.trim();
+  }
+
+  if (params.date?.trim()) {
+    normalizedParams.date = params.date.trim();
+  }
+
   const { data } = await http.get("/leads", { params: normalizedParams });
   return data.data;
 }
@@ -76,6 +84,11 @@ export async function createLead(payload) {
 
 export async function updateLeadStatus(leadId, status) {
   const { data } = await http.patch(`/leads/${leadId}/status`, { status });
+  return data.data;
+}
+
+export async function assignLeadToFSE(leadId, fseId) {
+  const { data } = await http.patch(`/leads/${leadId}/assign`, { fseId });
   return data.data;
 }
 
