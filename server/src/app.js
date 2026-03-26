@@ -11,9 +11,11 @@ const crmRoutes = require("./routes/crm.routes");
 const crmPanelRoutes = require("./routes/crm-panel.routes");
 const leadGeneratorRoutes = require("./routes/lead-generator.routes");
 const stateManagerRoutes = require("./routes/state-manager.routes");
+const fseRoutes = require("./routes/fse.routes");
 const landingRoute = require("./routes/landing.routes");
 const adminRoutes = require("./routes/admin.routes");
 const candidateRoutes = require("./routes/candidate.routes");
+const nshRoutes = require("./routes/national-sales-head.routes");
 
 const app = express();
 
@@ -38,9 +40,11 @@ app.use(`${BASE_ROUTE}/crm`, crmRoutes);
 app.use(`${BASE_ROUTE}/crm-panel`, crmPanelRoutes);
 app.use(`${BASE_ROUTE}/lead-generator`, leadGeneratorRoutes);
 app.use(`${BASE_ROUTE}/state-manager`, stateManagerRoutes);
+app.use(`${BASE_ROUTE}/fse`, fseRoutes);
 app.use(`${BASE_ROUTE}/landing`, landingRoute);
 app.use(`${BASE_ROUTE}/admin`, adminRoutes);
 app.use(`${BASE_ROUTE}/candidate`, candidateRoutes);
+app.use(`${BASE_ROUTE}/national-sales-head`, nshRoutes);
 
 // Health Route
 app.get("/", (req, res) => {

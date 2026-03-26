@@ -87,6 +87,11 @@ export async function updateLeadStatus(leadId, status) {
   return data.data;
 }
 
+export async function fetchFSEs() {
+  const { data } = await http.get("/fses");
+  return data.data;
+}
+
 export async function assignLeadToFSE(leadId, fseId) {
   const { data } = await http.patch(`/leads/${leadId}/assign`, { fseId });
   return data.data;
@@ -99,5 +104,21 @@ export async function logLeadActivity(leadId, activityData) {
 
 export async function deleteLeadActivity(leadId, index) {
   const { data } = await http.delete(`/leads/${leadId}/activity/${index}`);
+  return data.data;
+}
+
+export async function fetchStateManagerProfile() {
+  const { data } = await http.get("/profile");
+  return data.data;
+}
+
+export async function uploadStateManagerProfilePhoto(file) {
+  const formData = new FormData();
+  formData.append("photo", file);
+  const { data } = await http.patch("/profile/photo", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
   return data.data;
 }

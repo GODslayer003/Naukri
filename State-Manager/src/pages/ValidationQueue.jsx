@@ -10,9 +10,17 @@ import {
   LuRefreshCw,
   LuSend
 } from "react-icons/lu";
-import { fetchLeads, updateLeadStatus, logLeadActivity, deleteLeadActivity } from "../api/leadApi";
+import {
+  fetchLeads,
+  updateLeadStatus,
+  logLeadActivity,
+  deleteLeadActivity,
+  fetchFSEs,
+  assignLeadToFSE,
+} from "../api/leadApi";
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
+import AssignFseModal from "../components/AssignFseModal";
 
 export default function ValidationQueue() {
   const [leads, setLeads] = useState([]);
@@ -22,7 +30,11 @@ export default function ValidationQueue() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignLead, setAssignLead] = useState(null);
   const [editingActivityIndex, setEditingActivityIndex] = useState(null);
+  const [fses, setFses] = useState([]);
+  const [myZone, setMyZone] = useState("");
   
   // Activities state for modal (mocked for now, or synced if backend supports)
   const [activities, setActivities] = useState({});
@@ -52,6 +64,7 @@ export default function ValidationQueue() {
         id: lead._id || lead.id,
         category: lead.businessCategory || "Unknown",
         contactEmail: lead.email || "-",
+        location: lead.address || [lead.city, lead.state].filter(Boolean).join(", "),
       }));
 
       // Sort newest first
@@ -74,12 +87,39 @@ export default function ValidationQueue() {
   };
 
   useEffect(() => {
+    try {
+      const crmSession = sessionStorage.getItem("crm_panel_session");
+      if (crmSession) {
+        const parsed = JSON.parse(crmSession);
+        if (parsed?.user?.zone) {
+          setMyZone(parsed.user.zone);
+        }
+      }
+    } catch {
+      // Ignore parse failures.
+    }
+  }, []);
+
+  useEffect(() => {
     const handler = setTimeout(() => {
       loadLeads();
     }, 500); // 500ms debounce
 
     return () => clearTimeout(handler);
   }, [search, location, date]);
+
+  useEffect(() => {
+    const loadFses = async () => {
+      try {
+        const data = await fetchFSEs();
+        setFses(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load FSE list", err);
+      }
+    };
+
+    loadFses();
+  }, []);
 
   const handleConvert = async (e, lead) => {
     e.stopPropagation();
@@ -95,14 +135,15 @@ export default function ValidationQueue() {
 
   const handleForward = async (e, lead) => {
     e.stopPropagation();
-    try {
-      await updateLeadStatus(lead._id || lead.id, "ASSIGNED");
-      setLeads((prev) => 
-        prev.map((r) => ((r._id || r.id) === (lead._id || lead.id) ? { ...r, status: "ASSIGNED" } : r))
-      );
-    } catch (err) {
-      alert("Failed to forward lead.");
-    }
+    setAssignLead(lead);
+    setShowAssignModal(true);
+  };
+
+  const handleAssignLead = async (leadId, fseId) => {
+    await assignLeadToFSE(leadId, fseId);
+    setShowAssignModal(false);
+    setAssignLead(null);
+    await loadLeads();
   };
 
   const handleRowClick = (lead) => {
@@ -324,6 +365,11 @@ export default function ValidationQueue() {
                             Forwarded
                           </span>
                         )}
+                        {lead.assignedTo?.fullName && (
+                          <small style={{ color: "#334155", fontSize: "0.75rem" }}>
+                            Assigned: {lead.assignedTo.fullName}
+                          </small>
+                        )}
 
                         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                           {/* Convert Button */}
@@ -383,6 +429,19 @@ export default function ValidationQueue() {
             setShowDetailModal(true);
           }}
           onSubmit={handleActivitySubmit}
+        />
+      )}
+
+      {showAssignModal && assignLead && (
+        <AssignFseModal
+          lead={assignLead}
+          fses={fses}
+          myZone={myZone}
+          onClose={() => {
+            setShowAssignModal(false);
+            setAssignLead(null);
+          }}
+          onSubmit={handleAssignLead}
         />
       )}
 

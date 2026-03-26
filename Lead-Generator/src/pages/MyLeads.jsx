@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   LuBuilding2,
+  LuCalendarDays,
   LuLoaderCircle,
-  LuListFilter,
   LuMapPin,
   LuSearch,
   LuUserRound,
@@ -13,13 +13,13 @@ import { fetchLeads, updateLeadStatus, logLeadActivity, deleteLeadActivity } fro
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
 
-const STATUS_FILTERS = ["All", "Pending", "Approved", "Rejected"];
-
-const statusClassMap = {
-  Approved: "status-pill-approved",
-  Pending: "status-pill-pending",
-  Rejected: "status-pill-rejected",
-};
+const TIMELINE_FILTERS = [
+  { value: "", label: "All Dates" },
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "this_week", label: "This Week" },
+  { value: "this_month", label: "This Month" },
+];
 
 const formatStatus = (status = "") => {
   if (["QUALIFIED", "WON"].includes(status)) {
@@ -56,7 +56,9 @@ const formatLocation = (lead) => {
 export default function MyLeads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [zoneFilter, setZoneFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const [availableZones, setAvailableZones] = useState([]);
   const [rows, setRows] = useState([]);
   const [loadingRows, setLoadingRows] = useState(true);
   const [error, setError] = useState("");
@@ -85,7 +87,8 @@ export default function MyLeads() {
           page: 1,
           limit: 50,
           search: debouncedSearch,
-          statusGroup: statusFilter === "All" ? "" : statusFilter.toUpperCase(),
+          zone: zoneFilter,
+          date: dateFilter,
         });
 
         if (!mounted) {
@@ -105,6 +108,18 @@ export default function MyLeads() {
         }));
 
         setRows(mappedRows);
+
+        const dynamicZones = Array.isArray(response?.filters?.availableZones)
+          ? response.filters.availableZones.filter((zone) => String(zone || "").trim())
+          : [];
+        const fallbackZones = Array.from(
+          new Set(
+            mappedRows
+              .map((lead) => lead.createdBy?.zone)
+              .filter((zone) => String(zone || "").trim()),
+          ),
+        );
+        setAvailableZones(dynamicZones.length ? dynamicZones : fallbackZones);
         
         // Sync activities state
         const initialActivities = {};
@@ -133,7 +148,7 @@ export default function MyLeads() {
     return () => {
       mounted = false;
     };
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, zoneFilter, dateFilter]);
 
   const handleRowClick = (lead) => {
     setSelectedLead(lead);
@@ -244,27 +259,47 @@ export default function MyLeads() {
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by Company Name..."
+            placeholder="Search company, contact, phone, lead code..."
           />
         </div>
 
-        <div className="my-leads-filter">
-          <span className="my-leads-filter-label">
-            <LuListFilter />
-            Filter by:
-          </span>
-          <div className="my-leads-filter-chips">
-            {STATUS_FILTERS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={`filter-chip ${statusFilter === item ? "is-active" : ""}`}
-                onClick={() => setStatusFilter(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+        <div className="my-leads-zone-time-row">
+          <label className="my-leads-select-field">
+            <span className="my-leads-filter-label">
+              <LuMapPin />
+              Region:
+            </span>
+            <select
+              className="my-leads-select-input"
+              value={zoneFilter}
+              onChange={(event) => setZoneFilter(event.target.value)}
+            >
+              <option value="">All Zones</option>
+              {availableZones.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="my-leads-select-field">
+            <span className="my-leads-filter-label">
+              <LuCalendarDays />
+              Timeline:
+            </span>
+            <select
+              className="my-leads-select-input"
+              value={dateFilter}
+              onChange={(event) => setDateFilter(event.target.value)}
+            >
+              {TIMELINE_FILTERS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </section>
 

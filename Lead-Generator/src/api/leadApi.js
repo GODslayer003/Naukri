@@ -57,6 +57,14 @@ export async function fetchLeads(params = {}) {
     normalizedParams.statusGroup = params.statusGroup.trim();
   }
 
+  if (params.zone?.trim()) {
+    normalizedParams.zone = params.zone.trim();
+  }
+
+  if (params.date?.trim()) {
+    normalizedParams.date = params.date.trim();
+  }
+
   if (params.businessCategory?.trim()) {
     normalizedParams.businessCategory = params.businessCategory.trim();
   }
@@ -86,5 +94,21 @@ export async function logLeadActivity(leadId, activityData) {
 
 export async function deleteLeadActivity(leadId, index) {
   const { data } = await http.delete(`/leads/${leadId}/activity/${index}`);
+  return data.data;
+}
+
+export async function fetchLeadProfile() {
+  const { data } = await http.get("/profile");
+  return data.data;
+}
+
+export async function uploadLeadProfilePhoto(file) {
+  const formData = new FormData();
+  formData.append("photo", file);
+  const { data } = await http.patch("/profile/photo", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
   return data.data;
 }

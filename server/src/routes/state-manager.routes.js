@@ -4,6 +4,7 @@ const controller = require("../controllers/state-manager.controller");
 const leadGeneratorController = require("../controllers/lead-generator.controller");
 const { protectCRM } = require("../middleware/auth.middleware");
 const role = require("../middleware/role.middleware");
+const uploadProfilePhoto = require("../middleware/profile-image-upload.middleware");
 
 // Public routes for State Manager Portal
 router.post("/auth/signup", controller.signup);
@@ -13,10 +14,13 @@ router.use(protectCRM);
 router.use(role("STATE_MANAGER", "ADMIN"));
 
 router.patch("/auth/change-password", controller.changePassword);
+router.get("/profile", controller.getProfile);
+router.patch("/profile/photo", uploadProfilePhoto, controller.uploadProfilePhoto);
 
 // Leads
 router.get("/dashboard", controller.getDashboard);
 router.get("/leads", controller.getLeads);
+router.get("/fses", controller.getFSEs);
 router.patch("/leads/:id/assign", controller.assignLead);
 router.patch("/leads/:id/status", controller.updateLeadStatus);
 router.post("/leads/:id/activity", leadGeneratorController.logLeadActivity);

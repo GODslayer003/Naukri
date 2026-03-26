@@ -22,6 +22,7 @@ const LEAD_STATUSES = [
   "FOLLOW_UP",
   "WON",
   "LOST",
+  "REJECTED",
   "CONVERTED",
   "FORWARDED",
   "ASSIGNED",

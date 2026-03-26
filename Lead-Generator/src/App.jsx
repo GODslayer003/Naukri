@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   LuBell,
@@ -37,13 +38,25 @@ function RequireAuth({ children }) {
 
 export default function App() {
   const navigate = useNavigate();
-  const session = getStoredSession();
+  const [session, setSession] = useState(getStoredSession);
+  useEffect(() => {
+    const syncSession = () => setSession(getStoredSession());
+    window.addEventListener("crm-session-updated", syncSession);
+    window.addEventListener("storage", syncSession);
+    return () => {
+      window.removeEventListener("crm-session-updated", syncSession);
+      window.removeEventListener("storage", syncSession);
+    };
+  }, []);
+
   const user = session?.user;
-  const displayName = user?.name || user?.email || "Lead Generator";
+  const displayName = user?.fullName || user?.name || user?.email || "Lead Generator";
   const displayRole = user?.role || "Sales Team";
+  const profileImage = user?.profileImage || "";
 
   const handleLogout = () => {
     sessionStorage.removeItem(SESSION_KEY);
+    window.dispatchEvent(new Event("crm-session-updated"));
     navigate("/login", { replace: true });
   };
 
@@ -97,9 +110,13 @@ export default function App() {
                 </nav>
 
                 <div className="sidebar-foot">
-                  <span className="sidebar-foot-avatar">
-                    {displayName.charAt(0).toUpperCase()}
-                  </span>
+                  {profileImage ? (
+                    <img src={profileImage} alt={displayName} className="sidebar-foot-avatar-img" />
+                  ) : (
+                    <span className="sidebar-foot-avatar">
+                      {displayName.charAt(0).toUpperCase()}
+                    </span>
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p className="sidebar-foot-title">{displayName}</p>
                     <p className="sidebar-foot-copy">{displayRole}</p>
@@ -126,11 +143,7 @@ export default function App() {
               </aside>
 
               <main className="page-shell">
-                <header className="top-bar">
-                  <div className="search-wrap">
-                    <input type="text" placeholder="Search by name or email..." />
-                  </div>
-
+                <header className="top-bar" style={{ justifyContent: "flex-end" }}>
                   <div className="top-bar-actions">
                     <button type="button" className="icon-btn" aria-label="Notifications">
                       <LuBell />
@@ -140,9 +153,13 @@ export default function App() {
                         <strong>{displayName}</strong>
                         <span>{displayRole}</span>
                       </div>
-                      <span className="profile-avatar">
-                        <LuCircleUserRound />
-                      </span>
+                      {profileImage ? (
+                        <img src={profileImage} alt={displayName} className="profile-avatar-img" />
+                      ) : (
+                        <span className="profile-avatar">
+                          <LuCircleUserRound />
+                        </span>
+                      )}
                     </div>
                   </div>
                 </header>

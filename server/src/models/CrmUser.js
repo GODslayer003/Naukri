@@ -21,13 +21,23 @@ const crmUserSchema = new mongoose.Schema(
     phone: {
       type: String,
     },
+    profileImageUrl: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    profileImagePublicId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     role: {
       type: String,
-      enum: ["LEAD_GENERATOR", "STATE_MANAGER", "FSE", "APPROVER", "ADMIN"],
+      enum: ["LEAD_GENERATOR", "STATE_MANAGER", "FSE", "APPROVER", "ADMIN", "NATIONAL_SALES_HEAD"],
       required: true,
     },
     territory: {
-      type: String, // useful for Lead Generator
+      type: String, // useful for Lead Generator (Zone)
     },
     state: {
       type: String, // useful for State Manager

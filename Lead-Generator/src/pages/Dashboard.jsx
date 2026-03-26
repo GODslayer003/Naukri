@@ -90,7 +90,7 @@ export default function Dashboard() {
             <LuSparkles />
             Lead Generator Panel
           </div>
-          <h1>Welcome back, Alex</h1>
+          <h1>Welcome back</h1>
           <p>
             Here's what is happening with your leads today.
           </p>

@@ -4,11 +4,18 @@ const jwt = require("jsonwebtoken");
 const CrmUser = require("../models/CrmUser");
 const Lead = require("../models/Lead");
 const {
+  CANONICAL_ZONES,
+  normalizeZoneInput,
+  inferZoneFromTerritory,
+  buildZoneRegex,
+} = require("../utils/zone.util");
+const {
   BUSINESS_CATEGORIES,
   LEAD_SOURCES,
   LEAD_STATUSES,
   LEAD_PRIORITIES,
 } = require("../constants/lead-generator.constants");
+const { replaceCrmProfileImage } = require("../services/profile-image-storage.service");
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -28,6 +35,98 @@ const parseEnum = (value, allowedValues, fallback) => {
     .trim()
     .toUpperCase();
   return allowedValues.includes(normalized) ? normalized : fallback;
+};
+
+const ALLOWED_DATE_FILTERS = ["today", "yesterday", "this_week", "this_month"];
+
+const buildDateFilter = (date = "") => {
+  const normalized = String(date || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (normalized === "today") {
+    return { $gte: startOfToday };
+  }
+
+  if (normalized === "yesterday") {
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    return { $gte: startOfYesterday, $lt: startOfToday };
+  }
+
+  if (normalized === "this_week") {
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - 7);
+    return { $gte: startOfWeek };
+  }
+
+  if (normalized === "this_month") {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { $gte: startOfMonth };
+  }
+
+  return null;
+};
+
+const getAvailableZonesForFilter = async (baseFilter, user) => {
+  const creatorIds = await Lead.distinct("createdBy", baseFilter);
+  if (!creatorIds.length) {
+    const fallbackZone = normalizeZoneInput(user?.territory) || inferZoneFromTerritory(user?.territory);
+    return fallbackZone ? [fallbackZone] : [];
+  }
+
+  const creators = await CrmUser.find({ _id: { $in: creatorIds } }).select("territory");
+  const zoneSet = new Set();
+
+  creators.forEach((creator) => {
+    const zone = normalizeZoneInput(creator.territory) || inferZoneFromTerritory(creator.territory);
+    if (zone) {
+      zoneSet.add(zone);
+    }
+  });
+
+  if (!zoneSet.size) {
+    const fallbackZone = normalizeZoneInput(user?.territory) || inferZoneFromTerritory(user?.territory);
+    if (fallbackZone) {
+      zoneSet.add(fallbackZone);
+    }
+  }
+
+  return CANONICAL_ZONES.filter((zone) => zoneSet.has(zone));
+};
+
+const applyCreatedByZoneFilter = async (filters, zone) => {
+  if (!zone) {
+    return;
+  }
+
+  const zoneRegex = buildZoneRegex(zone);
+  if (!zoneRegex) {
+    return;
+  }
+
+  const zoneCreatorIds = await CrmUser.find({ territory: { $regex: zoneRegex } }).distinct("_id");
+  const zoneCreatorIdSet = new Set(zoneCreatorIds.map((id) => String(id)));
+
+  if (filters.createdBy && filters.createdBy.$in && Array.isArray(filters.createdBy.$in)) {
+    filters.createdBy = {
+      $in: filters.createdBy.$in.filter((id) => zoneCreatorIdSet.has(String(id))),
+    };
+    return;
+  }
+
+  if (filters.createdBy) {
+    if (!zoneCreatorIdSet.has(String(filters.createdBy))) {
+      filters.createdBy = { $in: [] };
+    }
+    return;
+  }
+
+  filters.createdBy = { $in: zoneCreatorIds };
 };
 
 const normalizeCreateLeadInput = (payload = {}, user = {}) => ({
@@ -101,6 +200,20 @@ const formatLead = (lead) => ({
           id: String(lead.createdBy._id),
           fullName: lead.createdBy.fullName,
           role: lead.createdBy.role,
+          profileImage: lead.createdBy.profileImageUrl || "",
+          zone:
+            normalizeZoneInput(lead.createdBy.territory) ||
+            inferZoneFromTerritory(lead.createdBy.territory) ||
+            "",
+        }
+      : null,
+  assignedTo:
+    lead.assignedTo && typeof lead.assignedTo === "object"
+      ? {
+          id: String(lead.assignedTo._id),
+          fullName: lead.assignedTo.fullName,
+          role: lead.assignedTo.role,
+          profileImage: lead.assignedTo.profileImageUrl || "",
         }
       : null,
 });
@@ -179,14 +292,16 @@ exports.getLeadGeneratorDashboard = asyncHandler(async (req, res) => {
     Lead.find(accessFilter)
       .sort({ createdAt: -1 })
       .limit(8)
-      .populate("createdBy", "fullName role"),
+      .populate("createdBy", "fullName role profileImageUrl")
+      .populate("assignedTo", "fullName role profileImageUrl"),
     Lead.find({
       ...accessFilter,
       nextFollowUpAt: { $gte: dayStart },
     })
       .sort({ nextFollowUpAt: 1 })
       .limit(5)
-      .populate("createdBy", "fullName role"),
+      .populate("createdBy", "fullName role profileImageUrl")
+      .populate("assignedTo", "fullName role profileImageUrl"),
     Lead.aggregate([
       { $match: accessFilter },
       { $group: { _id: "$status", value: { $sum: 1 } } },
@@ -244,8 +359,24 @@ exports.getLeads = asyncHandler(async (req, res) => {
   const search = String(req.query.search || "").trim();
   const status = String(req.query.status || "").trim().toUpperCase();
   const statusGroup = String(req.query.statusGroup || "").trim().toUpperCase();
+  const zone = normalizeZoneInput(req.query.zone);
+  const date = String(req.query.date || "").trim().toLowerCase();
   const leadSource = String(req.query.leadSource || "").trim();
   const businessCategory = String(req.query.businessCategory || "").trim();
+
+  if (req.query.zone && !zone) {
+    throw createHttpError(
+      400,
+      `Invalid zone filter. Allowed values: ${CANONICAL_ZONES.join(", ")}`,
+    );
+  }
+
+  if (date && !ALLOWED_DATE_FILTERS.includes(date)) {
+    throw createHttpError(
+      400,
+      `Invalid date filter. Allowed values: ${ALLOWED_DATE_FILTERS.join(", ")}`,
+    );
+  }
 
   const filters = { ...accessFilter };
 
@@ -283,12 +414,22 @@ exports.getLeads = asyncHandler(async (req, res) => {
     filters.businessCategory = businessCategory;
   }
 
+  const createdAtFilter = buildDateFilter(date);
+  if (createdAtFilter) {
+    filters.createdAt = createdAtFilter;
+  }
+
+  const filtersForZoneOptions = { ...filters };
+  const availableZones = await getAvailableZonesForFilter(filtersForZoneOptions, req.user);
+  await applyCreatedByZoneFilter(filters, zone);
+
   const [items, total] = await Promise.all([
     Lead.find(filters)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("createdBy", "fullName role"),
+      .populate("createdBy", "fullName role profileImageUrl territory")
+      .populate("assignedTo", "fullName role profileImageUrl"),
     Lead.countDocuments(filters),
   ]);
 
@@ -301,6 +442,13 @@ exports.getLeads = asyncHandler(async (req, res) => {
         limit,
         total,
         totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+      filters: {
+        availableZones,
+        applied: {
+          zone: zone || "",
+          date: date || "",
+        },
       },
     },
   });
@@ -346,7 +494,7 @@ exports.createLead = asyncHandler(async (req, res) => {
     updatedBy: req.user._id,
   });
 
-  const hydratedLead = await Lead.findById(lead._id).populate("createdBy", "fullName role");
+  const hydratedLead = await Lead.findById(lead._id).populate("createdBy", "fullName role profileImageUrl");
 
   res.status(201).json({
     success: true,
@@ -386,7 +534,7 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
   lead.updatedBy = req.user._id;
   await lead.save();
 
-  const updated = await Lead.findById(lead._id).populate("createdBy", "fullName role");
+  const updated = await Lead.findById(lead._id).populate("createdBy", "fullName role profileImageUrl");
 
   res.status(200).json({
     success: true,
@@ -405,6 +553,11 @@ exports.signup = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Passwords do not match");
   }
 
+  const normalizedZone = normalizeZoneInput(zone);
+  if (!normalizedZone) {
+    throw createHttpError(400, "Valid zone is required (North, South, East, West).");
+  }
+
   const normalizedEmail = email.trim().toLowerCase();
   const existingUser = await CrmUser.findOne({ email: normalizedEmail });
   
@@ -419,7 +572,7 @@ exports.signup = asyncHandler(async (req, res) => {
     email: normalizedEmail,
     password: hashedPassword,
     role: "LEAD_GENERATOR",
-    territory: zone.trim(), // mapping 'Zone' to 'territory'
+    territory: normalizedZone,
     accessStatus: "ACTIVE",
     isActive: true,
   });
@@ -431,8 +584,9 @@ exports.signup = asyncHandler(async (req, res) => {
     user: {
       id: user._id,
       email: user.email,
-      zone: user.territory,
+      zone: normalizedZone,
       role: user.role,
+      profileImage: user.profileImageUrl || "",
     },
   });
 });
@@ -442,6 +596,11 @@ exports.login = asyncHandler(async (req, res) => {
 
   if (!email || !zone || !password) {
     throw createHttpError(400, "All fields are required (email, zone, password)");
+  }
+
+  const normalizedZone = normalizeZoneInput(zone);
+  if (!normalizedZone) {
+    throw createHttpError(400, "Valid zone is required (North, South, East, West).");
   }
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -455,7 +614,7 @@ exports.login = asyncHandler(async (req, res) => {
     throw createHttpError(403, "Access denied. Only Lead Generators can log in here.");
   }
 
-  if (user.territory !== zone.trim()) {
+  if (inferZoneFromTerritory(user.territory) !== normalizedZone) {
     throw createHttpError(401, "Invalid zone selection for this account.");
   }
 
@@ -476,8 +635,9 @@ exports.login = asyncHandler(async (req, res) => {
       id: user._id,
       fullName: user.fullName,
       email: user.email,
-      zone: user.territory,
+      zone: normalizedZone,
       role: user.role,
+      profileImage: user.profileImageUrl || "",
     },
   });
 });
@@ -511,6 +671,58 @@ exports.changePassword = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Password updated successfully.",
+  });
+});
+
+exports.getProfile = asyncHandler(async (req, res) => {
+  const zone = normalizeZoneInput(req.user.territory) || inferZoneFromTerritory(req.user.territory) || "";
+  res.status(200).json({
+    success: true,
+    data: {
+      id: String(req.user._id),
+      fullName: req.user.fullName,
+      email: req.user.email,
+      role: req.user.role,
+      zone,
+      phone: req.user.phone || "",
+      profileImage: req.user.profileImageUrl || "",
+    },
+  });
+});
+
+exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw createHttpError(400, "Profile photo file is required.");
+  }
+
+  const user = await CrmUser.findById(req.user._id);
+  if (!user) {
+    throw createHttpError(404, "User not found.");
+  }
+
+  const uploaded = await replaceCrmProfileImage(req.file, {
+    userId: user._id,
+    role: user.role,
+    previousPublicId: user.profileImagePublicId,
+  });
+
+  user.profileImageUrl = uploaded.url;
+  user.profileImagePublicId = uploaded.publicId;
+  await user.save();
+
+  const zone = normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory) || "";
+
+  res.status(200).json({
+    success: true,
+    message: "Profile picture updated successfully.",
+    data: {
+      id: String(user._id),
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      zone,
+      profileImage: user.profileImageUrl || "",
+    },
   });
 });
 

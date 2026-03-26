@@ -14,6 +14,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   useEffect(() => {
     // simple clock
@@ -50,6 +52,28 @@ export default function Dashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isNotificationsModalOpen && !isTeamModalOpen) {
+      return undefined;
+    }
+
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsNotificationsModalOpen(false);
+        setIsTeamModalOpen(false);
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [isNotificationsModalOpen, isTeamModalOpen]);
+
   if (loading) {
     return (
       <div className="page-section" style={{ display: 'flex', justifyContent: 'center', paddingTop: '100px', color: '#64748b' }}>
@@ -71,6 +95,36 @@ export default function Dashboard() {
     teamOverview,
     recentActivity,
   } = dashboard || {};
+
+  const allTeamOverview = Array.isArray(teamOverview) ? teamOverview : [];
+  const previewTeamOverview = allTeamOverview.slice(0, 3);
+  const allNotifications = Array.isArray(recentActivity) ? recentActivity : [];
+  const previewNotifications = allNotifications.slice(0, 3);
+
+  const renderNotificationItem = (activity) => {
+    const colorMap = {
+      success: "#10b981",
+      danger: "#ef4444",
+      primary: "#1e3a8a",
+      default: "#64748b"
+    };
+
+    const dotColor = colorMap[activity.type] || colorMap.default;
+
+    return (
+      <div key={activity.id} className="dashboard-notification-item">
+        <div style={{ marginTop: "6px" }}>
+          <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: dotColor }} />
+        </div>
+        <div>
+          <p style={{ margin: "0 0 4px 0", fontSize: "0.875rem", color: "#334155", fontWeight: "500", lineHeight: "1.4" }}>
+            {activity.text}
+          </p>
+          <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{activity.time}</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="page-section" style={{ padding: "24px 32px", background: "#f8fafc", minHeight: "100vh" }}>
@@ -159,7 +213,22 @@ export default function Dashboard() {
         <div style={{ backgroundColor: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 style={{ fontSize: "1.25rem", fontWeight: "700", color: "#1e3a8a", margin: 0 }}>Team Overview</h2>
-            <Link to="#" style={{ fontSize: "0.875rem", fontWeight: "600", color: "#1e3a8a", textDecoration: "none" }}>View All</Link>
+            <button
+              type="button"
+              onClick={() => setIsTeamModalOpen(true)}
+              disabled={!allTeamOverview.length}
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: "600",
+                color: allTeamOverview.length ? "#1e3a8a" : "#94a3b8",
+                background: "transparent",
+                border: 0,
+                cursor: allTeamOverview.length ? "pointer" : "not-allowed",
+                padding: 0,
+              }}
+            >
+              View All
+            </button>
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
@@ -172,13 +241,27 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {teamOverview?.map((fse, index) => (
-                  <tr key={fse.id} style={{ borderBottom: index < teamOverview.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                {previewTeamOverview.length ? previewTeamOverview.map((fse, index) => (
+                  <tr key={fse.id} style={{ borderBottom: index < previewTeamOverview.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                     <td style={{ padding: "16px 24px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: "600", color: "#475569" }}>
-                          {fse.initials}
-                        </div>
+                        {fse.profileImage ? (
+                          <img
+                            src={fse.profileImage}
+                            alt={fse.name}
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              border: "1px solid #cbd5e1",
+                            }}
+                          />
+                        ) : (
+                          <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: "600", color: "#475569" }}>
+                            {fse.initials}
+                          </div>
+                        )}
                         <span style={{ fontWeight: "500", color: "#334155" }}>{fse.name}</span>
                       </div>
                     </td>
@@ -191,7 +274,13 @@ export default function Dashboard() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan="4" style={{ padding: "16px 24px", color: "#94a3b8", textAlign: "center" }}>
+                      No active FSEs found in this zone.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -203,37 +292,160 @@ export default function Dashboard() {
             <h2 style={{ fontSize: "1.25rem", fontWeight: "700", color: "#1e3a8a", margin: 0 }}>Recent Activity</h2>
           </div>
           <div style={{ padding: "16px 24px", display: "flex", flexDirection: "column", gap: "24px", flex: 1 }}>
-            {recentActivity?.map((activity) => {
-              // Map type to colors
-              const colorMap = {
-                success: "#10b981",
-                danger: "#ef4444",
-                primary: "#1e3a8a",
-                default: "#64748b"
-              };
-              const dotColor = colorMap[activity.type] || colorMap.default;
-
-              return (
-                <div key={activity.id} style={{ display: "flex", gap: "16px", position: "relative" }}>
-                  <div style={{ marginTop: "6px" }}>
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: dotColor }}></div>
-                  </div>
-                  <div>
-                    <p style={{ margin: "0 0 4px 0", fontSize: "0.875rem", color: "#334155", fontWeight: "500", lineHeight: "1.4" }}>
-                      {activity.text}
-                    </p>
-                    <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{activity.time}</span>
-                  </div>
-                </div>
-              );
-            })}
+            {previewNotifications.length ? (
+              previewNotifications.map((activity) => renderNotificationItem(activity))
+            ) : (
+              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}>No notifications available.</p>
+            )}
           </div>
           <div style={{ padding: "16px 24px", marginTop: "auto", textAlign: "center", borderTop: "1px solid #f1f5f9" }}>
-            <Link to="#" style={{ fontSize: "0.875rem", fontWeight: "600", color: "#1e3a8a", textDecoration: "none" }}>View All Notifications</Link>
+            <button
+              type="button"
+              onClick={() => setIsNotificationsModalOpen(true)}
+              disabled={!allNotifications.length}
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: "600",
+                color: allNotifications.length ? "#1e3a8a" : "#94a3b8",
+                background: "transparent",
+                border: 0,
+                cursor: allNotifications.length ? "pointer" : "not-allowed",
+                padding: 0,
+              }}
+            >
+              View All Notifications
+            </button>
           </div>
         </div>
 
       </div>
+
+      {isNotificationsModalOpen ? (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setIsNotificationsModalOpen(false)}
+        >
+          <section
+            className="modal-content dashboard-notifications-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="All notifications"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="dashboard-notifications-header">
+              <div>
+                <h2 className="dashboard-notifications-title">All Notifications</h2>
+                <p className="dashboard-notifications-subtitle">
+                  Showing {allNotifications.length} recent updates.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setIsNotificationsModalOpen(false)}
+                aria-label="Close notifications modal"
+              >
+                &times;
+              </button>
+            </header>
+
+            <div className="dashboard-notification-scroll">
+              {allNotifications.length ? (
+                allNotifications.map((activity) => renderNotificationItem(activity))
+              ) : (
+                <p className="dashboard-notification-empty">No notifications available.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isTeamModalOpen ? (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setIsTeamModalOpen(false)}
+        >
+          <section
+            className="modal-content dashboard-team-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="All team members"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="dashboard-notifications-header">
+              <div>
+                <h2 className="dashboard-notifications-title">All Team Members</h2>
+                <p className="dashboard-notifications-subtitle">
+                  Showing {allTeamOverview.length} FSEs from your zone.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setIsTeamModalOpen(false)}
+                aria-label="Close team modal"
+              >
+                &times;
+              </button>
+            </header>
+
+            <div className="dashboard-team-scroll">
+              <table className="dashboard-team-table">
+                <thead>
+                  <tr>
+                    <th>FSE Name</th>
+                    <th>Location</th>
+                    <th>Active Leads</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allTeamOverview.length ? allTeamOverview.map((fse, index) => (
+                    <tr key={`modal-${fse.id}`} className={index === allTeamOverview.length - 1 ? "is-last" : ""}>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          {fse.profileImage ? (
+                            <img
+                              src={fse.profileImage}
+                              alt={fse.name}
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                                border: "1px solid #cbd5e1",
+                              }}
+                            />
+                          ) : (
+                            <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: "600", color: "#475569" }}>
+                              {fse.initials}
+                            </div>
+                          )}
+                          <span style={{ fontWeight: "500", color: "#334155" }}>{fse.name}</span>
+                        </div>
+                      </td>
+                      <td>{fse.location}</td>
+                      <td style={{ color: "#334155", fontWeight: "500" }}>{fse.activeLeads}</td>
+                      <td>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", backgroundColor: fse.status === "Active" ? "#ecfdf5" : "#f1f5f9", color: fse.status === "Active" ? "#10b981" : "#64748b", padding: "4px 10px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "600" }}>
+                          <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: fse.status === "Active" ? "#10b981" : "#94a3b8" }} />
+                          {fse.status}
+                        </div>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan="4" className="dashboard-team-empty">No active FSEs found in this zone.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

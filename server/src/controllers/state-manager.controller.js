@@ -4,9 +4,28 @@ const asyncHandler = require("../middleware/async.middleware");
 const createHttpError = require("http-errors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const {
+  normalizeZoneInput,
+  inferZoneFromTerritory,
+  buildZoneRegex,
+} = require("../utils/zone.util");
+const { replaceCrmProfileImage } = require("../services/profile-image-storage.service");
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
+};
+
+const getUserZone = (user = {}) => {
+  return normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory);
+};
+
+const buildTerritoryFilter = (zone = "") => {
+  const regex = buildZoneRegex(zone);
+  if (!regex) {
+    return {};
+  }
+
+  return { territory: regex };
 };
 
 exports.signup = asyncHandler(async (req, res) => {
@@ -18,6 +37,11 @@ exports.signup = asyncHandler(async (req, res) => {
 
   if (password !== confirmPassword) {
     throw createHttpError(400, "Passwords do not match");
+  }
+
+  const normalizedZone = normalizeZoneInput(zone);
+  if (!normalizedZone) {
+    throw createHttpError(400, "Valid zone is required (North, South, East, West)");
   }
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -33,7 +57,7 @@ exports.signup = asyncHandler(async (req, res) => {
     email: normalizedEmail,
     password: hashedPassword,
     role: "STATE_MANAGER",
-    territory: zone, // e.g. "North", "South"
+    territory: normalizedZone,
   });
 
   res.status(201).json({
@@ -44,8 +68,9 @@ exports.signup = asyncHandler(async (req, res) => {
       id: user._id,
       fullName: user.fullName,
       email: user.email,
-      zone: user.territory,
+      zone: normalizedZone,
       role: user.role,
+      profileImage: user.profileImageUrl || "",
     },
   });
 });
@@ -57,6 +82,11 @@ exports.login = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Email, zone, and password are required");
   }
 
+  const normalizedZone = normalizeZoneInput(zone);
+  if (!normalizedZone) {
+    throw createHttpError(400, "Valid zone is required (North, South, East, West)");
+  }
+
   const normalizedEmail = email.trim().toLowerCase();
   const user = await CrmUser.findOne({ email: normalizedEmail }).select("+password");
 
@@ -64,7 +94,7 @@ exports.login = asyncHandler(async (req, res) => {
     throw createHttpError(401, "Invalid email, zone, or password");
   }
 
-  if (user.territory !== zone) {
+  if (getUserZone(user) !== normalizedZone) {
     throw createHttpError(401, "Incorrect zone for this user");
   }
 
@@ -81,8 +111,9 @@ exports.login = asyncHandler(async (req, res) => {
       id: user._id,
       fullName: user.fullName,
       email: user.email,
-      zone: user.territory,
+      zone: normalizedZone,
       role: user.role,
+      profileImage: user.profileImageUrl || "",
     },
   });
 });
@@ -119,16 +150,73 @@ exports.changePassword = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getProfile = asyncHandler(async (req, res) => {
+  const zone = getUserZone(req.user);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      id: String(req.user._id),
+      fullName: req.user.fullName,
+      email: req.user.email,
+      role: req.user.role,
+      zone,
+      phone: req.user.phone || "",
+      profileImage: req.user.profileImageUrl || "",
+    },
+  });
+});
+
+exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw createHttpError(400, "Profile photo file is required.");
+  }
+
+  const user = await CrmUser.findById(req.user._id);
+  if (!user) {
+    throw createHttpError(404, "User not found.");
+  }
+
+  const uploaded = await replaceCrmProfileImage(req.file, {
+    userId: user._id,
+    role: user.role,
+    previousPublicId: user.profileImagePublicId,
+  });
+
+  user.profileImageUrl = uploaded.url;
+  user.profileImagePublicId = uploaded.publicId;
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Profile picture updated successfully.",
+    data: {
+      id: String(user._id),
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      zone: getUserZone(user),
+      profileImage: user.profileImageUrl || "",
+    },
+  });
+});
+
 // Get Leads for State Manager
 exports.getLeads = asyncHandler(async (req, res) => {
   const { search, location, date, page = 1, limit = 50 } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
   // State Manager can only see leads forwarded by Lead Generators in their Zone
-  let targetZone = req.user.role === "STATE_MANAGER" ? req.user.territory : null;
+  let targetZone = req.user.role === "STATE_MANAGER" ? getUserZone(req.user) : "";
+  if (!targetZone) {
+    throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
+  }
 
   if (location && location !== "All Zones") {
-    const requestedZone = location.replace(" Zone", "").trim();
+    const requestedZone = normalizeZoneInput(location.replace(" Zone", "").trim());
+    if (!requestedZone) {
+      throw createHttpError(400, "Invalid zone filter.");
+    }
 
     // If the user is a STATE_MANAGER, they can only query their own zone
     if (req.user.role === "STATE_MANAGER" && targetZone !== requestedZone) {
@@ -143,10 +231,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
     targetZone = requestedZone;
   }
 
-  const zoneQuery = { role: "LEAD_GENERATOR" };
-  if (targetZone) {
-    zoneQuery.territory = targetZone;
-  }
+  const zoneQuery = { role: "LEAD_GENERATOR", ...buildTerritoryFilter(targetZone) };
 
   // Find all lead generators matching the zone constraint
   const zoneLGUsers = await CrmUser.find(zoneQuery).select("_id");
@@ -155,7 +240,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
   // Build Query
   const query = {
     createdBy: { $in: generatorIds },
-    status: { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED"] }
+    status: { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"] }
   };
 
   if (search) {
@@ -189,6 +274,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
   const [leads, total] = await Promise.all([
     Lead.find(query)
       .populate("createdBy", "fullName territory email")
+      .populate("assignedTo", "fullName email territory profileImageUrl")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
@@ -208,86 +294,214 @@ exports.getLeads = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getFSEs = asyncHandler(async (req, res) => {
+  const myZone = getUserZone(req.user);
+  if (!myZone) {
+    throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
+  }
+
+  const fses = await CrmUser.find({
+    role: "FSE",
+    ...buildTerritoryFilter(myZone),
+    isActive: true,
+    accessStatus: { $ne: "RESTRICTED" },
+  }).select("_id fullName email territory phone profileImageUrl");
+
+  const fseIds = fses.map((fse) => fse._id);
+  const leadCounts = fseIds.length
+    ? await Lead.aggregate([
+        {
+          $match: {
+            assignedTo: { $in: fseIds },
+            status: { $nin: ["CONVERTED", "LOST", "REJECTED"] },
+          },
+        },
+        {
+          $group: {
+            _id: "$assignedTo",
+            activeLeads: { $sum: 1 },
+          },
+        },
+      ])
+    : [];
+
+  const activeLeadMap = new Map(
+    leadCounts.map((item) => [String(item._id), Number(item.activeLeads || 0)]),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: fses.map((fse) => ({
+      id: String(fse._id),
+      fullName: fse.fullName,
+      email: fse.email,
+      zone: getUserZone(fse),
+      phone: fse.phone || "",
+      activeLeads: activeLeadMap.get(String(fse._id)) || 0,
+      profileImage: fse.profileImageUrl || "",
+    })),
+  });
+});
+
 exports.assignLead = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { fseId } = req.body; // In mock, fseId might be a dummy string
+  const { fseId } = req.body;
 
-  const lead = await Lead.findById(id);
+  if (!fseId || typeof fseId !== "string" || fseId.length !== 24) {
+    throw createHttpError(400, "Valid fseId is required.");
+  }
+
+  const managerZone = getUserZone(req.user);
+  if (!managerZone) {
+    throw createHttpError(403, "State Manager zone is not configured.");
+  }
+
+  const [lead, fse] = await Promise.all([
+    Lead.findById(id).populate("createdBy", "territory fullName"),
+    CrmUser.findById(fseId),
+  ]);
 
   if (!lead) {
     throw createHttpError(404, "Lead not found");
   }
 
-  // FSE handling: For now since we don't have FSE users yet, we'll store
-  // a mock reference or just change the status to ASSIGNED.
-  // In reality, assignedTo should be a valid ObjectId of an FSE.
-  // We'll skip ObjectId validation if it's a mock.
-
-  lead.status = "ASSIGNED";
-  if (fseId.length === 24) {
-    lead.assignedTo = fseId; // If it's a valid object ID
+  if (!fse || fse.role !== "FSE" || !fse.isActive || fse.accessStatus === "RESTRICTED") {
+    throw createHttpError(404, "Active FSE not found");
   }
 
+  const leadZone = inferZoneFromTerritory(lead.createdBy?.territory);
+  const fseZone = getUserZone(fse);
+
+  if (!leadZone || leadZone !== managerZone) {
+    throw createHttpError(403, "This lead does not belong to your zone.");
+  }
+
+  if (!fseZone || fseZone !== managerZone) {
+    throw createHttpError(403, "FSE must belong to the same zone as the State Manager.");
+  }
+
+  lead.status = "ASSIGNED";
+  lead.assignedTo = fseId;
+  lead.assignedBy = req.user._id;
+  lead.updatedBy = req.user._id;
+
   await lead.save();
+
+  const updatedLead = await Lead.findById(lead._id)
+    .populate("createdBy", "fullName territory email")
+    .populate("assignedTo", "fullName email territory profileImageUrl");
 
   res.status(200).json({
     success: true,
     message: "Lead assigned successfully",
-    data: lead
+    data: updatedLead
   });
 });
 
 exports.getDashboard = asyncHandler(async (req, res) => {
-  const myZone = req.user.territory;
-
-  // Find all lead generators in this zone
-  const zoneLGUsers = await CrmUser.find({
-    role: "LEAD_GENERATOR",
-    territory: myZone
-  }).select("_id");
-
-  const generatorIds = zoneLGUsers.map((u) => u._id);
-
-  // Fetch all leads for this zone
-  const leads = await Lead.find({
-    createdBy: { $in: generatorIds },
-  });
-
-  const pendingValidation = leads.filter(l => l.status === "FORWARDED").length;
-  const totalAssigned = leads.filter(l => l.status === "ASSIGNED").length;
-  const converted = leads.filter(l => l.status === "CONVERTED").length;
-
-  let conversionRate = 0;
-  if (totalAssigned + converted > 0) {
-    conversionRate = Math.round((converted / (totalAssigned + converted)) * 100);
-  } else {
-    conversionRate = 68; // mock default if zero data
+  const myZone = getUserZone(req.user);
+  if (!myZone) {
+    throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
   }
 
-  // Mock FSEs for Team Overview
-  const teamOverview = [
-    { id: "f1", initials: "RS", name: "Rahul Sharma", location: "Dehradun", activeLeads: 12, status: "Active" },
-    { id: "f2", initials: "PS", name: "Priya Singh", location: "Delhi", activeLeads: 8, status: "Active" },
-    { id: "f3", initials: "VM", name: "Vikram Malhotra", location: "Mumbai", activeLeads: 5, status: "On Leave" },
-    { id: "f4", initials: "AG", name: "Anjali Gupta", location: "Bangalore", activeLeads: 15, status: "Active" },
-  ];
+  const [zoneLGUsers, zoneFSEUsers] = await Promise.all([
+    CrmUser.find({
+      role: "LEAD_GENERATOR",
+      ...buildTerritoryFilter(myZone),
+    }).select("_id"),
+    CrmUser.find({
+      role: "FSE",
+      ...buildTerritoryFilter(myZone),
+      isActive: true,
+      accessStatus: { $ne: "RESTRICTED" },
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .select("_id fullName territory profileImageUrl"),
+  ]);
 
-  // Mock Recent Activity matches the image exactly
-  const recentActivity = [
-    { id: "a1", type: "success", text: "Lead #123 assigned to Rahul", time: "10 mins ago" },
-    { id: "a2", type: "danger", text: "Lead #455 Rejected (Bad Data)", time: "1 hour ago" },
-    { id: "a3", type: "primary", text: "New FSE 'Anjali Gupta' added", time: "2 hours ago" },
-    { id: "a4", type: "success", text: "Lead #112 marked as 'Closed'", time: "4 hours ago" },
-  ];
+  const generatorIds = zoneLGUsers.map((user) => user._id);
+  const fseIds = zoneFSEUsers.map((user) => user._id);
+
+  const [leads, fseOpenLeadCounts, recentAssigned] = await Promise.all([
+    Lead.find({
+      createdBy: { $in: generatorIds },
+    }).sort({ updatedAt: -1 }),
+    fseIds.length
+      ? Lead.aggregate([
+          {
+            $match: {
+              assignedTo: { $in: fseIds },
+              status: { $nin: ["CONVERTED", "LOST", "REJECTED"] },
+            },
+          },
+          {
+            $group: {
+              _id: "$assignedTo",
+              activeLeads: { $sum: 1 },
+            },
+          },
+        ])
+      : Promise.resolve([]),
+    Lead.find({
+      assignedTo: { $in: fseIds },
+      status: { $in: ["ASSIGNED", "CONVERTED", "LOST", "REJECTED"] },
+    })
+      .populate("assignedTo", "fullName profileImageUrl")
+      .sort({ updatedAt: -1 })
+      .limit(50),
+  ]);
+
+  const pendingValidation = leads.filter((lead) => lead.status === "FORWARDED").length;
+  const totalAssigned = leads.filter((lead) => lead.status === "ASSIGNED").length;
+  const converted = leads.filter((lead) => lead.status === "CONVERTED").length;
+  const conversionRate = totalAssigned + converted > 0
+    ? Math.round((converted / (totalAssigned + converted)) * 100)
+    : 0;
+
+  const activeLeadMap = new Map(
+    fseOpenLeadCounts.map((item) => [String(item._id), Number(item.activeLeads || 0)]),
+  );
+
+  const teamOverview = zoneFSEUsers.map((fse) => {
+    const name = fse.fullName || "FSE";
+    const initials = name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("") || "F";
+
+    return {
+      id: String(fse._id),
+      initials,
+      name,
+      location: myZone,
+      activeLeads: activeLeadMap.get(String(fse._id)) || 0,
+      status: "Active",
+      profileImage: fse.profileImageUrl || "",
+    };
+  });
+
+  const recentActivity = recentAssigned.map((lead) => ({
+    id: String(lead._id),
+    type: lead.status === "CONVERTED" ? "success" : lead.status === "REJECTED" || lead.status === "LOST" ? "danger" : "primary",
+    text: `Lead ${lead.leadCode || "#"} ${lead.status.toLowerCase()} by ${lead.assignedTo?.fullName || "FSE"}`,
+    time: new Date(lead.updatedAt).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  }));
 
   res.status(200).json({
     success: true,
     data: {
       pendingValidation,
-      activeFses: 3,
+      activeFses: zoneFSEUsers.length,
       totalAssigned,
       conversionRate: `${conversionRate}%`,
-      conversionGrowth: "+2.4%",
+      conversionGrowth: "0%",
       teamOverview,
       recentActivity
     }
@@ -298,19 +512,41 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  const ALLOWED_STATUSES = ["CONVERTED", "FORWARDED", "REJECTED", "ASSIGNED"];
+  const ALLOWED_STATUSES = ["CONVERTED", "FORWARDED", "REJECTED", "ASSIGNED", "LOST"];
 
-  if (!ALLOWED_STATUSES.includes(status)) {
+  const nextStatus = String(status || "").toUpperCase();
+
+  if (!ALLOWED_STATUSES.includes(nextStatus)) {
     throw createHttpError(400, "Invalid status upgrade");
   }
 
-  const lead = await Lead.findById(id);
+  const managerZone = getUserZone(req.user);
+  if (!managerZone) {
+    throw createHttpError(403, "State Manager zone is not configured.");
+  }
+
+  const lead = await Lead.findById(id).populate("createdBy", "territory");
 
   if (!lead) {
     throw createHttpError(404, "Lead not found");
   }
 
-  lead.status = status;
+  const leadZone = inferZoneFromTerritory(lead.createdBy?.territory);
+  if (!leadZone || leadZone !== managerZone) {
+    throw createHttpError(403, "You can only update leads from your own zone.");
+  }
+
+  if (nextStatus === "ASSIGNED" && !lead.assignedTo) {
+    throw createHttpError(400, "Lead must be assigned to an FSE before moving to ASSIGNED.");
+  }
+
+  lead.status = nextStatus;
+  lead.updatedBy = req.user._id;
+
+  if (nextStatus === "CONVERTED") {
+    lead.convertedAt = new Date();
+  }
+
   await lead.save();
 
   res.status(200).json({

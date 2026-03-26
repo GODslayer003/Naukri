@@ -109,6 +109,77 @@ const leadSchema = new mongoose.Schema(
       ref: "CrmUser",
       required: true,
     },
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CrmUser",
+      default: null,
+      index: true,
+    },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CrmUser",
+      default: null,
+    },
+    dealValue: {
+      type: Number,
+      min: 0,
+      default: 0,
+      index: true,
+    },
+    currency: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "INR",
+    },
+    convertedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    requiresNationalApproval: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isStrategicDeal: {
+      type: Boolean,
+      default: false,
+    },
+    approvalStatus: {
+      type: String,
+      enum: ["NOT_REQUIRED", "PENDING", "APPROVED", "REJECTED"],
+      default: "NOT_REQUIRED",
+      index: true,
+    },
+    approvalLevel: {
+      type: String,
+      enum: ["STATE_MANAGER", "ZONAL_MANAGER", "NATIONAL_SALES_HEAD"],
+      default: "STATE_MANAGER",
+    },
+    approvalRequestedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CrmUser",
+      default: null,
+    },
+    approvalRequestedAt: {
+      type: Date,
+      default: null,
+    },
+    approvalDecisionBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CrmUser",
+      default: null,
+    },
+    approvalDecisionAt: {
+      type: Date,
+      default: null,
+    },
+    approvalDecisionNote: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     isForwardedToSM: {
       type: Boolean,
       default: false,
@@ -149,6 +220,7 @@ leadSchema.pre("save", async function () {
   this.address = (this.address || "").trim();
   this.notes = (this.notes || "").trim();
   this.pincode = (this.pincode || "").trim();
+  this.currency = (this.currency || "INR").trim().toUpperCase();
 });
 
 leadSchema.statics.normalizePhoneNumber = normalizePhoneNumber;
