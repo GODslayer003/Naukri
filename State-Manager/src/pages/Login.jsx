@@ -3,9 +3,18 @@ import { useNavigate, Link } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import logo from "../assets/maven-logo.svg";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL
-  ? import.meta.env.VITE_API_BASE_URL.replace("/lead-generator", "")
-  : "http://localhost:3000/api/v1";
+const resolveRootApiBaseUrl = () => {
+  const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL || "").trim();
+  if (!configuredBaseUrl) {
+    return "http://localhost:3000/api/v1";
+  }
+
+  const normalized = configuredBaseUrl.replace(/\/+$/, "");
+  const match = normalized.match(/^(.*\/api\/v1)(?:\/.*)?$/i);
+  return match ? match[1] : normalized;
+};
+
+const API_BASE = resolveRootApiBaseUrl();
 
 const SESSION_KEY = "crm_panel_session";
 

@@ -16,8 +16,35 @@ const getAuthToken = () => {
   }
 };
 
+const normalizeApiV1BaseUrl = (value = "") => {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) {
+    return "";
+  }
+
+  const trimmedValue = rawValue.replace(/\/+$/, "");
+  const match = trimmedValue.match(/^(.*\/api\/v1)(?:\/.*)?$/i);
+  return (match ? match[1] : trimmedValue).replace(/\/+$/, "");
+};
+
+const resolveModuleApiBaseUrl = (modulePath) => {
+  const configuredBaseUrl = normalizeApiV1BaseUrl(import.meta.env.VITE_API_BASE_URL);
+  const fallbackBaseUrl = `http://localhost:3000/api/v1${modulePath}`;
+
+  if (!configuredBaseUrl) {
+    return fallbackBaseUrl;
+  }
+
+  const normalizedBaseUrl = configuredBaseUrl.replace(/\/+$/, "");
+  if (normalizedBaseUrl.toLowerCase().endsWith(modulePath.toLowerCase())) {
+    return normalizedBaseUrl;
+  }
+
+  return `${normalizedBaseUrl}${modulePath}`;
+};
+
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1/fse",
+  baseURL: resolveModuleApiBaseUrl("/fse"),
 });
 
 http.interceptors.request.use((config) => {
