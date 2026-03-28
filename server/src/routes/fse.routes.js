@@ -21,6 +21,7 @@ router.patch("/leads/:id/status", controller.updateLeadStatus);
 router.post("/leads/:id/activity", controller.logLeadActivity);
 router.delete("/leads/:id/activity/:index", controller.deleteLeadActivity);
 router.get("/profile", controller.getProfile);
+router.patch("/profile", controller.updateProfile);
 router.patch("/profile/photo", uploadProfilePhoto, controller.uploadProfilePhoto);
 
 module.exports = router;

@@ -33,7 +33,7 @@ const crmUserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["LEAD_GENERATOR", "STATE_MANAGER", "FSE", "APPROVER", "ADMIN", "NATIONAL_SALES_HEAD"],
+      enum: ["LEAD_GENERATOR", "STATE_MANAGER", "ZONAL_MANAGER", "FSE", "APPROVER", "ADMIN", "NATIONAL_SALES_HEAD"],
       required: true,
     },
     territory: {

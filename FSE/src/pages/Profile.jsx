@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { LuMail, LuMapPin, LuShield, LuUpload, LuUser } from "react-icons/lu";
-import { changeFsePassword, fetchFseProfile, uploadFseProfilePhoto } from "../api/fseApi";
+import { changeFsePassword, fetchFseProfile, updateFseProfile, uploadFseProfilePhoto } from "../api/fseApi";
 
 const SESSION_KEY = "crm_panel_session";
 
@@ -75,6 +75,9 @@ export default function Profile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editableFullName, setEditableFullName] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [nameMessage, setNameMessage] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -92,6 +95,7 @@ export default function Profile() {
           return;
         }
         setProfile(data);
+        setEditableFullName(data.fullName || "");
         updateSessionUser({
           fullName: data.fullName,
           email: data.email,
@@ -141,6 +145,51 @@ export default function Profile() {
       setMessage("Password updated successfully.");
     } catch (requestError) {
       setMessage(requestError?.response?.data?.message || "Failed to update password.");
+    }
+  };
+
+  const handleNameUpdate = async (event) => {
+    event.preventDefault();
+
+    const normalizedFullName = editableFullName.trim().replace(/\s+/g, " ");
+    const fullNamePattern = /^[A-Za-z][A-Za-z .'-]*$/;
+
+    if (!normalizedFullName) {
+      setNameMessage("Full name is required.");
+      return;
+    }
+
+    if (normalizedFullName.length < 2 || normalizedFullName.length > 80) {
+      setNameMessage("Full name must be between 2 and 80 characters.");
+      return;
+    }
+
+    if (!fullNamePattern.test(normalizedFullName)) {
+      setNameMessage("Full name can only contain letters, spaces, apostrophes, hyphens, and periods.");
+      return;
+    }
+
+    try {
+      setIsSavingName(true);
+      setNameMessage("");
+      const updatedUser = await updateFseProfile({ fullName: normalizedFullName });
+      setProfile((current) => ({
+        ...(current || {}),
+        ...updatedUser,
+      }));
+      setEditableFullName(updatedUser.fullName || normalizedFullName);
+      updateSessionUser({
+        fullName: updatedUser.fullName || normalizedFullName,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        zone: updatedUser.zone,
+        profileImage: updatedUser.profileImage || "",
+      });
+      setNameMessage("Name updated successfully.");
+    } catch (requestError) {
+      setNameMessage(requestError?.response?.data?.message || "Failed to update name.");
+    } finally {
+      setIsSavingName(false);
     }
   };
 
@@ -196,6 +245,11 @@ export default function Profile() {
   const displayZone = profile?.zone || "-";
   const displayRole = profile?.role || "FSE";
   const displayImage = previewUrl || profile?.profileImage || "";
+  const normalizedStoredName = String(profile?.fullName || "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const normalizedEditableName = editableFullName.trim().replace(/\s+/g, " ");
+  const isNameUnchanged = normalizedEditableName === normalizedStoredName;
 
   return (
     <div className="page-section" style={{ maxWidth: "860px", margin: "0 auto" }}>
@@ -253,6 +307,42 @@ export default function Profile() {
             {displayRole.replace(/_/g, " ")} | {displayZone} Zone
           </p>
         </div>
+      </section>
+
+      <section className="data-card">
+        <div className="card-header">
+          <div className="section-copy">
+            <h2>Profile Details</h2>
+            <p>Update your full name as needed.</p>
+          </div>
+        </div>
+        <form onSubmit={handleNameUpdate} className="add-lead-form" style={{ marginTop: "10px" }}>
+          <div className="form-field">
+            <label htmlFor="fse-full-name">Full Name</label>
+            <input
+              id="fse-full-name"
+              className="input"
+              type="text"
+              value={editableFullName}
+              onChange={(event) => setEditableFullName(event.target.value)}
+              placeholder="Your full name"
+              autoComplete="name"
+              maxLength={80}
+              required
+            />
+          </div>
+          {nameMessage ? (
+            <p className={nameMessage.toLowerCase().includes("success") ? "helper-copy" : "status-banner"}>
+              {nameMessage}
+            </p>
+          ) : null}
+          <div className="form-actions">
+            <button type="submit" className="button button-primary" disabled={isSavingName || isNameUnchanged}>
+              <LuUser />
+              {isSavingName ? "Saving..." : "Update Name"}
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="data-card">

@@ -17,10 +17,37 @@ const {
 } = require("../utils/zone.util");
 const { replaceCrmProfileImage } = require("../services/profile-image-storage.service");
 
+const FULL_NAME_MIN_LENGTH = 2;
+const FULL_NAME_MAX_LENGTH = 80;
+const FULL_NAME_PATTERN = /^[A-Za-z][A-Za-z .'-]*$/;
+
 const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 
 const getUserZone = (user = {}) => {
   return normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory);
+};
+
+const normalizeFullName = (value = "") => {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!normalized) {
+    throw createHttpError(400, "Full name is required.");
+  }
+
+  if (normalized.length < FULL_NAME_MIN_LENGTH || normalized.length > FULL_NAME_MAX_LENGTH) {
+    throw createHttpError(
+      400,
+      `Full name must be between ${FULL_NAME_MIN_LENGTH} and ${FULL_NAME_MAX_LENGTH} characters.`,
+    );
+  }
+
+  if (!FULL_NAME_PATTERN.test(normalized)) {
+    throw createHttpError(400, "Full name can only contain letters, spaces, apostrophes, hyphens, and periods.");
+  }
+
+  return normalized;
 };
 
 const parseEnum = (value, allowedValues, fallback) => {
@@ -156,12 +183,16 @@ const formatLead = (lead) => ({
 exports.signup = asyncHandler(async (req, res) => {
   const { email, zone, password, confirmPassword, fullName } = req.body;
 
-  if (!email || !zone || !password || !confirmPassword) {
-    throw createHttpError(400, "All fields are required (email, zone, password, confirmPassword)");
+  if (!email || !zone || !password || !confirmPassword || !fullName) {
+    throw createHttpError(400, "All fields are required (fullName, email, zone, password, confirmPassword)");
   }
 
   if (password !== confirmPassword) {
     throw createHttpError(400, "Passwords do not match");
+  }
+
+  if (String(password).length < 8) {
+    throw createHttpError(400, "Password must be at least 8 characters.");
   }
 
   const normalizedZone = normalizeZoneInput(zone);
@@ -169,6 +200,7 @@ exports.signup = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Valid zone is required (North, South, East, West)");
   }
 
+  const normalizedFullName = normalizeFullName(fullName);
   const normalizedEmail = String(email).trim().toLowerCase();
   const existingUser = await CrmUser.findOne({ email: normalizedEmail });
   if (existingUser) {
@@ -177,7 +209,7 @@ exports.signup = asyncHandler(async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
   const user = await CrmUser.create({
-    fullName: String(fullName || "Field Sales Executive").trim() || "Field Sales Executive",
+    fullName: normalizedFullName,
     email: normalizedEmail,
     password: hashedPassword,
     role: "FSE",
@@ -606,6 +638,39 @@ exports.getProfile = asyncHandler(async (req, res) => {
       phone: req.user.phone || "",
       department: req.user.department || "Field Sales",
       profileImage: req.user.profileImageUrl || "",
+    },
+  });
+});
+
+exports.updateProfile = asyncHandler(async (req, res) => {
+  const { fullName } = req.body;
+
+  if (fullName === undefined) {
+    throw createHttpError(400, "fullName is required.");
+  }
+
+  const normalizedFullName = normalizeFullName(fullName);
+
+  const user = await CrmUser.findById(req.user._id);
+  if (!user) {
+    throw createHttpError(404, "User not found.");
+  }
+
+  user.fullName = normalizedFullName;
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Profile updated successfully.",
+    data: {
+      id: String(user._id),
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      zone: getUserZone(user),
+      phone: user.phone || "",
+      department: user.department || "Field Sales",
+      profileImage: user.profileImageUrl || "",
     },
   });
 });

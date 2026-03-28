@@ -110,6 +110,11 @@ export async function fetchFseProfile() {
   return data.data;
 }
 
+export async function updateFseProfile(payload) {
+  const { data } = await http.patch("/profile", payload);
+  return data.data;
+}
+
 export async function uploadFseProfilePhoto(file) {
   const formData = new FormData();
   formData.append("photo", file);

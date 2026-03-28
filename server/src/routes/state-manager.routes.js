@@ -15,6 +15,7 @@ router.use(role("STATE_MANAGER", "ADMIN"));
 
 router.patch("/auth/change-password", controller.changePassword);
 router.get("/profile", controller.getProfile);
+router.patch("/profile", controller.updateProfile);
 router.patch("/profile/photo", uploadProfilePhoto, controller.uploadProfilePhoto);
 
 // Leads

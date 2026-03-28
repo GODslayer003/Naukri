@@ -128,6 +128,11 @@ export async function fetchLeadProfile() {
   return data.data;
 }
 
+export async function updateLeadProfile(payload) {
+  const { data } = await http.patch("/profile", payload);
+  return data.data;
+}
+
 export async function uploadLeadProfilePhoto(file) {
   const formData = new FormData();
   formData.append("photo", file);

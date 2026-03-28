@@ -33,6 +33,7 @@ async function signupLeadGenerator(data) {
 }
 
 export default function Signup() {
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [zone, setZone] = useState("");
   const [password, setPassword] = useState("");
@@ -48,8 +49,21 @@ export default function Signup() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!email.trim() || !zone.trim() || !password || !confirmPassword) {
+    const normalizedFullName = fullName.trim().replace(/\s+/g, " ");
+    const fullNamePattern = /^[A-Za-z][A-Za-z .'-]*$/;
+
+    if (!normalizedFullName || !email.trim() || !zone.trim() || !password || !confirmPassword) {
       setError("All fields are required.");
+      return;
+    }
+
+    if (normalizedFullName.length < 2 || normalizedFullName.length > 80) {
+      setError("Full name must be between 2 and 80 characters.");
+      return;
+    }
+
+    if (!fullNamePattern.test(normalizedFullName)) {
+      setError("Full name can only contain letters, spaces, apostrophes, hyphens, and periods.");
       return;
     }
 
@@ -58,11 +72,17 @@ export default function Signup() {
       return;
     }
 
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
 
     try {
       await signupLeadGenerator({ 
+        fullName: normalizedFullName,
         email: email.trim(), 
         zone: zone.trim(), 
         password, 
@@ -113,6 +133,23 @@ export default function Signup() {
           </p>
 
           <form onSubmit={handleSubmit} className="login-form">
+            <div className="login-field">
+              <label className="login-label" htmlFor="lg-full-name">
+                Full Name
+              </label>
+              <input
+                id="lg-full-name"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your full name"
+                className="login-input"
+                autoComplete="name"
+                maxLength={80}
+                required
+              />
+            </div>
+
             <div className="login-field">
               <label className="login-label" htmlFor="lg-email">
                 Email address

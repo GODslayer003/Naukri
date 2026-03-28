@@ -44,7 +44,7 @@ const resolveModuleApiBaseUrl = (modulePath) => {
 };
 
 const http = axios.create({
-  baseURL: resolveModuleApiBaseUrl("/state-manager"),
+  baseURL: resolveModuleApiBaseUrl("/zonal-manager"),
 });
 
 http.interceptors.request.use((config) => {
@@ -60,15 +60,10 @@ export async function fetchLeadDashboard() {
   return data.data;
 }
 
-export async function fetchLeadMeta() {
-  const { data } = await http.get("/meta");
-  return data.data;
-}
-
 export async function fetchLeads(params = {}) {
   const normalizedParams = {
     page: Number(params.page) || 1,
-    limit: Number(params.limit) || 10,
+    limit: Number(params.limit) || 50,
   };
 
   if (params.search?.trim()) {
@@ -100,12 +95,7 @@ export async function fetchLeads(params = {}) {
   }
 
   const { data } = await http.get("/leads", { params: normalizedParams });
-  return data.data;
-}
-
-export async function createLead(payload) {
-  const { data } = await http.post("/leads", payload);
-  return data.data;
+  return data;
 }
 
 export async function updateLeadStatus(leadId, status) {
@@ -113,13 +103,13 @@ export async function updateLeadStatus(leadId, status) {
   return data.data;
 }
 
-export async function fetchFSEs() {
-  const { data } = await http.get("/fses");
+export async function fetchStateManagers() {
+  const { data } = await http.get("/state-managers");
   return data.data;
 }
 
-export async function assignLeadToFSE(leadId, fseId) {
-  const { data } = await http.patch(`/leads/${leadId}/assign`, { fseId });
+export async function assignLeadToStateManager(leadId, stateManagerId) {
+  const { data } = await http.patch(`/leads/${leadId}/assign`, { stateManagerId });
   return data.data;
 }
 
@@ -133,17 +123,17 @@ export async function deleteLeadActivity(leadId, index) {
   return data.data;
 }
 
-export async function fetchStateManagerProfile() {
+export async function fetchZonalManagerProfile() {
   const { data } = await http.get("/profile");
   return data.data;
 }
 
-export async function updateStateManagerProfile(payload) {
+export async function updateZonalManagerProfile(payload) {
   const { data } = await http.patch("/profile", payload);
   return data.data;
 }
 
-export async function uploadStateManagerProfilePhoto(file) {
+export async function uploadZonalManagerProfilePhoto(file) {
   const formData = new FormData();
   formData.append("photo", file);
   const { data } = await http.patch("/profile/photo", formData, {

@@ -59,7 +59,7 @@ const defaultAdminCredentials = {
 };
 
 
-const crmRolesForOperationalUsers = ["LEAD_GENERATOR", "STATE_MANAGER", "APPROVER"];
+const crmRolesForOperationalUsers = ["LEAD_GENERATOR", "STATE_MANAGER", "ZONAL_MANAGER", "APPROVER"];
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import logo from "../assets/maven-logo.svg";
 
@@ -16,35 +16,32 @@ const resolveRootApiBaseUrl = () => {
 
 const API_BASE = resolveRootApiBaseUrl();
 
-async function signupStateManager(data) {
-  const response = await fetch(`${API_BASE}/state-manager/auth/signup`, {
+async function signupZonalManager(payload) {
+  const response = await fetch(`${API_BASE}/zonal-manager/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
 
-  const payload = await response.json();
-
+  const data = await response.json();
   if (!response.ok) {
-    throw new Error(payload.message || "Registration failed");
+    throw new Error(data.message || "Registration failed");
   }
 
-  return payload;
+  return data;
 }
 
 export default function Signup() {
+  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [zone, setZone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -81,17 +78,16 @@ export default function Signup() {
     setError("");
 
     try {
-      await signupStateManager({ 
+      await signupZonalManager({
         fullName: normalizedFullName,
-        email: email.trim(), 
-        zone: zone.trim(), 
-        password, 
-        confirmPassword 
+        email: email.trim(),
+        zone: zone.trim(),
+        password,
+        confirmPassword,
       });
-      // Optionally just navigate to login or auto-login
       navigate("/login", { replace: true });
-    } catch (err) {
-      setError(err.message || "Unable to sign up.");
+    } catch (requestError) {
+      setError(requestError.message || "Unable to sign up.");
     } finally {
       setIsSubmitting(false);
     }
@@ -100,20 +96,17 @@ export default function Signup() {
   return (
     <div className="login-shell">
       <div className="login-card">
-        {/* Left panel */}
         <div className="login-brand">
           <img src={logo} alt="Maven Jobs" className="login-brand-logo" />
-          <h1 className="login-brand-title">
-            State Manager Portal
-          </h1>
+          <h1 className="login-brand-title">Zonal Manager Portal</h1>
           <p className="login-brand-sub">
-            Register your account to manage your zone's sales operations, assign leads, and track team performance.
+            Create a zonal manager account to supervise state-level sales operations and lead conversion flow.
           </p>
           <ul className="login-feature-list">
             {[
-              "Submit and track leads in real-time",
-              "View approval status and feedback",
-              "Monitor your performance dashboard",
+              "Built for zone-wise visibility and controls",
+              "Secure account access with role-based permissions",
+              "Designed for real-time lead tracking and escalations",
             ].map((item) => (
               <li key={item} className="login-feature-item">
                 <span className="login-feature-dot" />
@@ -123,24 +116,23 @@ export default function Signup() {
           </ul>
         </div>
 
-        {/* Right panel */}
         <div className="login-form-wrap">
-          <p className="login-eyebrow">State Manager Access</p>
+          <p className="login-eyebrow">Zonal Manager Access</p>
           <h2 className="login-form-title">Create your account</h2>
           <p className="login-form-sub">
-            Fill in the details below to register for the portal.
+            Register with your official email and assigned zone.
           </p>
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="login-field">
-              <label className="login-label" htmlFor="lg-full-name">
+              <label className="login-label" htmlFor="zm-signup-full-name">
                 Full Name
               </label>
               <input
-                id="lg-full-name"
+                id="zm-signup-full-name"
                 type="text"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(event) => setFullName(event.target.value)}
                 placeholder="Your full name"
                 className="login-input"
                 autoComplete="name"
@@ -150,14 +142,14 @@ export default function Signup() {
             </div>
 
             <div className="login-field">
-              <label className="login-label" htmlFor="lg-email">
+              <label className="login-label" htmlFor="zm-signup-email">
                 Email address
               </label>
               <input
-                id="lg-email"
+                id="zm-signup-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@mavenjobs.com"
                 className="login-input"
                 autoComplete="email"
@@ -165,17 +157,19 @@ export default function Signup() {
             </div>
 
             <div className="login-field">
-              <label className="login-label" htmlFor="lg-zone">
+              <label className="login-label" htmlFor="zm-signup-zone">
                 Zone
               </label>
               <select
-                id="lg-zone"
+                id="zm-signup-zone"
                 value={zone}
-                onChange={(e) => setZone(e.target.value)}
+                onChange={(event) => setZone(event.target.value)}
                 className="login-input"
                 style={{ appearance: "auto" }}
               >
-                <option value="" disabled>Select a zone</option>
+                <option value="" disabled>
+                  Select a zone
+                </option>
                 <option value="North">North</option>
                 <option value="South">South</option>
                 <option value="East">East</option>
@@ -184,15 +178,15 @@ export default function Signup() {
             </div>
 
             <div className="login-field">
-              <label className="login-label" htmlFor="lg-password">
+              <label className="login-label" htmlFor="zm-signup-password">
                 Password
               </label>
               <div style={{ position: "relative" }}>
                 <input
-                  id="lg-password"
+                  id="zm-signup-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                   placeholder="Enter your password"
                   className="login-input"
                   autoComplete="new-password"
@@ -200,7 +194,7 @@ export default function Signup() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((current) => !current)}
                   style={{
                     position: "absolute",
                     right: "12px",
@@ -209,10 +203,10 @@ export default function Signup() {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "rgba(255, 255, 255, 0.5)",
+                    color: "#64748b",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
                   }}
                   title={showPassword ? "Hide password" : "Show password"}
                 >
@@ -222,15 +216,15 @@ export default function Signup() {
             </div>
 
             <div className="login-field">
-              <label className="login-label" htmlFor="lg-confirm-password">
+              <label className="login-label" htmlFor="zm-signup-confirm">
                 Confirm Password
               </label>
               <div style={{ position: "relative" }}>
                 <input
-                  id="lg-confirm-password"
+                  id="zm-signup-confirm"
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                   placeholder="Confirm your password"
                   className="login-input"
                   autoComplete="new-password"
@@ -238,7 +232,7 @@ export default function Signup() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  onClick={() => setShowConfirmPassword((current) => !current)}
                   style={{
                     position: "absolute",
                     right: "12px",
@@ -247,10 +241,10 @@ export default function Signup() {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "rgba(255, 255, 255, 0.5)",
+                    color: "#64748b",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
                   }}
                   title={showConfirmPassword ? "Hide password" : "Show password"}
                 >
@@ -259,21 +253,20 @@ export default function Signup() {
               </div>
             </div>
 
-            {error && (
+            {error ? (
               <div className="login-error" role="alert">
                 {error}
               </div>
-            )}
+            ) : null}
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="login-btn"
-            >
+            <button type="submit" disabled={isSubmitting} className="login-btn">
               {isSubmitting ? "Creating account..." : "Register"}
             </button>
             <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.875rem", color: "#475569", fontWeight: "500" }}>
-              Already have an account? <Link to="/login" style={{ color: "#1e40af", textDecoration: "none", fontWeight: "600" }}>Sign In</Link>
+              Already have an account?{" "}
+              <Link to="/login" style={{ color: "#1e40af", textDecoration: "none", fontWeight: "600" }}>
+                Sign In
+              </Link>
             </div>
           </form>
         </div>

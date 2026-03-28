@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { LuMail, LuMapPin, LuShield, LuUpload, LuUser } from "react-icons/lu";
-import {
-  fetchStateManagerProfile,
-  updateStateManagerProfile,
-  uploadStateManagerProfilePhoto,
-} from "../api/leadApi";
+import { fetchZonalManagerProfile, updateZonalManagerProfile, uploadZonalManagerProfilePhoto } from "../api/leadApi";
 
 const SESSION_KEY = "crm_panel_session";
 
@@ -84,7 +80,7 @@ export default function Profile() {
 
     const loadProfile = async () => {
       try {
-        const data = await fetchStateManagerProfile();
+        const data = await fetchZonalManagerProfile();
         if (!mounted) {
           return;
         }
@@ -139,7 +135,7 @@ export default function Profile() {
     try {
       setIsUploading(true);
       setPhotoMessage("");
-      const updatedUser = await uploadStateManagerProfilePhoto(selectedFile);
+      const updatedUser = await uploadZonalManagerProfilePhoto(selectedFile);
       setProfile((current) => ({
         ...(current || {}),
         ...updatedUser,
@@ -184,7 +180,7 @@ export default function Profile() {
     try {
       setIsSavingName(true);
       setNameMessage("");
-      const updatedUser = await updateStateManagerProfile({ fullName: normalizedFullName });
+      const updatedUser = await updateZonalManagerProfile({ fullName: normalizedFullName });
       setProfile((current) => ({
         ...(current || {}),
         ...updatedUser,
@@ -221,10 +217,10 @@ export default function Profile() {
     );
   }
 
-  const displayName = profile?.fullName || "State Manager";
+  const displayName = profile?.fullName || "Zonal Manager";
   const displayEmail = profile?.email || "-";
   const displayZone = profile?.zone || "-";
-  const displayRole = profile?.role || "STATE_MANAGER";
+  const displayRole = profile?.role || "ZONAL_MANAGER";
   const displayImage = previewUrl || profile?.profileImage || "";
   const normalizedStoredName = String(profile?.fullName || "")
     .trim()
@@ -299,9 +295,9 @@ export default function Profile() {
         </div>
         <form onSubmit={handleNameUpdate} className="add-lead-form" style={{ marginTop: "10px" }}>
           <div className="form-field">
-            <label htmlFor="state-manager-full-name">Full Name</label>
+            <label htmlFor="zonal-manager-full-name">Full Name</label>
             <input
-              id="state-manager-full-name"
+              id="zonal-manager-full-name"
               className="input"
               type="text"
               value={editableFullName}
@@ -335,9 +331,9 @@ export default function Profile() {
         </div>
         <form onSubmit={handlePhotoUpload} className="add-lead-form" style={{ marginTop: "10px" }}>
           <div className="form-field">
-            <label htmlFor="state-manager-profile-photo">Choose Image</label>
+            <label htmlFor="zonal-manager-profile-photo">Choose Image</label>
             <input
-              id="state-manager-profile-photo"
+              id="zonal-manager-profile-photo"
               className="input"
               type="file"
               accept="image/png,image/jpeg,image/webp"
