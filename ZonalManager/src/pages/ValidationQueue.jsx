@@ -21,6 +21,7 @@ import {
 import AssignFseModal from "../components/AssignFseModal";
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
+import ActionConfirmModal from "../components/ActionConfirmModal";
 
 const ACTIVE_STATUS_OPTIONS = ["", "FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"];
 const TERMINAL_STATUSES = ["CONVERTED", "REJECTED", "LOST"];
@@ -46,6 +47,8 @@ export default function ValidationQueue() {
   const [editingActivityIndex, setEditingActivityIndex] = useState(null);
   const [stateManagers, setStateManagers] = useState([]);
   const [activities, setActivities] = useState({});
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   const [myZone, setMyZone] = useState("");
   const [search, setSearch] = useState("");
@@ -129,19 +132,12 @@ export default function ValidationQueue() {
 
   const handleConvert = async (event, lead) => {
     event.stopPropagation();
-
-    try {
-      await updateLeadStatus(lead.id, "CONVERTED");
-      await loadLeads();
-    } catch (requestError) {
-      window.alert(requestError?.response?.data?.message || "Failed to convert lead.");
-    }
+    setConfirmAction({ type: "CONVERT", lead });
   };
 
   const handleAssign = (event, lead) => {
     event.stopPropagation();
-    setAssignLead(lead);
-    setShowAssignModal(true);
+    setConfirmAction({ type: "FORWARD", lead });
   };
 
   const handleAssignLead = async (leadId, stateManagerId) => {
@@ -149,6 +145,30 @@ export default function ValidationQueue() {
     setShowAssignModal(false);
     setAssignLead(null);
     await loadLeads();
+  };
+
+  const handleConfirmStatusAction = async () => {
+    if (!confirmAction?.lead) {
+      return;
+    }
+
+    if (confirmAction.type === "FORWARD") {
+      setAssignLead(confirmAction.lead);
+      setShowAssignModal(true);
+      setConfirmAction(null);
+      return;
+    }
+
+    try {
+      setActionSubmitting(true);
+      await updateLeadStatus(confirmAction.lead.id, "CONVERTED");
+      await loadLeads();
+    } catch (requestError) {
+      window.alert(requestError?.response?.data?.message || "Failed to convert lead.");
+    } finally {
+      setActionSubmitting(false);
+      setConfirmAction(null);
+    }
   };
 
   const handleRowClick = (lead) => {
@@ -518,6 +538,25 @@ export default function ValidationQueue() {
           onSubmit={handleAssignLead}
         />
       ) : null}
+
+      <ActionConfirmModal
+        isOpen={Boolean(confirmAction)}
+        title={confirmAction?.type === "CONVERT" ? "Confirm Conversion" : "Confirm Forward"}
+        message={
+          confirmAction?.type === "CONVERT"
+            ? `Convert lead for ${confirmAction?.lead?.companyName || "this company"}?`
+            : `Forward lead for ${confirmAction?.lead?.companyName || "this company"} to a State Manager?`
+        }
+        confirmLabel={confirmAction?.type === "CONVERT" ? "Yes, Convert" : "Yes, Forward"}
+        tone={confirmAction?.type === "FORWARD" ? "forward" : "primary"}
+        isSubmitting={actionSubmitting}
+        onClose={() => {
+          if (!actionSubmitting) {
+            setConfirmAction(null);
+          }
+        }}
+        onConfirm={handleConfirmStatusAction}
+      />
     </div>
   );
 }

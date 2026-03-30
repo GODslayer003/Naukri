@@ -12,6 +12,8 @@ import {
 import { fetchLeads, updateLeadStatus, logLeadActivity, deleteLeadActivity } from "../api/leadApi";
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
+import ContactPickerModal from "../components/ContactPickerModal";
+import ActionConfirmModal from "../components/ActionConfirmModal";
 
 const TIMELINE_FILTERS = [
   { value: "", label: "All Dates" },
@@ -53,6 +55,54 @@ const formatLocation = (lead) => {
   return parts.length ? parts.join(", ") : "Location not available";
 };
 
+const getLeadContacts = (lead = {}) => {
+  const contacts = Array.isArray(lead.contacts)
+    ? lead.contacts
+        .map((contact) => ({
+          fullName: String(contact?.fullName || "").trim(),
+          phone: String(contact?.phone || "").trim(),
+          email: String(contact?.email || "").trim(),
+        }))
+        .filter((contact) => contact.fullName || contact.phone || contact.email)
+    : [];
+
+  if (contacts.length) {
+    return contacts;
+  }
+
+  const fallback = {
+    fullName: String(lead.contactName || "").trim(),
+    phone: String(lead.phone || "").trim(),
+    email: String(lead.contactEmail || lead.email || "").trim(),
+  };
+
+  return fallback.fullName || fallback.phone || fallback.email ? [fallback] : [];
+};
+
+const normalizeActivityContact = (contact = {}) => {
+  const normalized = {
+    fullName: String(contact?.fullName || contact?.contactName || "").trim(),
+    phone: String(contact?.phone || "").trim(),
+    email: String(contact?.email || "").trim(),
+  };
+
+  return normalized.fullName || normalized.phone || normalized.email ? normalized : null;
+};
+
+const mapLeadForRow = (lead) => ({
+  ...lead,
+  id: lead.id,
+  companyName: lead.companyName || "Unknown company",
+  location: formatLocation(lead),
+  contactName: lead.contactName || "Unknown contact",
+  contactEmail: lead.email || "-",
+  status: formatStatus(lead.status),
+  phone: lead.phone || "Not provided",
+  category: lead.businessCategory || "Unknown",
+  contacts: getLeadContacts(lead),
+  activities: Array.isArray(lead.activities) ? lead.activities : [],
+});
+
 export default function MyLeads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -65,9 +115,13 @@ export default function MyLeads() {
 
   const [selectedLead, setSelectedLead] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showContactPickerModal, setShowContactPickerModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [activities, setActivities] = useState({});
   const [editingActivityIndex, setEditingActivityIndex] = useState(null);
+  const [selectedActivityContact, setSelectedActivityContact] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -95,17 +149,7 @@ export default function MyLeads() {
           return;
         }
 
-        const mappedRows = (response.items || []).map((lead) => ({
-          ...lead, // keep all original model data
-          id: lead.id,
-          companyName: lead.companyName || "Unknown company",
-          location: formatLocation(lead),
-          contactName: lead.contactName || "Unknown contact",
-          contactEmail: lead.email || "-",
-          status: formatStatus(lead.status),
-          phone: lead.phone || "Not provided",
-          category: lead.businessCategory || "Unknown",
-        }));
+        const mappedRows = (response.items || []).map(mapLeadForRow);
 
         setRows(mappedRows);
 
@@ -156,35 +200,57 @@ export default function MyLeads() {
   };
 
   const handleLogActivity = (lead) => {
+    const leadContacts = getLeadContacts(lead);
+    if (!leadContacts.length) {
+      alert("No contact found for this lead.");
+      return;
+    }
+
     setEditingActivityIndex(null);
+    setSelectedActivityContact(null);
     setShowDetailModal(false);
+
+    if (leadContacts.length === 1) {
+      setSelectedActivityContact(leadContacts[0]);
+      setShowActivityModal(true);
+      return;
+    }
+
+    setShowContactPickerModal(true);
+  };
+
+  const handleSelectActivityContact = (contact) => {
+    setSelectedActivityContact(contact);
+    setShowContactPickerModal(false);
     setShowActivityModal(true);
   };
 
   const handleEditActivity = (index) => {
+    const leadId = selectedLead?._id || selectedLead?.id;
+    const existingActivity = activities[leadId]?.[index];
+    const fallbackContact = getLeadContacts(selectedLead)[0] || null;
+
     setEditingActivityIndex(index);
+    setSelectedActivityContact(normalizeActivityContact(existingActivity?.contact) || fallbackContact);
     setShowDetailModal(false);
+    setShowContactPickerModal(false);
     setShowActivityModal(true);
   };
 
   const handleDeleteActivity = async (index) => {
     const leadId = selectedLead._id || selectedLead.id;
     try {
-      await deleteLeadActivity(leadId, index);
-      // We don't have a loadLeads standalone function here, we rely on the useEffect.
-      // Easiest way to trigger refetch is to reload or manually update.
-      // In MyLeads, let's just update local state if we want it to be snappy,
-      // or we can just trigger the same logic as useEffect.
-      setActivities(prev => {
-        const updatedLeadActivities = [...(prev[leadId] || [])];
-        updatedLeadActivities.splice(index, 1);
-        return {
-          ...prev,
-          [leadId]: updatedLeadActivities
-        };
-      });
-    } catch (err) {
-      alert("Failed to delete activity.");
+      const updatedLead = await deleteLeadActivity(leadId, index);
+      const mappedLead = mapLeadForRow(updatedLead);
+
+      setActivities((prev) => ({
+        ...prev,
+        [leadId]: mappedLead.activities,
+      }));
+      setRows((prev) => prev.map((row) => (row.id === mappedLead.id ? { ...row, ...mappedLead } : row)));
+      setSelectedLead((current) => (current?.id === mappedLead.id ? { ...current, ...mappedLead } : current));
+    } catch (error) {
+      alert(error?.response?.data?.message || "Failed to delete activity.");
     }
   };
 
@@ -192,56 +258,64 @@ export default function MyLeads() {
     const leadId = selectedLead._id || selectedLead.id;
 
     try {
-      await logLeadActivity(leadId, {
-        ...data,
+      const updatedLead = await logLeadActivity(leadId, {
+        outcome: data.outcome,
+        notes: data.notes,
+        contact: data.contact,
         activityIndex: editingActivityIndex,
-        nextFollowUpAt: data.nextFollowUp // The backend expects nextFollowUpAt
+        nextFollowUpAt: data.nextFollowUp || null,
       });
-      
+      const mappedLead = mapLeadForRow(updatedLead);
+
       setShowActivityModal(false);
+      setShowContactPickerModal(false);
       setEditingActivityIndex(null);
-      
-      // Update local state for immediate feedback
-      setActivities(prev => {
-        const currentActivities = [...(prev[leadId] || [])];
-        if (editingActivityIndex !== null) {
-          currentActivities[editingActivityIndex] = {
-            ...currentActivities[editingActivityIndex],
-            ...data,
-          };
-        } else {
-          currentActivities.push({ ...data, date: new Date().toISOString() });
-        }
-        return { ...prev, [leadId]: currentActivities };
-      });
-      
+      setSelectedActivityContact(null);
+
+      setActivities((prev) => ({
+        ...prev,
+        [leadId]: mappedLead.activities,
+      }));
+      setRows((prev) => prev.map((row) => (row.id === mappedLead.id ? { ...row, ...mappedLead } : row)));
+      setSelectedLead((current) => (current?.id === mappedLead.id ? { ...current, ...mappedLead } : current));
       setShowDetailModal(true);
-    } catch (err) {
-      alert("Failed to log activity.");
+    } catch (error) {
+      alert(error?.response?.data?.message || "Failed to log activity.");
     }
   };
 
   const handleConvert = async (e, lead) => {
     e.stopPropagation();
-    try {
-      await updateLeadStatus(lead.id, "CONVERTED");
-      setRows((prev) =>
-        prev.map((r) => (r.id === lead.id ? { ...r, status: "Converted" } : r))
-      );
-    } catch (err) {
-      alert(err?.response?.data?.message || "Failed to convert lead.");
-    }
+    setConfirmAction({ type: "CONVERT", lead });
   };
 
   const handleForward = async (e, lead) => {
     e.stopPropagation();
+    setConfirmAction({ type: "FORWARD", lead });
+  };
+
+  const handleConfirmStatusAction = async () => {
+    if (!confirmAction?.lead?.id) {
+      return;
+    }
+
+    const nextStatus = confirmAction.type === "CONVERT" ? "CONVERTED" : "FORWARDED";
+    const nextStatusLabel = confirmAction.type === "CONVERT" ? "Converted" : "Forwarded";
+
     try {
-      await updateLeadStatus(lead.id, "FORWARDED");
+      setActionSubmitting(true);
+      await updateLeadStatus(confirmAction.lead.id, nextStatus);
       setRows((prev) =>
-        prev.map((r) => (r.id === lead.id ? { ...r, status: "Forwarded" } : r))
+        prev.map((r) => (r.id === confirmAction.lead.id ? { ...r, status: nextStatusLabel } : r))
       );
-    } catch (err) {
-      alert(err?.response?.data?.message || "Failed to forward lead.");
+    } catch (error) {
+      alert(
+        error?.response?.data?.message ||
+          `Failed to ${confirmAction.type === "CONVERT" ? "convert" : "forward"} lead.`,
+      );
+    } finally {
+      setActionSubmitting(false);
+      setConfirmAction(null);
     }
   };
 
@@ -423,18 +497,53 @@ export default function MyLeads() {
         />
       )}
 
+      {showContactPickerModal && (
+        <ContactPickerModal
+          lead={selectedLead}
+          contacts={getLeadContacts(selectedLead)}
+          onClose={() => {
+            setShowContactPickerModal(false);
+            setShowDetailModal(true);
+          }}
+          onSelect={handleSelectActivityContact}
+        />
+      )}
+
       {showActivityModal && (
         <LogActivityModal
+          key={`${selectedLead?._id || selectedLead?.id}-${editingActivityIndex ?? "new"}-${selectedActivityContact?.phone || selectedActivityContact?.email || selectedActivityContact?.fullName || "contact"}`}
           lead={selectedLead}
           initialData={editingActivityIndex !== null ? activities[selectedLead?._id || selectedLead?.id]?.[editingActivityIndex] : null}
+          activityContact={selectedActivityContact}
           onClose={() => {
             setShowActivityModal(false);
+            setShowContactPickerModal(false);
             setEditingActivityIndex(null);
+            setSelectedActivityContact(null);
             setShowDetailModal(true); // Reopen detail modal on cancel
           }}
           onSubmit={handleActivitySubmit}
         />
       )}
+
+      <ActionConfirmModal
+        isOpen={Boolean(confirmAction)}
+        title={confirmAction?.type === "CONVERT" ? "Confirm Conversion" : "Confirm Forward"}
+        message={
+          confirmAction?.type === "CONVERT"
+            ? `Convert lead for ${confirmAction?.lead?.companyName || "this company"}?`
+            : `Forward lead for ${confirmAction?.lead?.companyName || "this company"} to the next stage?`
+        }
+        confirmLabel={confirmAction?.type === "CONVERT" ? "Yes, Convert" : "Yes, Forward"}
+        tone={confirmAction?.type === "FORWARD" ? "forward" : "primary"}
+        isSubmitting={actionSubmitting}
+        onClose={() => {
+          if (!actionSubmitting) {
+            setConfirmAction(null);
+          }
+        }}
+        onConfirm={handleConfirmStatusAction}
+      />
     </div>
   );
 }

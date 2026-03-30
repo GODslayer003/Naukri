@@ -8,6 +8,7 @@ import {
 } from "../api/fseApi";
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
+import ActionConfirmModal from "../components/ActionConfirmModal";
 
 const STATUS_OPTIONS = ["ASSIGNED", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", "LOST", "REJECTED"];
 
@@ -48,6 +49,8 @@ export default function MyLeads() {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [editingActivityIndex, setEditingActivityIndex] = useState(null);
   const [activitySubmitting, setActivitySubmitting] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => setDebouncedSearch(search), 250);
@@ -109,18 +112,33 @@ export default function MyLeads() {
     setShowActivityModal(true);
   };
 
-  const handleStatusUpdate = async (leadId) => {
-    const nextStatus = statusDraft[leadId];
+  const performStatusUpdate = async (leadId, nextStatus) => {
     if (!nextStatus) {
       return;
     }
 
     try {
+      setStatusSubmitting(true);
       await updateFseLeadStatus(leadId, nextStatus);
       await loadLeads(selectedLead?.id || leadId);
     } catch (requestError) {
       alert(requestError?.response?.data?.message || "Failed to update lead status.");
+    } finally {
+      setStatusSubmitting(false);
     }
+  };
+
+  const handleStatusUpdate = async (leadId) => {
+    const nextStatus = statusDraft[leadId];
+    const normalizedStatus = String(nextStatus || "").toUpperCase();
+
+    if (["CONVERTED", "FORWARDED"].includes(normalizedStatus)) {
+      const lead = leads.find((item) => item.id === leadId) || null;
+      setConfirmAction({ leadId, nextStatus: normalizedStatus, lead });
+      return;
+    }
+
+    await performStatusUpdate(leadId, nextStatus);
   };
 
   const handleActivitySubmit = async ({ outcome, notes, nextFollowUpAt }) => {
@@ -327,6 +345,32 @@ export default function MyLeads() {
           onSubmit={handleActivitySubmit}
         />
       ) : null}
+
+      <ActionConfirmModal
+        isOpen={Boolean(confirmAction)}
+        title={confirmAction?.nextStatus === "CONVERTED" ? "Confirm Conversion" : "Confirm Forward"}
+        message={
+          confirmAction?.nextStatus === "CONVERTED"
+            ? `Convert lead for ${confirmAction?.lead?.companyName || "this company"}?`
+            : `Forward lead for ${confirmAction?.lead?.companyName || "this company"}?`
+        }
+        confirmLabel={confirmAction?.nextStatus === "CONVERTED" ? "Yes, Convert" : "Yes, Forward"}
+        tone={confirmAction?.nextStatus === "FORWARDED" ? "forward" : "primary"}
+        isSubmitting={statusSubmitting}
+        onClose={() => {
+          if (!statusSubmitting) {
+            setConfirmAction(null);
+          }
+        }}
+        onConfirm={async () => {
+          if (!confirmAction) {
+            return;
+          }
+
+          await performStatusUpdate(confirmAction.leadId, confirmAction.nextStatus);
+          setConfirmAction(null);
+        }}
+      />
     </div>
   );
 }

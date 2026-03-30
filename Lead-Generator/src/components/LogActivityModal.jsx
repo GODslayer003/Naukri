@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { LuX, LuCircleCheck, LuCalendar, LuMessageSquare, LuChevronDown } from 'react-icons/lu';
+import React, { useState } from "react";
+import { LuCircleCheck, LuChevronDown, LuMail, LuPhone, LuUserRound, LuX } from "react-icons/lu";
 
-const LogActivityModal = ({ lead, initialData, onClose, onSubmit }) => {
-  const [outcome, setOutcome] = useState('');
-  const [notes, setNotes] = useState('');
-  const [nextFollowUp, setNextFollowUp] = useState('');
+const normalizeContact = (contact = {}) => ({
+  fullName: String(contact?.fullName || contact?.contactName || "").trim(),
+  phone: String(contact?.phone || "").trim(),
+  email: String(contact?.email || "").trim(),
+});
 
-  useEffect(() => {
-    if (initialData) {
-      setOutcome(initialData.outcome || '');
-      setNotes(initialData.notes || '');
-      setNextFollowUp(initialData.nextFollowUp || '');
-    }
-  }, [initialData]);
+const LogActivityModal = ({ lead, initialData, activityContact, onClose, onSubmit }) => {
+  const [outcome, setOutcome] = useState(initialData?.outcome || "");
+  const [notes, setNotes] = useState(initialData?.notes || "");
+  const [nextFollowUp, setNextFollowUp] = useState(initialData?.nextFollowUpAt || initialData?.nextFollowUp || "");
+
+  const resolvedContact = normalizeContact(activityContact || initialData?.contact || {});
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ outcome, notes, nextFollowUp });
+    onSubmit({ outcome, notes, nextFollowUp, contact: resolvedContact });
   };
 
   return (
@@ -33,6 +33,15 @@ const LogActivityModal = ({ lead, initialData, onClose, onSubmit }) => {
         </header>
 
         <form onSubmit={handleSubmit} className="modal-form">
+          <div className="activity-contact-banner">
+            <p className="activity-contact-title">Logging for contact</p>
+            <div className="activity-contact-grid">
+              <span><LuUserRound /> {resolvedContact.fullName || "Unknown Contact"}</span>
+              <span><LuPhone /> {resolvedContact.phone || "Phone not available"}</span>
+              <span><LuMail /> {resolvedContact.email || "Email not available"}</span>
+            </div>
+          </div>
+
           <div className="form-group">
             <label className="form-label">OUTCOME</label>
             <div className="select-container">

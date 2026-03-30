@@ -9,6 +9,54 @@ const {
 
 const normalizePhoneNumber = (value = "") => value.replace(/\D/g, "");
 
+const leadContactSchema = new mongoose.Schema(
+  {
+    fullName: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: "",
+    },
+    isPrimary: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: false },
+);
+
+const activityContactSchema = new mongoose.Schema(
+  {
+    fullName: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: "",
+    },
+  },
+  { _id: false },
+);
+
 const leadSchema = new mongoose.Schema(
   {
     leadCode: {
@@ -41,6 +89,10 @@ const leadSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
       default: "",
+    },
+    contacts: {
+      type: [leadContactSchema],
+      default: [],
     },
     businessCategory: {
       type: String,
@@ -189,6 +241,11 @@ const leadSchema = new mongoose.Schema(
         outcome: { type: String, required: true },
         notes: { type: String, required: true },
         nextFollowUpAt: { type: Date },
+        contact: {
+          type: activityContactSchema,
+          required: false,
+          default: null,
+        },
         date: { type: Date, default: Date.now },
       },
     ],
@@ -200,6 +257,8 @@ leadSchema.index({ leadSource: 1, createdAt: -1 });
 leadSchema.index({ businessCategory: 1, createdAt: -1 });
 leadSchema.index({ phone: 1 });
 leadSchema.index({ email: 1 });
+leadSchema.index({ "contacts.phone": 1 });
+leadSchema.index({ "contacts.email": 1 });
 
 leadSchema.pre("validate", async function () {
   if (!this.leadCode) {
@@ -210,10 +269,10 @@ leadSchema.pre("validate", async function () {
 });
 
 leadSchema.pre("save", async function () {
-  this.phone = normalizePhoneNumber(this.phone);
+  this.contactName = String(this.contactName || "").trim();
+  this.phone = normalizePhoneNumber(String(this.phone || ""));
   this.alternatePhone = normalizePhoneNumber(this.alternatePhone);
   this.email = (this.email || "").trim().toLowerCase();
-  this.contactName = this.contactName.trim();
   this.companyName = this.companyName.trim();
   this.city = this.city.trim();
   this.state = this.state.trim();
@@ -221,6 +280,55 @@ leadSchema.pre("save", async function () {
   this.notes = (this.notes || "").trim();
   this.pincode = (this.pincode || "").trim();
   this.currency = (this.currency || "INR").trim().toUpperCase();
+
+  const normalizedContacts = (Array.isArray(this.contacts) ? this.contacts : [])
+    .map((contact) => ({
+      fullName: String(contact?.fullName || "").trim(),
+      phone: normalizePhoneNumber(String(contact?.phone || "")),
+      email: String(contact?.email || "").trim().toLowerCase(),
+      isPrimary: Boolean(contact?.isPrimary),
+    }))
+    .filter((contact) => contact.fullName || contact.phone || contact.email);
+
+  if (normalizedContacts.length) {
+    const primaryIndex = normalizedContacts.findIndex((contact) => contact.isPrimary);
+    const resolvedPrimaryIndex = primaryIndex >= 0 ? primaryIndex : 0;
+
+    this.contacts = normalizedContacts.map((contact, index) => ({
+      ...contact,
+      isPrimary: index === resolvedPrimaryIndex,
+    }));
+
+    const primaryContact = this.contacts[resolvedPrimaryIndex];
+    this.contactName = primaryContact.fullName || this.contactName;
+    this.phone = primaryContact.phone || this.phone;
+    if (primaryContact.email) {
+      this.email = primaryContact.email;
+    }
+  } else {
+    this.contacts = [];
+  }
+
+  if (Array.isArray(this.activities)) {
+    this.activities = this.activities.map((activity = {}) => {
+      const activitySnapshot = typeof activity.toObject === "function" ? activity.toObject() : activity;
+      if (!activity.contact) {
+        return {
+          ...activitySnapshot,
+          contact: null,
+        };
+      }
+
+      return {
+        ...activitySnapshot,
+        contact: {
+          fullName: String(activity.contact.fullName || "").trim(),
+          phone: normalizePhoneNumber(String(activity.contact.phone || "")),
+          email: String(activity.contact.email || "").trim().toLowerCase(),
+        },
+      };
+    });
+  }
 });
 
 leadSchema.statics.normalizePhoneNumber = normalizePhoneNumber;

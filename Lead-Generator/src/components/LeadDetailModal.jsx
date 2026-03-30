@@ -12,12 +12,37 @@ import {
   LuTrash2,
 } from "react-icons/lu";
 
+const getLeadContacts = (lead = {}) => {
+  const contacts = Array.isArray(lead.contacts)
+    ? lead.contacts
+        .map((contact) => ({
+          fullName: String(contact?.fullName || "").trim(),
+          phone: String(contact?.phone || "").trim(),
+          email: String(contact?.email || "").trim(),
+        }))
+        .filter((contact) => contact.fullName || contact.phone || contact.email)
+    : [];
+
+  if (contacts.length) {
+    return contacts;
+  }
+
+  const fallback = {
+    fullName: String(lead.contactName || "").trim(),
+    phone: String(lead.phone || "").trim(),
+    email: String(lead.contactEmail || lead.email || "").trim(),
+  };
+
+  return fallback.fullName || fallback.phone || fallback.email ? [fallback] : [];
+};
+
 const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEditActivity, onDeleteActivity }) => {
   if (!lead) return null;
 
   const isApproved = lead.status === "Approved";
   const assignedFseName = lead.assignedTo?.fullName || lead.assignedToName || "";
   const showAssignedFse = Boolean(assignedFseName);
+  const contacts = getLeadContacts(lead);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -68,19 +93,28 @@ const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEdit
 
           <section className="detail-section">
             <h3>Contact Details</h3>
-            <div className="detail-grid">
-              <div className="detail-item">
-                <span className="detail-label"><LuUserRound /> CONTACT PERSON</span>
-                <p className="detail-value">{lead.contactName}</p>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label"><LuPhone /> PHONE</span>
-                <p className="detail-value">{lead.phone}</p>
-              </div>
-              <div className="detail-item full-width">
-                <span className="detail-label"><LuMail /> EMAIL</span>
-                <p className="detail-value">{lead.contactEmail}</p>
-              </div>
+            <div className="lead-contacts-list">
+              {contacts.map((contact, index) => (
+                <article
+                  key={`lead-contact-${index}-${contact.phone || contact.email || contact.fullName}`}
+                  className="lead-contact-card"
+                >
+                  <div className="detail-grid">
+                    <div className="detail-item">
+                      <span className="detail-label"><LuUserRound /> CONTACT PERSON</span>
+                      <p className="detail-value">{contact.fullName || "Not available"}</p>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label"><LuPhone /> PHONE</span>
+                      <p className="detail-value">{contact.phone || "Not available"}</p>
+                    </div>
+                    <div className="detail-item full-width">
+                      <span className="detail-label"><LuMail /> EMAIL</span>
+                      <p className="detail-value">{contact.email || "Not available"}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
           </section>
 
@@ -112,10 +146,15 @@ const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEdit
                       </div>
                     </div>
                     <p className="activity-notes">{activity.notes}</p>
-                    {activity.nextFollowUp && (
+                    {activity?.contact?.fullName ? (
+                      <p className="activity-contact-name">
+                        <LuUserRound /> Followed up with: {activity.contact.fullName}
+                      </p>
+                    ) : null}
+                    {(activity.nextFollowUpAt || activity.nextFollowUp) && (
                       <p className="next-follow-up">
                         <LuCalendar className="calendar-icon" /> Next Follow-up:{" "}
-                        {new Date(activity.nextFollowUp).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(activity.nextFollowUpAt || activity.nextFollowUp).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     )}
                   </div>

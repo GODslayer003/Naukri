@@ -156,23 +156,128 @@ const applyCreatedByZoneFilter = async (filters, zone) => {
   filters.createdBy = { $in: zoneCreatorIds };
 };
 
-const normalizeCreateLeadInput = (payload = {}, user = {}) => ({
-  contactName: String(payload.contactName || payload.fullName || "").trim(),
-  companyName: String(payload.companyName || "").trim(),
-  phone: String(payload.phone || payload.phoneNumber || "").trim(),
-  alternatePhone: String(payload.alternatePhone || "").trim(),
-  email: String(payload.email || "").trim().toLowerCase(),
-  businessCategory: String(payload.businessCategory || "").trim(),
-  leadSource: String(payload.leadSource || "").trim(),
-  status: parseEnum(payload.status, LEAD_STATUSES, "NEW"),
-  priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
-  city: String(payload.city || "").trim() || "Unknown",
-  state: String(payload.state || user.state || "").trim() || "Unknown",
-  address: String(payload.address || payload.location || "").trim(),
-  pincode: String(payload.pincode || "").trim(),
-  notes: String(payload.notes || "").trim(),
-  nextFollowUpAt: payload.nextFollowUpAt || null,
+const normalizeLeadContacts = (payload = {}) => {
+  const incomingContacts = Array.isArray(payload.contacts) ? payload.contacts : [];
+  const normalizedContacts = incomingContacts
+    .map((contact) => ({
+      fullName: String(contact?.fullName || contact?.contactName || "").trim(),
+      phone: String(contact?.phone || contact?.phoneNumber || "").trim(),
+      email: String(contact?.email || "").trim().toLowerCase(),
+      isPrimary: Boolean(contact?.isPrimary),
+    }))
+    .filter((contact) => contact.fullName || contact.phone || contact.email);
+
+  if (!normalizedContacts.length) {
+    const fallbackContact = {
+      fullName: String(payload.contactName || payload.fullName || "").trim(),
+      phone: String(payload.phone || payload.phoneNumber || "").trim(),
+      email: String(payload.email || "").trim().toLowerCase(),
+      isPrimary: true,
+    };
+
+    if (fallbackContact.fullName || fallbackContact.phone || fallbackContact.email) {
+      normalizedContacts.push(fallbackContact);
+    }
+  }
+
+  if (!normalizedContacts.length) {
+    return [];
+  }
+
+  const primaryIndex = normalizedContacts.findIndex((contact) => contact.isPrimary);
+  const resolvedPrimaryIndex = primaryIndex >= 0 ? primaryIndex : 0;
+
+  return normalizedContacts.map((contact, index) => ({
+    fullName: contact.fullName,
+    phone: contact.phone,
+    email: contact.email,
+    isPrimary: index === resolvedPrimaryIndex,
+  }));
+};
+
+const normalizeCreateLeadInput = (payload = {}, user = {}) => {
+  const contacts = normalizeLeadContacts(payload);
+  const primaryContact = contacts.find((contact) => contact.isPrimary) || contacts[0] || {};
+
+  return {
+    contactName: String(payload.contactName || payload.fullName || primaryContact.fullName || "").trim(),
+    companyName: String(payload.companyName || "").trim(),
+    phone: String(payload.phone || payload.phoneNumber || primaryContact.phone || "").trim(),
+    alternatePhone: String(payload.alternatePhone || "").trim(),
+    email: String(payload.email || primaryContact.email || "").trim().toLowerCase(),
+    contacts,
+    businessCategory: String(payload.businessCategory || "").trim(),
+    leadSource: String(payload.leadSource || "").trim(),
+    status: parseEnum(payload.status, LEAD_STATUSES, "NEW"),
+    priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
+    city: String(payload.city || "").trim() || "Unknown",
+    state: String(payload.state || user.state || "").trim() || "Unknown",
+    address: String(payload.address || payload.location || "").trim(),
+    pincode: String(payload.pincode || "").trim(),
+    notes: String(payload.notes || "").trim(),
+    nextFollowUpAt: payload.nextFollowUpAt || null,
+  };
+};
+
+const normalizeActivityContactInput = (contact = {}) => ({
+  fullName: String(contact?.fullName || contact?.contactName || "").trim(),
+  phone: Lead.normalizePhoneNumber(String(contact?.phone || "")),
+  email: String(contact?.email || "").trim().toLowerCase(),
 });
+
+const getLeadContactsForActivity = (lead = {}) => {
+  const normalizedContacts = (Array.isArray(lead.contacts) ? lead.contacts : [])
+    .map((contact) => normalizeActivityContactInput(contact))
+    .filter((contact) => contact.fullName || contact.phone || contact.email);
+
+  if (normalizedContacts.length) {
+    return normalizedContacts;
+  }
+
+  const fallbackContact = normalizeActivityContactInput({
+    fullName: lead.contactName,
+    phone: lead.phone,
+    email: lead.email,
+  });
+
+  return fallbackContact.fullName || fallbackContact.phone || fallbackContact.email ? [fallbackContact] : [];
+};
+
+const pickActivityContact = ({ lead, incomingContact, existingActivityContact }) => {
+  const leadContacts = getLeadContactsForActivity(lead);
+  const normalizedIncoming = normalizeActivityContactInput(incomingContact);
+  const normalizedExisting = normalizeActivityContactInput(existingActivityContact);
+  const hasIncoming = normalizedIncoming.fullName || normalizedIncoming.phone || normalizedIncoming.email;
+
+  if (hasIncoming) {
+    const matchedContact = leadContacts.find((leadContact) => {
+      if (normalizedIncoming.phone) {
+        return leadContact.phone === normalizedIncoming.phone;
+      }
+
+      if (normalizedIncoming.email) {
+        return leadContact.email === normalizedIncoming.email;
+      }
+
+      return (
+        normalizedIncoming.fullName &&
+        String(leadContact.fullName || "").toLowerCase() === normalizedIncoming.fullName.toLowerCase()
+      );
+    });
+
+    if (!matchedContact) {
+      throw createHttpError(400, "Selected contact does not belong to this lead.");
+    }
+
+    return matchedContact;
+  }
+
+  if (normalizedExisting.fullName || normalizedExisting.phone || normalizedExisting.email) {
+    return normalizedExisting;
+  }
+
+  return leadContacts[0] || null;
+};
 
 const buildLeadAccessFilter = (user) => {
   if (!user) {
@@ -207,6 +312,22 @@ const formatLead = (lead) => ({
   phone: lead.phone,
   alternatePhone: lead.alternatePhone || "",
   email: lead.email || "",
+  contacts:
+    Array.isArray(lead.contacts) && lead.contacts.length
+      ? lead.contacts.map((contact) => ({
+          fullName: contact.fullName || "",
+          phone: contact.phone || "",
+          email: contact.email || "",
+          isPrimary: Boolean(contact.isPrimary),
+        }))
+      : [
+          {
+            fullName: lead.contactName || "",
+            phone: lead.phone || "",
+            email: lead.email || "",
+            isPrimary: true,
+          },
+        ],
   businessCategory: lead.businessCategory,
   leadSource: lead.leadSource,
   status: lead.isForwardedToSM ? "FORWARDED" : lead.status,
@@ -218,7 +339,25 @@ const formatLead = (lead) => ({
   notes: lead.notes || "",
   nextFollowUpAt: lead.nextFollowUpAt,
   lastContactedAt: lead.lastContactedAt,
-  activities: lead.activities || [],
+  activities: (Array.isArray(lead.activities) ? lead.activities : []).map((activity) => {
+    const fallbackContact = {
+      fullName: lead.contactName || "",
+      phone: lead.phone || "",
+      email: lead.email || "",
+    };
+    const normalizedContact = normalizeActivityContactInput(activity?.contact || fallbackContact);
+
+    return {
+      outcome: activity?.outcome || "",
+      notes: activity?.notes || "",
+      nextFollowUpAt: activity?.nextFollowUpAt || null,
+      date: activity?.date || null,
+      contact:
+        normalizedContact.fullName || normalizedContact.phone || normalizedContact.email
+          ? normalizedContact
+          : fallbackContact,
+    };
+  }),
   createdAt: lead.createdAt,
   updatedAt: lead.updatedAt,
   createdBy:
@@ -269,6 +408,49 @@ const ensureLeadPayload = (payload = {}) => {
   if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(payload.email).trim())) {
     throw createHttpError(400, "Enter a valid email address");
   }
+
+  if (!Array.isArray(payload.contacts) || !payload.contacts.length) {
+    throw createHttpError(400, "At least one contact person is required.");
+  }
+
+  const seenPhones = new Set();
+  const seenEmails = new Set();
+
+  payload.contacts.forEach((contact = {}, index) => {
+    const label = `Contact ${index + 1}`;
+    const contactName = String(contact.fullName || "").trim();
+    const contactPhone = String(contact.phone || "").trim();
+    const contactEmail = String(contact.email || "").trim().toLowerCase();
+
+    if (!contactName) {
+      throw createHttpError(400, `${label}: Full name is required.`);
+    }
+
+    if (!contactPhone) {
+      throw createHttpError(400, `${label}: Phone number is required.`);
+    }
+
+    const normalizedContactPhone = Lead.normalizePhoneNumber(contactPhone);
+    if (normalizedContactPhone.length < 10) {
+      throw createHttpError(400, `${label}: Phone number must contain at least 10 digits.`);
+    }
+
+    if (seenPhones.has(normalizedContactPhone)) {
+      throw createHttpError(400, `${label}: Duplicate phone number is not allowed.`);
+    }
+    seenPhones.add(normalizedContactPhone);
+
+    if (contactEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+        throw createHttpError(400, `${label}: Enter a valid email address.`);
+      }
+
+      if (seenEmails.has(contactEmail)) {
+        throw createHttpError(400, `${label}: Duplicate email is not allowed.`);
+      }
+      seenEmails.add(contactEmail);
+    }
+  });
 };
 
 exports.getLeadGeneratorMeta = asyncHandler(async (req, res) => {
@@ -414,6 +596,9 @@ exports.getLeads = asyncHandler(async (req, res) => {
       { leadCode: { $regex: escapeRegExp(search), $options: "i" } },
       { phone: { $regex: escapeRegExp(search) } },
       { email: { $regex: escapeRegExp(search), $options: "i" } },
+      { "contacts.fullName": { $regex: escapeRegExp(search), $options: "i" } },
+      { "contacts.phone": { $regex: escapeRegExp(search) } },
+      { "contacts.email": { $regex: escapeRegExp(search), $options: "i" } },
     ];
   }
 
@@ -487,10 +672,36 @@ exports.createLead = asyncHandler(async (req, res) => {
 
   const normalizedPhone = Lead.normalizePhoneNumber(input.phone);
   const normalizedEmail = input.email;
-  const duplicateFilter = normalizedEmail
-    ? {
-        $or: [{ phone: normalizedPhone }, { email: normalizedEmail }],
-      }
+  const contactPhones = Array.from(
+    new Set(
+      (input.contacts || [])
+        .map((contact) => Lead.normalizePhoneNumber(contact.phone))
+        .filter((phone) => phone),
+    ),
+  );
+  const contactEmails = Array.from(
+    new Set(
+      (input.contacts || [])
+        .map((contact) => String(contact.email || "").trim().toLowerCase())
+        .filter((email) => email),
+    ),
+  );
+  const duplicateConditions = [];
+
+  if (contactPhones.length || normalizedPhone) {
+    const phones = Array.from(new Set([normalizedPhone, ...contactPhones].filter(Boolean)));
+    duplicateConditions.push({ phone: { $in: phones } });
+    duplicateConditions.push({ "contacts.phone": { $in: phones } });
+  }
+
+  if (contactEmails.length || normalizedEmail) {
+    const emails = Array.from(new Set([normalizedEmail, ...contactEmails].filter(Boolean)));
+    duplicateConditions.push({ email: { $in: emails } });
+    duplicateConditions.push({ "contacts.email": { $in: emails } });
+  }
+
+  const duplicateFilter = duplicateConditions.length
+    ? { $or: duplicateConditions }
     : { phone: normalizedPhone };
 
   const existingLead = await Lead.findOne(duplicateFilter).select("_id leadCode");
@@ -507,6 +718,7 @@ exports.createLead = asyncHandler(async (req, res) => {
     phone: input.phone,
     alternatePhone: input.alternatePhone,
     email: normalizedEmail,
+    contacts: input.contacts,
     businessCategory: input.businessCategory,
     leadSource: input.leadSource,
     status: input.status,
@@ -795,7 +1007,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
 
 exports.logLeadActivity = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { outcome, notes, nextFollowUpAt, activityIndex } = req.body;
+  const { outcome, notes, nextFollowUpAt, activityIndex, contact } = req.body;
 
   if (!outcome || !notes) {
     throw createHttpError(400, "Outcome and notes are required");
@@ -806,10 +1018,19 @@ exports.logLeadActivity = asyncHandler(async (req, res) => {
     throw createHttpError(404, "Lead not found");
   }
 
+  const existingActivity =
+    activityIndex !== undefined && activityIndex !== null ? lead.activities[activityIndex] : null;
+  const selectedContact = pickActivityContact({
+    lead,
+    incomingContact: contact,
+    existingActivityContact: existingActivity?.contact,
+  });
+
   const activityData = {
     outcome,
     notes,
     nextFollowUpAt: nextFollowUpAt || null,
+    contact: selectedContact,
     date: new Date(),
   };
 

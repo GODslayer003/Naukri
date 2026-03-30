@@ -21,6 +21,7 @@ import {
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
 import AssignFseModal from "../components/AssignFseModal";
+import ActionConfirmModal from "../components/ActionConfirmModal";
 
 export default function ValidationQueue() {
   const [leads, setLeads] = useState([]);
@@ -35,6 +36,8 @@ export default function ValidationQueue() {
   const [editingActivityIndex, setEditingActivityIndex] = useState(null);
   const [fses, setFses] = useState([]);
   const [myZone, setMyZone] = useState("");
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
   
   // Activities state for modal (mocked for now, or synced if backend supports)
   const [activities, setActivities] = useState({});
@@ -123,20 +126,40 @@ export default function ValidationQueue() {
 
   const handleConvert = async (e, lead) => {
     e.stopPropagation();
-    try {
-      await updateLeadStatus(lead._id || lead.id, "CONVERTED");
-      setLeads((prev) => 
-        prev.map((r) => ((r._id || r.id) === (lead._id || lead.id) ? { ...r, status: "CONVERTED" } : r))
-      );
-    } catch (err) {
-      alert("Failed to convert lead.");
-    }
+    setConfirmAction({ type: "CONVERT", lead });
   };
 
   const handleForward = async (e, lead) => {
     e.stopPropagation();
-    setAssignLead(lead);
-    setShowAssignModal(true);
+    setConfirmAction({ type: "FORWARD", lead });
+  };
+
+  const handleConfirmStatusAction = async () => {
+    if (!confirmAction?.lead) {
+      return;
+    }
+
+    if (confirmAction.type === "FORWARD") {
+      setAssignLead(confirmAction.lead);
+      setShowAssignModal(true);
+      setConfirmAction(null);
+      return;
+    }
+
+    const lead = confirmAction.lead;
+    const leadId = lead._id || lead.id;
+    try {
+      setActionSubmitting(true);
+      await updateLeadStatus(leadId, "CONVERTED");
+      setLeads((prev) =>
+        prev.map((record) => ((record._id || record.id) === leadId ? { ...record, status: "CONVERTED" } : record))
+      );
+    } catch (error) {
+      alert(error?.response?.data?.message || "Failed to convert lead.");
+    } finally {
+      setActionSubmitting(false);
+      setConfirmAction(null);
+    }
   };
 
   const handleAssignLead = async (leadId, fseId) => {
@@ -151,7 +174,7 @@ export default function ValidationQueue() {
     setShowDetailModal(true);
   };
   
-  const handleLogActivity = (lead) => {
+  const handleLogActivity = () => {
     setEditingActivityIndex(null);
     setShowDetailModal(false);
     setShowActivityModal(true);
@@ -168,8 +191,8 @@ export default function ValidationQueue() {
     try {
       await deleteLeadActivity(leadId, index);
       loadLeads();
-    } catch (err) {
-      alert("Failed to delete activity.");
+    } catch (requestError) {
+      alert(requestError?.response?.data?.message || "Failed to delete activity.");
     }
   };
 
@@ -187,8 +210,8 @@ export default function ValidationQueue() {
       setEditingActivityIndex(null);
       await loadLeads();
       setShowDetailModal(true);
-    } catch (err) {
-      alert("Failed to log activity.");
+    } catch (requestError) {
+      alert(requestError?.response?.data?.message || "Failed to log activity.");
     }
   };
 
@@ -444,6 +467,25 @@ export default function ValidationQueue() {
           onSubmit={handleAssignLead}
         />
       )}
+
+      <ActionConfirmModal
+        isOpen={Boolean(confirmAction)}
+        title={confirmAction?.type === "CONVERT" ? "Confirm Conversion" : "Confirm Forward"}
+        message={
+          confirmAction?.type === "CONVERT"
+            ? `Convert lead for ${confirmAction?.lead?.companyName || "this company"}?`
+            : `Forward lead for ${confirmAction?.lead?.companyName || "this company"} and continue assignment?`
+        }
+        confirmLabel={confirmAction?.type === "CONVERT" ? "Yes, Convert" : "Yes, Forward"}
+        tone={confirmAction?.type === "FORWARD" ? "forward" : "primary"}
+        isSubmitting={actionSubmitting}
+        onClose={() => {
+          if (!actionSubmitting) {
+            setConfirmAction(null);
+          }
+        }}
+        onConfirm={handleConfirmStatusAction}
+      />
 
     </div>
   );

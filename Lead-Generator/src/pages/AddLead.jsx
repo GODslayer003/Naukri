@@ -7,6 +7,8 @@ import {
   LuMail,
   LuMapPin,
   LuPhone,
+  LuPlus,
+  LuTrash2,
   LuUserRound,
 } from "react-icons/lu";
 import { toast } from "sonner";
@@ -29,11 +31,15 @@ const LEAD_SOURCE_OPTIONS = [
   "Inbound Inquiry",
 ];
 
-const initialForm = {
+const createEmptyContact = () => ({
   fullName: "",
-  companyName: "",
   phone: "",
   email: "",
+});
+
+const initialForm = {
+  companyName: "",
+  contacts: [createEmptyContact()],
   businessCategory: "",
   leadSource: "",
   address: "",
@@ -100,27 +106,100 @@ export default function AddLead() {
     setForm((current) => ({ ...current, [name]: value }));
   };
 
+  const handleContactChange = (index, field, value) => {
+    setForm((current) => ({
+      ...current,
+      contacts: current.contacts.map((contact, contactIndex) =>
+        contactIndex === index ? { ...contact, [field]: value } : contact,
+      ),
+    }));
+  };
+
+  const handleAddContact = () => {
+    setForm((current) => ({
+      ...current,
+      contacts: [...current.contacts, createEmptyContact()],
+    }));
+  };
+
+  const handleRemoveContact = (index) => {
+    setForm((current) => {
+      if (current.contacts.length === 1) {
+        return current;
+      }
+
+      return {
+        ...current,
+        contacts: current.contacts.filter((_, contactIndex) => contactIndex !== index),
+      };
+    });
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const normalizedPhone = form.phone.replace(/\D/g, "");
 
-    if (normalizedPhone.length < 10) {
-      toast.error("Phone number must contain at least 10 digits.");
+    const sanitizedContacts = form.contacts.map((contact) => ({
+      fullName: contact.fullName.trim(),
+      phone: contact.phone.trim(),
+      email: contact.email.trim().toLowerCase(),
+    }));
+
+    if (!sanitizedContacts.length) {
+      toast.error("Add at least one contact person.");
       return;
     }
 
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      toast.error("Please enter a valid email address.");
-      return;
+    const uniquePhones = new Set();
+    const uniqueEmails = new Set();
+
+    for (const [index, contact] of sanitizedContacts.entries()) {
+      const contactNumber = index + 1;
+
+      if (!contact.fullName) {
+        toast.error(`Contact ${contactNumber}: full name is required.`);
+        return;
+      }
+
+      const normalizedPhone = contact.phone.replace(/\D/g, "");
+      if (normalizedPhone.length < 10) {
+        toast.error(`Contact ${contactNumber}: phone number must contain at least 10 digits.`);
+        return;
+      }
+
+      if (uniquePhones.has(normalizedPhone)) {
+        toast.error(`Contact ${contactNumber}: this phone number is already added.`);
+        return;
+      }
+      uniquePhones.add(normalizedPhone);
+
+      if (contact.email) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
+          toast.error(`Contact ${contactNumber}: please enter a valid email address.`);
+          return;
+        }
+
+        if (uniqueEmails.has(contact.email)) {
+          toast.error(`Contact ${contactNumber}: this email is already added.`);
+          return;
+        }
+        uniqueEmails.add(contact.email);
+      }
     }
 
     try {
       setSaving(true);
+      const [primaryContact] = sanitizedContacts;
       const payload = {
-        contactName: form.fullName.trim(),
+        contactName: primaryContact.fullName,
         companyName: form.companyName.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
+        phone: primaryContact.phone,
+        email: primaryContact.email,
+        contacts: sanitizedContacts.map((contact, index) => ({
+          fullName: contact.fullName,
+          phone: contact.phone,
+          email: contact.email,
+          isPrimary: index === 0,
+        })),
         businessCategory: form.businessCategory,
         leadSource: form.leadSource,
         address: form.address.trim(),
@@ -177,14 +256,14 @@ export default function AddLead() {
                     className="input add-lead-input add-lead-select"
                     name="businessCategory"
                     value={form.businessCategory}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="" disabled>
-                    Select Category...
-                  </option>
-                  {(meta?.businessCategories || []).map((option) => (
-                    <option key={option} value={option}>
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="" disabled>
+                      Select Category...
+                    </option>
+                    {(meta?.businessCategories || []).map((option) => (
+                      <option key={option} value={option}>
                         {option}
                       </option>
                     ))}
@@ -210,54 +289,81 @@ export default function AddLead() {
             </section>
 
             <section className="lead-block">
-              <div className="lead-block-header">
-                <span className="lead-block-icon">
-                  <LuUserRound />
-                </span>
-                <h2>Contact Person</h2>
+              <div className="lead-block-header contact-block-header">
+                <div className="lead-block-title">
+                  <span className="lead-block-icon">
+                    <LuUserRound />
+                  </span>
+                  <h2>Contact Person</h2>
+                </div>
+                <button
+                  type="button"
+                  className="button button-secondary add-contact-button"
+                  onClick={handleAddContact}
+                >
+                  <LuPlus />
+                  Add Contact
+                </button>
               </div>
 
-              <div className="lead-block-grid two-col">
-                <Field label="Full Name">
-                  <input
-                    className="input add-lead-input"
-                    name="fullName"
-                    value={form.fullName}
-                    onChange={handleChange}
-                    placeholder="Full Name"
-                    required
-                  />
-                </Field>
+              <div className="contact-list">
+                {form.contacts.map((contact, index) => (
+                  <article className="contact-card" key={`contact-${index}`}>
+                    <div className="contact-card-header">
+                      <h3>Contact {index + 1}</h3>
+                      {form.contacts.length > 1 ? (
+                        <button
+                          type="button"
+                          className="contact-remove-button"
+                          onClick={() => handleRemoveContact(index)}
+                        >
+                          <LuTrash2 />
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
 
-                <Field label="Phone Number">
-                  <div className="input-shell">
-                    <input
-                      className="input add-lead-input"
-                      name="phone"
-                      value={form.phone}
-                      onChange={handleChange}
-                      placeholder="Phone Number"
-                      required
-                    />
-                    <LuPhone className="input-icon" />
-                  </div>
-                </Field>
-              </div>
+                    <div className="lead-block-grid two-col contact-grid">
+                      <Field label={`Contact ${index + 1} Full Name`}>
+                        <input
+                          className="input add-lead-input"
+                          value={contact.fullName}
+                          onChange={(event) => handleContactChange(index, "fullName", event.target.value)}
+                          placeholder="Full Name"
+                          required
+                        />
+                      </Field>
 
-              <div className="lead-block-grid one-col">
-                <Field label="Email Address">
-                  <div className="input-shell">
-                    <input
-                      className="input add-lead-input"
-                      type="email"
-                      name="email"
-                      value={form.email}
-                      onChange={handleChange}
-                      placeholder="Email Address"
-                    />
-                    <LuMail className="input-icon" />
-                  </div>
-                </Field>
+                      <Field label={`Contact ${index + 1} Phone Number`}>
+                        <div className="input-shell">
+                          <input
+                            className="input add-lead-input"
+                            value={contact.phone}
+                            onChange={(event) => handleContactChange(index, "phone", event.target.value)}
+                            placeholder="Phone Number"
+                            required
+                          />
+                          <LuPhone className="input-icon" />
+                        </div>
+                      </Field>
+                    </div>
+
+                    <div className="lead-block-grid one-col">
+                      <Field label={`Contact ${index + 1} Email Address`}>
+                        <div className="input-shell">
+                          <input
+                            className="input add-lead-input"
+                            type="email"
+                            value={contact.email}
+                            onChange={(event) => handleContactChange(index, "email", event.target.value)}
+                            placeholder="Email Address"
+                          />
+                          <LuMail className="input-icon" />
+                        </div>
+                      </Field>
+                    </div>
+                  </article>
+                ))}
               </div>
             </section>
 
