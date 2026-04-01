@@ -9,6 +9,18 @@ import {
 } from "react-icons/lu";
 import { fetchLeadDashboard } from "../api/leadApi";
 
+const SESSION_KEY = "crm_panel_session";
+
+const getSessionUser = () => {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed?.user || null;
+  } catch {
+    return null;
+  }
+};
+
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +112,9 @@ export default function Dashboard() {
   const previewTeamOverview = allTeamOverview.slice(0, 3);
   const allNotifications = Array.isArray(recentActivity) ? recentActivity : [];
   const previewNotifications = allNotifications.slice(0, 3);
+  const currentUser = getSessionUser();
+  const managerName = currentUser?.fullName || currentUser?.email || "State Manager";
+  const managerZone = currentUser?.zone || "Assigned";
 
   const renderNotificationItem = (activity) => {
     const colorMap = {
@@ -135,7 +150,7 @@ export default function Dashboard() {
             Dashboard Overview
           </h1>
           <p style={{ color: "#64748b", margin: "4px 0 0 0", fontSize: "1rem" }}>
-            State Level Control Center
+            {managerZone} Zone Control Center | {managerName}
           </p>
         </div>
         <div style={{ color: "#64748b", fontSize: "0.875rem" }}>

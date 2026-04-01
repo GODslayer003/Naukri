@@ -2,23 +2,42 @@
 
 const CrmUser = require("../models/CrmUser");
 const bcrypt = require("bcryptjs");
+const { normalizeZoneInput, buildZoneRegex } = require("../utils/zone.util");
+
+const ALLOWED_CRM_ROLES = [
+  "LEAD_GENERATOR",
+  "STATE_MANAGER",
+  "ZONAL_MANAGER",
+  "FSE",
+  "APPROVER",
+  "ADMIN",
+  "NATIONAL_SALES_HEAD",
+];
 
 // REGISTER CRM USER
 exports.registerCrmUser = async (req, res) => {
   try {
-    const { fullName, email, password, phone, role, territory, state } =
-      req.body;
+    const { fullName, email, password, phone, role, territory, state } = req.body;
+    const normalizedRole = String(role || "").trim().toUpperCase();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    // 1️⃣ Basic Validation
-    if (!fullName || !email || !password || !role) {
+    // Basic validation
+    if (!fullName || !normalizedEmail || !password || !normalizedRole) {
       return res.status(400).json({
         success: false,
         message: "Full Name, Email, Password and Role are required",
       });
     }
 
-    // 2️⃣ Check existing user
-    const existingUser = await CrmUser.findOne({ email });
+    if (!ALLOWED_CRM_ROLES.includes(normalizedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid CRM role provided.",
+      });
+    }
+
+    // Check existing user
+    const existingUser = await CrmUser.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -26,17 +45,64 @@ exports.registerCrmUser = async (req, res) => {
       });
     }
 
-    // 3️⃣ Hash password
+    let normalizedTerritory = String(territory || "").trim();
+
+    if (normalizedRole === "NATIONAL_SALES_HEAD") {
+      const existingNsh = await CrmUser.findOne({ role: "NATIONAL_SALES_HEAD" }).select("_id");
+      if (existingNsh) {
+        return res.status(409).json({
+          success: false,
+          message: "Only one National Sales Head account is allowed.",
+        });
+      }
+    }
+
+    if (normalizedRole === "ZONAL_MANAGER") {
+      const normalizedZone = normalizeZoneInput(territory);
+      if (!normalizedZone) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid zone is required for Zonal Manager (North, South, East, West).",
+        });
+      }
+
+      const zoneRegex = buildZoneRegex(normalizedZone);
+      const [existingZoneManager, zonalManagerCount] = await Promise.all([
+        CrmUser.findOne({
+          role: "ZONAL_MANAGER",
+          territory: { $regex: zoneRegex },
+        }).select("_id"),
+        CrmUser.countDocuments({ role: "ZONAL_MANAGER" }),
+      ]);
+
+      if (existingZoneManager) {
+        return res.status(409).json({
+          success: false,
+          message: `${normalizedZone} Zone already has a Zonal Manager.`,
+        });
+      }
+
+      if (zonalManagerCount >= 4) {
+        return res.status(409).json({
+          success: false,
+          message: "Only four Zonal Managers are allowed (North, South, East, West).",
+        });
+      }
+
+      normalizedTerritory = normalizedZone;
+    }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 4️⃣ Create user
+    // Create user
     const user = await CrmUser.create({
       fullName,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       phone,
-      role,
-      territory,
+      role: normalizedRole,
+      territory: normalizedTerritory,
       state,
     });
 
@@ -58,7 +124,6 @@ exports.registerCrmUser = async (req, res) => {
     });
   }
 };
-
 
 exports.getMyProfile = async (req, res) => {
   try {

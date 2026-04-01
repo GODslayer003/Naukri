@@ -207,9 +207,26 @@ exports.signup = asyncHandler(async (req, res) => {
 
   const normalizedFullName = normalizeFullName(fullName);
   const normalizedEmail = String(email).trim().toLowerCase();
-  const existingUser = await CrmUser.findOne({ email: normalizedEmail });
+
+  const [existingUser, existingZoneManager, totalZonalManagers] = await Promise.all([
+    CrmUser.findOne({ email: normalizedEmail }),
+    CrmUser.findOne({
+      role: "ZONAL_MANAGER",
+      ...buildTerritoryFilter(normalizedZone),
+    }).select("_id"),
+    CrmUser.countDocuments({ role: "ZONAL_MANAGER" }),
+  ]);
+
   if (existingUser) {
     throw createHttpError(409, "User with this email already exists");
+  }
+
+  if (existingZoneManager) {
+    throw createHttpError(409, `${normalizedZone} Zone Manager already exists. Only one zonal manager is allowed per zone.`);
+  }
+
+  if (totalZonalManagers >= 4) {
+    throw createHttpError(409, "All zonal manager slots are already filled (North, South, East, West).");
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);

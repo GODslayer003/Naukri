@@ -32,6 +32,22 @@ const buildTerritoryFilter = (zone = "") => {
   return { territory: regex };
 };
 
+const buildManagerOwnershipFilter = (managerId) => ({
+  $or: [{ assignedTo: managerId }, { assignedBy: managerId }],
+});
+
+const managerOwnsLead = (lead, managerId) => {
+  const managerKey = String(managerId || "");
+  if (!lead || !managerKey) {
+    return false;
+  }
+
+  const assignedToKey = lead.assignedTo ? String(lead.assignedTo._id || lead.assignedTo) : "";
+  const assignedByKey = lead.assignedBy ? String(lead.assignedBy._id || lead.assignedBy) : "";
+
+  return assignedToKey === managerKey || assignedByKey === managerKey;
+};
+
 const normalizeFullName = (value = "") => {
   const normalized = String(value || "")
     .trim()
@@ -310,17 +326,29 @@ exports.getLeads = asyncHandler(async (req, res) => {
   // Build Query
   const query = {
     createdBy: { $in: generatorIds },
-    status: { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"] }
+    status: { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"] },
   };
+
+  if (req.user.role === "STATE_MANAGER") {
+    query.$and = [buildManagerOwnershipFilter(req.user._id)];
+  }
 
   if (search) {
     const searchRegex = { $regex: search, $options: "i" };
-    query.$or = [
-      { companyName: searchRegex },
-      { contactName: searchRegex },
-      { phone: searchRegex },
-      { leadCode: searchRegex }
-    ];
+    const searchFilter = {
+      $or: [
+        { companyName: searchRegex },
+        { contactName: searchRegex },
+        { phone: searchRegex },
+        { leadCode: searchRegex },
+      ],
+    };
+
+    if (Array.isArray(query.$and)) {
+      query.$and.push(searchFilter);
+    } else {
+      query.$or = searchFilter.$or;
+    }
   }
 
   if (date && date !== "All Dates") {
@@ -446,6 +474,10 @@ exports.assignLead = asyncHandler(async (req, res) => {
     throw createHttpError(403, "This lead does not belong to your zone.");
   }
 
+  if (!managerOwnsLead(lead, req.user._id)) {
+    throw createHttpError(403, "This lead is not assigned to your account.");
+  }
+
   if (!fseZone || fseZone !== managerZone) {
     throw createHttpError(403, "FSE must belong to the same zone as the State Manager.");
   }
@@ -492,14 +524,16 @@ exports.getDashboard = asyncHandler(async (req, res) => {
   const generatorIds = zoneLGUsers.map((user) => user._id);
   const fseIds = zoneFSEUsers.map((user) => user._id);
 
-  const [leads, fseOpenLeadCounts, recentAssigned] = await Promise.all([
+  const [leads, fseOpenLeadCounts, managedFseIds, recentAssigned] = await Promise.all([
     Lead.find({
       createdBy: { $in: generatorIds },
+      ...buildManagerOwnershipFilter(req.user._id),
     }).sort({ updatedAt: -1 }),
     fseIds.length
       ? Lead.aggregate([
           {
             $match: {
+              assignedBy: req.user._id,
               assignedTo: { $in: fseIds },
               status: { $nin: ["CONVERTED", "LOST", "REJECTED"] },
             },
@@ -512,7 +546,14 @@ exports.getDashboard = asyncHandler(async (req, res) => {
           },
         ])
       : Promise.resolve([]),
+    fseIds.length
+      ? Lead.distinct("assignedTo", {
+          assignedBy: req.user._id,
+          assignedTo: { $in: fseIds },
+        })
+      : Promise.resolve([]),
     Lead.find({
+      assignedBy: req.user._id,
       assignedTo: { $in: fseIds },
       status: { $in: ["ASSIGNED", "CONVERTED", "LOST", "REJECTED"] },
     })
@@ -532,7 +573,10 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     fseOpenLeadCounts.map((item) => [String(item._id), Number(item.activeLeads || 0)]),
   );
 
-  const teamOverview = zoneFSEUsers.map((fse) => {
+  const managedFseIdSet = new Set(managedFseIds.map((id) => String(id)));
+  const scopedFSEUsers = zoneFSEUsers.filter((fse) => managedFseIdSet.has(String(fse._id)));
+
+  const teamOverview = scopedFSEUsers.map((fse) => {
     const name = fse.fullName || "FSE";
     const initials = name
       .split(" ")
@@ -568,7 +612,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     success: true,
     data: {
       pendingValidation,
-      activeFses: zoneFSEUsers.length,
+      activeFses: scopedFSEUsers.length,
       totalAssigned,
       conversionRate: `${conversionRate}%`,
       conversionGrowth: "0%",
@@ -604,6 +648,10 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
   const leadZone = inferZoneFromTerritory(lead.createdBy?.territory);
   if (!leadZone || leadZone !== managerZone) {
     throw createHttpError(403, "You can only update leads from your own zone.");
+  }
+
+  if (!managerOwnsLead(lead, req.user._id)) {
+    throw createHttpError(403, "This lead is not assigned to your account.");
   }
 
   if (nextStatus === "ASSIGNED" && !lead.assignedTo) {

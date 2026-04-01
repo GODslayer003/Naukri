@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
+import { toast } from "sonner";
 import logo from "../assets/maven-logo.svg";
 
 const resolveRootApiBaseUrl = () => {
@@ -39,18 +40,16 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!email.trim() || !zone.trim() || !password.trim()) {
-      setError("Email, zone, and password are required.");
+      toast.error("Email, zone, and password are required.");
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       const response = await loginZonalManager({
@@ -66,7 +65,7 @@ export default function Login() {
       window.dispatchEvent(new Event("crm-session-updated"));
       navigate("/", { replace: true });
     } catch (requestError) {
-      setError(requestError.message || "Unable to sign in.");
+      toast.error(requestError.message || "Unable to sign in.");
     } finally {
       setIsSubmitting(false);
     }
@@ -176,12 +175,6 @@ export default function Login() {
                 </button>
               </div>
             </div>
-
-            {error ? (
-              <div className="login-error" role="alert">
-                {error}
-              </div>
-            ) : null}
 
             <button type="submit" disabled={isSubmitting} className="login-btn">
               {isSubmitting ? "Signing in..." : "Sign in"}

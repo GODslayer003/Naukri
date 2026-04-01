@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
+import { toast } from "sonner";
 import logo from "../assets/maven-logo.svg";
 
 const resolveRootApiBaseUrl = () => {
@@ -41,7 +42,6 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -50,32 +50,31 @@ export default function Signup() {
     const fullNamePattern = /^[A-Za-z][A-Za-z .'-]*$/;
 
     if (!normalizedFullName || !email.trim() || !zone.trim() || !password || !confirmPassword) {
-      setError("All fields are required.");
+      toast.error("All fields are required.");
       return;
     }
 
     if (normalizedFullName.length < 2 || normalizedFullName.length > 80) {
-      setError("Full name must be between 2 and 80 characters.");
+      toast.error("Full name must be between 2 and 80 characters.");
       return;
     }
 
     if (!fullNamePattern.test(normalizedFullName)) {
-      setError("Full name can only contain letters, spaces, apostrophes, hyphens, and periods.");
+      toast.error("Full name can only contain letters, spaces, apostrophes, hyphens, and periods.");
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      toast.error("Passwords do not match.");
       return;
     }
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      toast.error("Password must be at least 8 characters.");
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       await signupZonalManager({
@@ -85,9 +84,10 @@ export default function Signup() {
         password,
         confirmPassword,
       });
+      toast.success("Registration successful. Please sign in.");
       navigate("/login", { replace: true });
     } catch (requestError) {
-      setError(requestError.message || "Unable to sign up.");
+      toast.error(requestError.message || "Unable to sign up.");
     } finally {
       setIsSubmitting(false);
     }
@@ -252,12 +252,6 @@ export default function Signup() {
                 </button>
               </div>
             </div>
-
-            {error ? (
-              <div className="login-error" role="alert">
-                {error}
-              </div>
-            ) : null}
 
             <button type="submit" disabled={isSubmitting} className="login-btn">
               {isSubmitting ? "Creating account..." : "Register"}
