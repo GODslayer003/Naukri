@@ -8,8 +8,13 @@ const {
   LEAD_STATUSES,
 } = require("../constants/lead-generator.constants");
 const {
+  CANONICAL_ZONES,
   normalizeZoneInput,
+  normalizeIndianStateInput,
   inferZoneFromTerritory,
+  getZoneStates,
+  isValidStateForZone,
+  getAvailableStatesForZone,
   buildZoneRegex,
 } = require("../utils/zone.util");
 const { replaceCrmProfileImage } = require("../services/profile-image-storage.service");
@@ -20,6 +25,7 @@ const MAX_LIMIT = 200;
 const FULL_NAME_MIN_LENGTH = 2;
 const FULL_NAME_MAX_LENGTH = 80;
 const FULL_NAME_PATTERN = /^[A-Za-z][A-Za-z .'-]*$/;
+const RESERVED_STATE_MANAGER_STATUSES = ["ACTIVE", "PENDING_INVITE"];
 
 const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 
@@ -60,6 +66,96 @@ const buildTerritoryFilter = (zone = "") => {
 
   return { territory: regex };
 };
+
+const buildReservedStateManagerQuery = ({
+  zone = "",
+  state = "",
+  excludedUserId = null,
+  statuses = RESERVED_STATE_MANAGER_STATUSES,
+} = {}) => {
+  const normalizedZone = normalizeZoneInput(zone);
+  const normalizedState = normalizeIndianStateInput(state);
+
+  if (!normalizedZone || !normalizedState) {
+    return null;
+  }
+
+  const query = {
+    role: "STATE_MANAGER",
+    ...buildTerritoryFilter(normalizedZone),
+    state: normalizedState,
+    accessStatus: { $in: statuses },
+  };
+
+  if (excludedUserId) {
+    query._id = { $ne: excludedUserId };
+  }
+
+  return query;
+};
+
+const getReservedStatesForZone = async ({
+  zone = "",
+  excludedUserId = null,
+  statuses = RESERVED_STATE_MANAGER_STATUSES,
+} = {}) => {
+  const normalizedZone = normalizeZoneInput(zone);
+  if (!normalizedZone) {
+    return [];
+  }
+
+  const query = {
+    role: "STATE_MANAGER",
+    ...buildTerritoryFilter(normalizedZone),
+    accessStatus: { $in: statuses },
+  };
+
+  if (excludedUserId) {
+    query._id = { $ne: excludedUserId };
+  }
+
+  const managers = await CrmUser.find(query).select("state");
+  return managers
+    .map((item) => normalizeIndianStateInput(item.state))
+    .filter(Boolean);
+};
+
+const resolveStateForZone = (zone, state) => {
+  const normalizedState = normalizeIndianStateInput(state);
+  if (!normalizedState || !isValidStateForZone(normalizedState, zone)) {
+    throw createHttpError(400, "Selected state is not valid for your zone.");
+  }
+
+  return normalizedState;
+};
+
+const formatStateManagerStatus = (manager = {}) => {
+  if (manager.accessStatus === "PENDING_INVITE") {
+    return "PENDING_APPROVAL";
+  }
+
+  if (manager.accessStatus === "RESTRICTED" || !manager.isActive) {
+    return "DENIED";
+  }
+
+  return "ACTIVE";
+};
+
+const formatStateManagerAccount = (manager, { zone = "", activeLeadMap = new Map() } = {}) => ({
+  id: String(manager._id),
+  fullName: manager.fullName,
+  email: manager.email,
+  zone: zone || getUserZone(manager),
+  state: manager.state || "",
+  phone: manager.phone || "",
+  profileImage: manager.profileImageUrl || "",
+  accessStatus: manager.accessStatus,
+  accountStatus: formatStateManagerStatus(manager),
+  isActive: Boolean(manager.isActive),
+  activeLeads: activeLeadMap.get(String(manager._id)) || 0,
+  createdAt: manager.createdAt,
+  updatedAt: manager.updatedAt,
+});
 
 const resolvePagination = (page, limit) => {
   const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
@@ -749,6 +845,250 @@ exports.getStateManagers = asyncHandler(async (req, res) => {
       activeLeads: activeLeadMap.get(String(manager._id)) || 0,
       profileImage: manager.profileImageUrl || "",
     })),
+  });
+});
+
+exports.getStateManagerSignupMeta = asyncHandler(async (req, res) => {
+  assertZonalManagerAccess(req.user);
+
+  const zone = getUserZone(req.user);
+  if (!zone) {
+    throw createHttpError(403, "Unable to resolve zone for this Zonal Manager account.");
+  }
+
+  const excludedUserId = String(req.query.excludeUserId || "").trim();
+  const includeCurrentState = normalizeIndianStateInput(req.query.currentState);
+  const reservedStates = await getReservedStatesForZone({
+    zone,
+    excludedUserId: excludedUserId || null,
+  });
+
+  const availableStates = getAvailableStatesForZone(zone, reservedStates);
+  const orderedZoneStates = getZoneStates(zone);
+  const mergedStates = includeCurrentState && !availableStates.includes(includeCurrentState)
+    ? [...availableStates, includeCurrentState]
+    : availableStates;
+
+  mergedStates.sort((left, right) => orderedZoneStates.indexOf(left) - orderedZoneStates.indexOf(right));
+
+  res.status(200).json({
+    success: true,
+    data: {
+      zones: CANONICAL_ZONES,
+      zone,
+      availableStates: mergedStates,
+    },
+  });
+});
+
+exports.getStateManagerRegistry = asyncHandler(async (req, res) => {
+  assertZonalManagerAccess(req.user);
+
+  const zone = getUserZone(req.user);
+  if (!zone) {
+    throw createHttpError(403, "Unable to resolve zone for this Zonal Manager account.");
+  }
+
+  const stateManagers = await CrmUser.find({
+    role: "STATE_MANAGER",
+    ...buildTerritoryFilter(zone),
+  })
+    .sort({ createdAt: -1 })
+    .select("_id fullName email territory state phone profileImageUrl isActive accessStatus createdAt updatedAt");
+
+  const managerIds = stateManagers.map((manager) => manager._id);
+  const leadCounts = managerIds.length
+    ? await Lead.aggregate([
+        {
+          $match: {
+            assignedTo: { $in: managerIds },
+            status: { $nin: TERMINAL_LEAD_STATUSES },
+          },
+        },
+        {
+          $group: {
+            _id: "$assignedTo",
+            activeLeads: { $sum: 1 },
+          },
+        },
+      ])
+    : [];
+
+  const activeLeadMap = new Map(
+    leadCounts.map((item) => [String(item._id), Number(item.activeLeads || 0)]),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: stateManagers.map((manager) =>
+      formatStateManagerAccount(manager, { zone, activeLeadMap }),
+    ),
+  });
+});
+
+exports.createStateManagerAccount = asyncHandler(async (req, res) => {
+  assertZonalManagerAccess(req.user);
+
+  const { fullName, email, password, confirmPassword, state } = req.body;
+  const zone = getUserZone(req.user);
+
+  if (!zone) {
+    throw createHttpError(403, "Unable to resolve zone for this Zonal Manager account.");
+  }
+
+  if (!fullName || !email || !state || !password || !confirmPassword) {
+    throw createHttpError(
+      400,
+      "All fields are required (fullName, email, state, password, confirmPassword).",
+    );
+  }
+
+  if (password !== confirmPassword) {
+    throw createHttpError(400, "Passwords do not match");
+  }
+
+  if (String(password).length < 8) {
+    throw createHttpError(400, "Password must be at least 8 characters.");
+  }
+
+  const normalizedFullName = normalizeFullName(fullName);
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const normalizedState = resolveStateForZone(zone, state);
+
+  const [existingUser, existingStateReservation] = await Promise.all([
+    CrmUser.findOne({ email: normalizedEmail }).select("_id"),
+    CrmUser.findOne(buildReservedStateManagerQuery({ zone, state: normalizedState })).select("_id"),
+  ]);
+
+  if (existingUser) {
+    throw createHttpError(409, "User with this email already exists");
+  }
+
+  if (existingStateReservation) {
+    throw createHttpError(409, `${normalizedState} already has an active or pending State Manager.`);
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const createdManager = await CrmUser.create({
+    fullName: normalizedFullName,
+    email: normalizedEmail,
+    password: passwordHash,
+    role: "STATE_MANAGER",
+    territory: zone,
+    state: normalizedState,
+    accessStatus: "ACTIVE",
+    isActive: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "State Manager account created successfully.",
+    data: formatStateManagerAccount(createdManager, { zone }),
+  });
+});
+
+exports.reviewStateManagerAccount = asyncHandler(async (req, res) => {
+  assertZonalManagerAccess(req.user);
+
+  const { id } = req.params;
+  const decision = String(req.body.decision || "").trim().toUpperCase();
+  const zone = getUserZone(req.user);
+
+  if (!zone) {
+    throw createHttpError(403, "Unable to resolve zone for this Zonal Manager account.");
+  }
+
+  if (!["APPROVE", "DENY"].includes(decision)) {
+    throw createHttpError(400, "Decision must be APPROVE or DENY.");
+  }
+
+  const manager = await CrmUser.findOne({
+    _id: id,
+    role: "STATE_MANAGER",
+    ...buildTerritoryFilter(zone),
+  });
+
+  if (!manager) {
+    throw createHttpError(404, "State Manager request not found in your zone.");
+  }
+
+  const requestedState = req.body.state !== undefined ? req.body.state : manager.state;
+  const normalizedState = resolveStateForZone(zone, requestedState);
+
+  if (decision === "APPROVE") {
+    const existingStateReservation = await CrmUser.findOne(
+      buildReservedStateManagerQuery({
+        zone,
+        state: normalizedState,
+        excludedUserId: manager._id,
+      }),
+    ).select("_id");
+
+    if (existingStateReservation) {
+      throw createHttpError(409, `${normalizedState} already has an active or pending State Manager.`);
+    }
+
+    manager.state = normalizedState;
+    manager.accessStatus = "ACTIVE";
+    manager.isActive = true;
+  } else {
+    manager.state = normalizedState;
+    manager.accessStatus = "RESTRICTED";
+    manager.isActive = false;
+  }
+
+  await manager.save();
+
+  res.status(200).json({
+    success: true,
+    message:
+      decision === "APPROVE"
+        ? "State Manager approved successfully."
+        : "State Manager request denied.",
+    data: formatStateManagerAccount(manager, { zone }),
+  });
+});
+
+exports.deleteStateManagerAccount = asyncHandler(async (req, res) => {
+  assertZonalManagerAccess(req.user);
+
+  const { id } = req.params;
+  const zone = getUserZone(req.user);
+
+  if (!zone) {
+    throw createHttpError(403, "Unable to resolve zone for this Zonal Manager account.");
+  }
+
+  const manager = await CrmUser.findOne({
+    _id: id,
+    role: "STATE_MANAGER",
+    ...buildTerritoryFilter(zone),
+  }).select("_id email state accessStatus isActive");
+
+  if (!manager) {
+    throw createHttpError(404, "State Manager account not found in your zone.");
+  }
+
+  const linkedLeadCount = await Lead.countDocuments({
+    $or: [{ assignedTo: manager._id }, { assignedBy: manager._id }],
+  });
+
+  if (linkedLeadCount > 0) {
+    throw createHttpError(
+      409,
+      "Cannot delete this State Manager because lead history is linked. Use deny/restrict instead.",
+    );
+  }
+
+  await CrmUser.deleteOne({ _id: manager._id });
+
+  res.status(200).json({
+    success: true,
+    message: "State Manager account deleted permanently.",
+    data: {
+      id: String(manager._id),
+      email: manager.email,
+    },
   });
 });
 

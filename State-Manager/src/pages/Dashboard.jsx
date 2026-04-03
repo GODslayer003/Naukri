@@ -115,6 +115,7 @@ export default function Dashboard() {
   const currentUser = getSessionUser();
   const managerName = currentUser?.fullName || currentUser?.email || "State Manager";
   const managerZone = currentUser?.zone || "Assigned";
+  const managerState = currentUser?.state || "State Not Assigned";
 
   const renderNotificationItem = (activity) => {
     const colorMap = {
@@ -150,7 +151,7 @@ export default function Dashboard() {
             Dashboard Overview
           </h1>
           <p style={{ color: "#64748b", margin: "4px 0 0 0", fontSize: "1rem" }}>
-            {managerZone} Zone Control Center | {managerName}
+            {managerZone} Zone, {managerState} | {managerName}
           </p>
         </div>
         <div style={{ color: "#64748b", fontSize: "0.875rem" }}>

@@ -6,7 +6,10 @@ const Lead = require("../models/Lead");
 const {
   CANONICAL_ZONES,
   normalizeZoneInput,
+  normalizeIndianStateInput,
   inferZoneFromTerritory,
+  getZoneStates,
+  isValidStateForZone,
   buildZoneRegex,
 } = require("../utils/zone.util");
 const {
@@ -64,6 +67,18 @@ const normalizeFullName = (value = "") => {
   }
 
   return normalized;
+};
+
+const getUserZone = (user = {}) =>
+  normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory);
+
+const buildTerritoryFilter = (zone = "") => {
+  const regex = buildZoneRegex(zone);
+  if (!regex) {
+    return {};
+  }
+
+  return { territory: regex };
 };
 
 const buildDateFilter = (date = "") => {
@@ -196,6 +211,8 @@ const normalizeLeadContacts = (payload = {}) => {
 };
 
 const normalizeCreateLeadInput = (payload = {}, user = {}) => {
+  const normalizedUserState = normalizeIndianStateInput(user.state);
+  const normalizedPayloadState = normalizeIndianStateInput(payload.state);
   const contacts = normalizeLeadContacts(payload);
   const primaryContact = contacts.find((contact) => contact.isPrimary) || contacts[0] || {};
 
@@ -211,7 +228,7 @@ const normalizeCreateLeadInput = (payload = {}, user = {}) => {
     status: parseEnum(payload.status, LEAD_STATUSES, "NEW"),
     priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
     city: String(payload.city || "").trim() || "Unknown",
-    state: String(payload.state || user.state || "").trim() || "Unknown",
+    state: normalizedUserState || normalizedPayloadState || "Unknown",
     address: String(payload.address || payload.location || "").trim(),
     pincode: String(payload.pincode || "").trim(),
     notes: String(payload.notes || "").trim(),
@@ -466,8 +483,40 @@ exports.getLeadGeneratorMeta = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getSignupMeta = asyncHandler(async (req, res) => {
+  const requestedZone = normalizeZoneInput(req.query.zone);
+  if (req.query.zone && !requestedZone) {
+    throw createHttpError(400, "Invalid zone. Use North, South, East, or West.");
+  }
+
+  if (requestedZone) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        zones: CANONICAL_ZONES,
+        selectedZone: requestedZone,
+        availableStates: getZoneStates(requestedZone),
+      },
+    });
+  }
+
+  const availableStatesByZone = Object.fromEntries(
+    CANONICAL_ZONES.map((zone) => [zone, getZoneStates(zone)]),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      zones: CANONICAL_ZONES,
+      availableStatesByZone,
+    },
+  });
+});
+
 exports.getLeadGeneratorDashboard = asyncHandler(async (req, res) => {
   const accessFilter = buildLeadAccessFilter(req.user);
+  const zone = getUserZone(req.user);
+  const state = normalizeIndianStateInput(req.user?.state) || "";
   const now = new Date();
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -533,6 +582,8 @@ exports.getLeadGeneratorDashboard = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: {
+      zone,
+      state,
       summary: {
         totalLeads,
         newLeads,
@@ -751,14 +802,15 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
     throw createHttpError(400, `Status must be one of: ${ALLOWED_STATUSES.join(", ")}`);
   }
 
-  const lead = await Lead.findById(id);
+  const lead = await Lead.findById(id).populate("createdBy", "territory");
 
   if (!lead) {
     throw createHttpError(404, "Lead not found");
   }
 
   // Only the creator or admin/approver can update the status
-  const isOwner = String(lead.createdBy) === String(req.user._id);
+  const leadCreatorId = lead.createdBy?._id || lead.createdBy;
+  const isOwner = String(leadCreatorId) === String(req.user._id);
   const isPrivileged = ["ADMIN", "APPROVER", "STATE_MANAGER"].includes(req.user.role);
 
   if (!isOwner && !isPrivileged) {
@@ -766,6 +818,37 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
   }
 
   if (String(status).toUpperCase() === "FORWARDED") {
+    const leadState = normalizeIndianStateInput(lead.state) || normalizeIndianStateInput(req.user.state);
+    if (!leadState) {
+      throw createHttpError(
+        409,
+        "Lead state is missing or invalid. Update the lead state before forwarding.",
+      );
+    }
+
+    const leadZone = normalizeZoneInput(lead.createdBy?.territory) || inferZoneFromTerritory(lead.createdBy?.territory);
+    if (!leadZone || !isValidStateForZone(leadState, leadZone)) {
+      throw createHttpError(409, "Unable to resolve a valid zone/state mapping for this lead.");
+    }
+
+    const assignedStateManager = await CrmUser.findOne({
+      role: "STATE_MANAGER",
+      ...buildTerritoryFilter(leadZone),
+      state: leadState,
+      accessStatus: "ACTIVE",
+      isActive: true,
+    }).select("_id");
+
+    if (!assignedStateManager) {
+      throw createHttpError(
+        409,
+        `No active State Manager found for ${leadState}, ${leadZone} Zone.`,
+      );
+    }
+
+    lead.state = leadState;
+    lead.assignedTo = assignedStateManager._id;
+    lead.assignedBy = req.user._id;
     lead.isForwardedToSM = true;
   }
   
@@ -782,10 +865,13 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
 });
 
 exports.signup = asyncHandler(async (req, res) => {
-  const { email, zone, password, confirmPassword, fullName } = req.body;
+  const { email, zone, state, password, confirmPassword, fullName } = req.body;
 
-  if (!email || !zone || !password || !confirmPassword || !fullName) {
-    throw createHttpError(400, "All fields are required (fullName, email, zone, password, confirmPassword)");
+  if (!email || !zone || !state || !password || !confirmPassword || !fullName) {
+    throw createHttpError(
+      400,
+      "All fields are required (fullName, email, zone, state, password, confirmPassword)",
+    );
   }
 
   if (password !== confirmPassword) {
@@ -799,6 +885,11 @@ exports.signup = asyncHandler(async (req, res) => {
   const normalizedZone = normalizeZoneInput(zone);
   if (!normalizedZone) {
     throw createHttpError(400, "Valid zone is required (North, South, East, West).");
+  }
+
+  const normalizedState = normalizeIndianStateInput(state);
+  if (!normalizedState || !isValidStateForZone(normalizedState, normalizedZone)) {
+    throw createHttpError(400, "Selected state is not valid for the selected zone.");
   }
 
   const normalizedFullName = normalizeFullName(fullName);
@@ -817,6 +908,7 @@ exports.signup = asyncHandler(async (req, res) => {
     password: hashedPassword,
     role: "LEAD_GENERATOR",
     territory: normalizedZone,
+    state: normalizedState,
     accessStatus: "ACTIVE",
     isActive: true,
   });
@@ -830,6 +922,7 @@ exports.signup = asyncHandler(async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       zone: normalizedZone,
+      state: normalizedState,
       role: user.role,
       profileImage: user.profileImageUrl || "",
     },
@@ -881,6 +974,7 @@ exports.login = asyncHandler(async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       zone: normalizedZone,
+      state: normalizeIndianStateInput(user.state) || "",
       role: user.role,
       profileImage: user.profileImageUrl || "",
     },
@@ -920,7 +1014,8 @@ exports.changePassword = asyncHandler(async (req, res) => {
 });
 
 exports.getProfile = asyncHandler(async (req, res) => {
-  const zone = normalizeZoneInput(req.user.territory) || inferZoneFromTerritory(req.user.territory) || "";
+  const zone = getUserZone(req.user) || "";
+  const state = normalizeIndianStateInput(req.user.state) || "";
   res.status(200).json({
     success: true,
     data: {
@@ -929,6 +1024,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
       email: req.user.email,
       role: req.user.role,
       zone,
+      state,
       phone: req.user.phone || "",
       profileImage: req.user.profileImageUrl || "",
     },
@@ -953,6 +1049,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
   await user.save();
 
   const zone = normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory) || "";
+  const state = normalizeIndianStateInput(user.state) || "";
 
   res.status(200).json({
     success: true,
@@ -963,6 +1060,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       zone,
+      state,
       phone: user.phone || "",
       profileImage: user.profileImageUrl || "",
     },
@@ -990,6 +1088,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
   await user.save();
 
   const zone = normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory) || "";
+  const state = normalizeIndianStateInput(user.state) || "";
 
   res.status(200).json({
     success: true,
@@ -1000,6 +1099,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       zone,
+      state,
       profileImage: user.profileImageUrl || "",
     },
   });

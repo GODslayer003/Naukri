@@ -95,6 +95,7 @@ export default function Profile() {
           email: data.email,
           role: data.role,
           zone: data.zone,
+          state: data.state,
           profileImage: data.profileImage || "",
         });
       } catch (requestError) {
@@ -149,6 +150,7 @@ export default function Profile() {
         email: updatedUser.email,
         role: updatedUser.role,
         zone: updatedUser.zone,
+        state: updatedUser.state,
         profileImage: updatedUser.profileImage || "",
       });
       setSelectedFile(null);
@@ -195,6 +197,7 @@ export default function Profile() {
         email: updatedUser.email,
         role: updatedUser.role,
         zone: updatedUser.zone,
+        state: updatedUser.state,
         profileImage: updatedUser.profileImage || "",
       });
       setNameMessage("Name updated successfully.");
@@ -224,7 +227,12 @@ export default function Profile() {
   const displayName = profile?.fullName || "State Manager";
   const displayEmail = profile?.email || "-";
   const displayZone = profile?.zone || "-";
+  const displayState = profile?.state || "-";
   const displayRole = profile?.role || "STATE_MANAGER";
+  const territoryLabel =
+    [displayState !== "-" ? displayState : "", displayZone !== "-" ? `${displayZone} Zone` : ""]
+      .filter(Boolean)
+      .join(", ") || "-";
   const displayImage = previewUrl || profile?.profileImage || "";
   const normalizedStoredName = String(profile?.fullName || "")
     .trim()
@@ -285,7 +293,7 @@ export default function Profile() {
         <div>
           <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>{displayName}</h2>
           <p style={{ margin: "4px 0 0", opacity: 0.85, fontSize: "0.85rem" }}>
-            {displayRole.replace(/_/g, " ")} | {displayZone} Zone
+            {displayRole.replace(/_/g, " ")} | {territoryLabel}
           </p>
         </div>
       </section>
@@ -367,7 +375,7 @@ export default function Profile() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
           <InfoCard icon={LuUser} label="Full Name" value={displayName} />
           <InfoCard icon={LuMail} label="Email Address" value={displayEmail} />
-          <InfoCard icon={LuMapPin} label="Zone" value={`${displayZone} Zone`} />
+          <InfoCard icon={LuMapPin} label="Territory" value={territoryLabel} />
           <InfoCard icon={LuShield} label="Role" value={displayRole.replace(/_/g, " ")} />
         </div>
       </section>

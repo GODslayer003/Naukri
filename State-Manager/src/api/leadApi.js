@@ -153,3 +153,28 @@ export async function uploadStateManagerProfilePhoto(file) {
   });
   return data.data;
 }
+
+export async function fetchManagedMembers(params = {}) {
+  const normalizedParams = {
+    role: String(params.role || "").trim().toUpperCase(),
+    page: Number(params.page) || 1,
+    limit: Number(params.limit) || 10,
+  };
+
+  if (params.search?.trim()) {
+    normalizedParams.search = params.search.trim();
+  }
+
+  const { data } = await http.get("/team-members", { params: normalizedParams });
+  return data.data;
+}
+
+export async function fetchManagedMemberDetail(memberId) {
+  const { data } = await http.get(`/team-members/${memberId}`);
+  return data.data;
+}
+
+export async function deleteManagedMember(memberId) {
+  const { data } = await http.delete(`/team-members/${memberId}`);
+  return data;
+}

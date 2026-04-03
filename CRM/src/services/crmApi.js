@@ -206,6 +206,21 @@ export function getApplications() {
   return request("/applications");
 }
 
+export function getCandidates(params = {}) {
+  const query = new URLSearchParams();
+
+  if (params.search) {
+    query.set("search", params.search);
+  }
+
+  if (params.status) {
+    query.set("status", params.status);
+  }
+
+  const queryString = query.toString();
+  return request(`/candidates${queryString ? `?${queryString}` : ""}`);
+}
+
 export function updateApplicationStatus(id, payload) {
   return request(`/applications/${id}/status`, {
     method: "PATCH",

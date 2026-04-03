@@ -65,6 +65,12 @@ export async function signupFSE(payload) {
   return data;
 }
 
+export async function fetchFseSignupMeta(zone = "") {
+  const params = zone ? { zone } : {};
+  const { data } = await http.get("/auth/meta", { params });
+  return data.data;
+}
+
 export async function changeFsePassword(payload) {
   const { data } = await http.patch("/auth/change-password", payload);
   return data;

@@ -11,8 +11,12 @@ const {
   BUSINESS_CATEGORIES,
 } = require("../constants/lead-generator.constants");
 const {
+  CANONICAL_ZONES,
   normalizeZoneInput,
+  normalizeIndianStateInput,
   inferZoneFromTerritory,
+  getZoneStates,
+  isValidStateForZone,
   buildZoneRegex,
 } = require("../utils/zone.util");
 const { replaceCrmProfileImage } = require("../services/profile-image-storage.service");
@@ -25,6 +29,10 @@ const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expires
 
 const getUserZone = (user = {}) => {
   return normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory);
+};
+
+const getUserState = (user = {}) => {
+  return normalizeIndianStateInput(user.state) || "";
 };
 
 const normalizeFullName = (value = "") => {
@@ -55,22 +63,27 @@ const parseEnum = (value, allowedValues, fallback) => {
   return allowedValues.includes(normalized) ? normalized : fallback;
 };
 
-const normalizeCreateLeadInput = (payload = {}) => ({
-  contactName: String(payload.contactName || payload.fullName || "").trim(),
-  companyName: String(payload.companyName || "").trim(),
-  phone: String(payload.phone || payload.phoneNumber || "").trim(),
-  alternatePhone: String(payload.alternatePhone || "").trim(),
-  email: String(payload.email || "").trim().toLowerCase(),
-  businessCategory: String(payload.businessCategory || "").trim(),
-  leadSource: String(payload.leadSource || "").trim(),
-  priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
-  city: String(payload.city || "").trim() || "Unknown",
-  state: String(payload.state || "").trim() || "Unknown",
-  address: String(payload.address || payload.location || "").trim(),
-  pincode: String(payload.pincode || "").trim(),
-  notes: String(payload.notes || "").trim(),
-  nextFollowUpAt: payload.nextFollowUpAt || null,
-});
+const normalizeCreateLeadInput = (payload = {}, user = {}) => {
+  const normalizedUserState = getUserState(user);
+  const normalizedPayloadState = normalizeIndianStateInput(payload.state);
+
+  return {
+    contactName: String(payload.contactName || payload.fullName || "").trim(),
+    companyName: String(payload.companyName || "").trim(),
+    phone: String(payload.phone || payload.phoneNumber || "").trim(),
+    alternatePhone: String(payload.alternatePhone || "").trim(),
+    email: String(payload.email || "").trim().toLowerCase(),
+    businessCategory: String(payload.businessCategory || "").trim(),
+    leadSource: String(payload.leadSource || "").trim(),
+    priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
+    city: String(payload.city || "").trim() || "Unknown",
+    state: normalizedUserState || normalizedPayloadState || "Unknown",
+    address: String(payload.address || payload.location || "").trim(),
+    pincode: String(payload.pincode || "").trim(),
+    notes: String(payload.notes || "").trim(),
+    nextFollowUpAt: payload.nextFollowUpAt || null,
+  };
+};
 
 const ensureLeadPayload = (payload = {}) => {
   const requiredFields = [
@@ -180,11 +193,44 @@ const formatLead = (lead) => ({
     : null,
 });
 
-exports.signup = asyncHandler(async (req, res) => {
-  const { email, zone, password, confirmPassword, fullName } = req.body;
+exports.getSignupMeta = asyncHandler(async (req, res) => {
+  const requestedZone = normalizeZoneInput(req.query.zone);
+  if (req.query.zone && !requestedZone) {
+    throw createHttpError(400, "Invalid zone. Use North, South, East, or West.");
+  }
 
-  if (!email || !zone || !password || !confirmPassword || !fullName) {
-    throw createHttpError(400, "All fields are required (fullName, email, zone, password, confirmPassword)");
+  if (requestedZone) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        zones: CANONICAL_ZONES,
+        selectedZone: requestedZone,
+        availableStates: getZoneStates(requestedZone),
+      },
+    });
+  }
+
+  const availableStatesByZone = Object.fromEntries(
+    CANONICAL_ZONES.map((zone) => [zone, getZoneStates(zone)]),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      zones: CANONICAL_ZONES,
+      availableStatesByZone,
+    },
+  });
+});
+
+exports.signup = asyncHandler(async (req, res) => {
+  const { email, zone, state, password, confirmPassword, fullName } = req.body;
+
+  if (!email || !zone || !state || !password || !confirmPassword || !fullName) {
+    throw createHttpError(
+      400,
+      "All fields are required (fullName, email, zone, state, password, confirmPassword)",
+    );
   }
 
   if (password !== confirmPassword) {
@@ -198,6 +244,11 @@ exports.signup = asyncHandler(async (req, res) => {
   const normalizedZone = normalizeZoneInput(zone);
   if (!normalizedZone) {
     throw createHttpError(400, "Valid zone is required (North, South, East, West)");
+  }
+
+  const normalizedState = normalizeIndianStateInput(state);
+  if (!normalizedState || !isValidStateForZone(normalizedState, normalizedZone)) {
+    throw createHttpError(400, "Selected state is not valid for the selected zone.");
   }
 
   const normalizedFullName = normalizeFullName(fullName);
@@ -214,6 +265,7 @@ exports.signup = asyncHandler(async (req, res) => {
     password: hashedPassword,
     role: "FSE",
     territory: normalizedZone,
+    state: normalizedState,
     accessStatus: "ACTIVE",
     isActive: true,
   });
@@ -227,6 +279,7 @@ exports.signup = asyncHandler(async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       zone: normalizedZone,
+      state: normalizedState,
       role: user.role,
       profileImage: user.profileImageUrl || "",
     },
@@ -273,6 +326,7 @@ exports.login = asyncHandler(async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       zone: normalizedZone,
+      state: getUserState(user),
       role: user.role,
       profileImage: user.profileImageUrl || "",
     },
@@ -338,6 +392,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       zone: getUserZone(user),
+      state: getUserState(user),
       profileImage: user.profileImageUrl || "",
     },
   });
@@ -355,7 +410,7 @@ exports.getLeadMeta = asyncHandler(async (req, res) => {
 });
 
 exports.createLead = asyncHandler(async (req, res) => {
-  const input = normalizeCreateLeadInput(req.body);
+  const input = normalizeCreateLeadInput(req.body, req.user);
   ensureLeadPayload(input);
 
   const normalizedPhone = Lead.normalizePhoneNumber(input.phone);
@@ -635,6 +690,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
       email: req.user.email,
       role: req.user.role,
       zone: getUserZone(req.user),
+      state: getUserState(req.user),
       phone: req.user.phone || "",
       department: req.user.department || "Field Sales",
       profileImage: req.user.profileImageUrl || "",
@@ -668,6 +724,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       zone: getUserZone(user),
+      state: getUserState(user),
       phone: user.phone || "",
       department: user.department || "Field Sales",
       profileImage: user.profileImageUrl || "",

@@ -1,52 +1,170 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { 
   LuSearch, 
-  LuFilter, 
-  LuMapPin, 
-  LuCalendar,
   LuDownload,
   LuBuilding2,
   LuUser,
-  LuLoaderCircle
+  LuLoaderCircle,
+  LuChevronLeft,
+  LuChevronRight
 } from "react-icons/lu";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { toast } from "sonner";
 import { fetchAllLeads } from "../api/nshApi";
+import NationalLeadsReportTemplate from "../components/NationalLeadsReportTemplate";
+
+const PAGE_SIZE = 15;
 
 export default function AllLeads() {
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [reportPayload, setReportPayload] = useState(null);
   
   // Filters
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [zone, setZone] = useState("");
   const [status, setStatus] = useState("");
   const [date, setDate] = useState("");
   const [page, setPage] = useState(1);
+  const reportRef = useRef(null);
 
-  const loadLeads = async () => {
+  const loadLeads = async ({
+    pageOverride,
+    searchOverride,
+    zoneOverride,
+    statusOverride,
+    dateOverride,
+    showLoader = true,
+  } = {}) => {
     try {
-      setLoading(true);
-      const result = await fetchAllLeads({ search, zone, status, date, page });
+      if (showLoader) {
+        setLoading(true);
+      }
+      const result = await fetchAllLeads({
+        search: searchOverride ?? appliedSearch,
+        zone: zoneOverride ?? zone,
+        status: statusOverride ?? status,
+        date: dateOverride ?? date,
+        page: pageOverride ?? page,
+        limit: PAGE_SIZE,
+      });
       setLeads(result.data);
       setTotal(result.total);
+      setTotalPages(result?.pagination?.totalPages || 1);
+      setError("");
+      return result;
     } catch (err) {
       setError("Failed to load national lead database.");
+      return null;
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     loadLeads();
-  }, [zone, status, date, page]);
+  }, [zone, status, date, page, appliedSearch]);
 
   const handleSearch = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       setPage(1);
-      loadLeads();
+      setAppliedSearch(search.trim());
     }
   };
+
+  const fetchRecentLeadsForExport = async () => {
+    const baseFilters = {
+      search: appliedSearch,
+      zone,
+      status,
+      date,
+    };
+
+    const result = await fetchAllLeads({
+      ...baseFilters,
+      page: 1,
+      limit: 25,
+    });
+
+    const items = Array.isArray(result?.data) ? result.data.slice(0, 25) : [];
+
+    return {
+      items,
+      total: items.length,
+      filters: baseFilters,
+    };
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      setIsExporting(true);
+      const exportResult = await fetchRecentLeadsForExport();
+
+      if (!exportResult.items.length) {
+        toast.error("No leads available for PDF export with current filters.");
+        return;
+      }
+
+      const payload = {
+        ...exportResult,
+        generatedAt: new Date().toISOString(),
+      };
+
+      setReportPayload(payload);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+
+      const element = reportRef.current;
+      if (!element) {
+        throw new Error("Unable to prepare PDF template.");
+      }
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      const imageData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imageWidth = pdfWidth;
+      const imageHeight = (canvas.height * imageWidth) / canvas.width;
+      let heightLeft = imageHeight;
+      let position = 0;
+
+      pdf.addImage(imageData, "PNG", 0, position, imageWidth, imageHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imageHeight;
+        pdf.addPage();
+        pdf.addImage(imageData, "PNG", 0, position, imageWidth, imageHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      const fileDate = new Date().toISOString().slice(0, 10);
+      pdf.save(`Maven_National_Leads_${fileDate}.pdf`);
+      toast.success("PDF exported successfully.");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Unable to export PDF right now.");
+    } finally {
+      setIsExporting(false);
+      setReportPayload(null);
+    }
+  };
+
+  const fromIndex = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const toIndex = Math.min(page * PAGE_SIZE, total);
 
   return (
     <div style={{ padding: "24px 32px" }}>
@@ -55,7 +173,11 @@ export default function AllLeads() {
           <h1 style={{ fontSize: "1.875rem", fontWeight: "700", color: "#1e3a8a", margin: "0 0 8px 0" }}>National Lead Database</h1>
           <p style={{ color: "#64748b", margin: 0 }}>View and manage all {total} leads across the country.</p>
         </div>
-        <button style={{ 
+        <button
+          type="button"
+          onClick={handleExportPdf}
+          disabled={isExporting}
+          style={{ 
           padding: "10px 20px", 
           borderRadius: "10px", 
           backgroundColor: "#fff", 
@@ -65,9 +187,11 @@ export default function AllLeads() {
           display: "flex", 
           alignItems: "center", 
           gap: "8px",
-          cursor: "pointer"
-        }}>
-          <LuDownload size={18} /> Export Data
+          cursor: isExporting ? "not-allowed" : "pointer",
+          opacity: isExporting ? 0.75 : 1
+        }}
+        >
+          <LuDownload size={18} /> {isExporting ? "Exporting PDF..." : "Export Data"}
         </button>
       </div>
 
@@ -85,7 +209,7 @@ export default function AllLeads() {
         </div>
 
         <div style={{ display: "flex", gap: "12px" }}>
-          <select value={zone} onChange={(e) => setZone(e.target.value)} className="filter-chip" style={{ appearance: "auto", paddingRight: "30px" }}>
+          <select value={zone} onChange={(e) => { setZone(e.target.value); setPage(1); }} className="filter-chip" style={{ appearance: "auto", paddingRight: "30px" }}>
             <option value="">All Zones</option>
             <option value="North">North Zone</option>
             <option value="South">South Zone</option>
@@ -93,16 +217,17 @@ export default function AllLeads() {
             <option value="West">West Zone</option>
           </select>
 
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="filter-chip" style={{ appearance: "auto", paddingRight: "30px" }}>
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="filter-chip" style={{ appearance: "auto", paddingRight: "30px" }}>
             <option value="">All Statuses</option>
             <option value="NEW">New</option>
             <option value="FORWARDED">Forwarded</option>
             <option value="ASSIGNED">Assigned</option>
             <option value="CONVERTED">Converted</option>
             <option value="REJECTED">Rejected</option>
+            <option value="LOST">Lost</option>
           </select>
 
-          <select value={date} onChange={(e) => setDate(e.target.value)} className="filter-chip" style={{ appearance: "auto", paddingRight: "30px" }}>
+          <select value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }} className="filter-chip" style={{ appearance: "auto", paddingRight: "30px" }}>
             <option value="">All Timeline</option>
             <option value="today">Today</option>
             <option value="yesterday">Yesterday</option>
@@ -131,6 +256,12 @@ export default function AllLeads() {
                   <td colSpan="5" style={{ padding: "100px 0", textAlign: "center", color: "#64748b" }}>
                     <LuLoaderCircle className="animate-spin" size={24} style={{ marginBottom: "12px" }} />
                     <p>Fetching leads from database...</p>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan="5" style={{ padding: "100px 0", textAlign: "center", color: "#ef4444" }}>
+                    {error}
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
@@ -178,7 +309,50 @@ export default function AllLeads() {
             </tbody>
           </table>
         </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "12px 18px",
+            borderTop: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ color: "#64748b", fontSize: "0.85rem" }}>
+            Showing {fromIndex}-{toIndex} of {total} leads (15 per page)
+          </span>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              className="secondary-btn"
+              style={{ padding: "7px 10px" }}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1 || loading}
+            >
+              <LuChevronLeft />
+            </button>
+            <span style={{ color: "#334155", fontWeight: 600, minWidth: "95px", textAlign: "center" }}>
+              Page {page} / {totalPages || 1}
+            </span>
+            <button
+              type="button"
+              className="secondary-btn"
+              style={{ padding: "7px 10px" }}
+              onClick={() => setPage((prev) => Math.min(totalPages || 1, prev + 1))}
+              disabled={page >= (totalPages || 1) || loading}
+            >
+              <LuChevronRight />
+            </button>
+          </div>
+        </div>
       </section>
+
+      <div style={{ position: "absolute", left: "-9999px", top: 0, height: 0, overflow: "hidden" }}>
+        {reportPayload ? <NationalLeadsReportTemplate ref={reportRef} report={reportPayload} /> : null}
+      </div>
     </div>
   );
 }

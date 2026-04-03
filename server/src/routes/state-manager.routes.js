@@ -9,6 +9,7 @@ const uploadProfilePhoto = require("../middleware/profile-image-upload.middlewar
 // Public routes for State Manager Portal
 router.post("/auth/signup", controller.signup);
 router.post("/auth/login", controller.login);
+router.get("/auth/meta", controller.getSignupMeta);
 
 router.use(protectCRM);
 router.use(role("STATE_MANAGER", "ADMIN"));
@@ -22,6 +23,9 @@ router.patch("/profile/photo", uploadProfilePhoto, controller.uploadProfilePhoto
 router.get("/dashboard", controller.getDashboard);
 router.get("/leads", controller.getLeads);
 router.get("/fses", controller.getFSEs);
+router.get("/team-members", controller.getManagedMembers);
+router.get("/team-members/:id", controller.getManagedMemberById);
+router.delete("/team-members/:id", controller.deleteManagedMember);
 router.patch("/leads/:id/assign", controller.assignLead);
 router.patch("/leads/:id/status", controller.updateLeadStatus);
 router.post("/leads/:id/activity", leadGeneratorController.logLeadActivity);

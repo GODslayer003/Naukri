@@ -38,6 +38,7 @@ router.get("/qr-codes/:id", protectCrmPanel, crmPanelController.getQRCode);
 router.patch("/qr-codes/:id", protectCrmPanel, crmPanelController.updateQRCode);
 router.patch("/qr-codes/:id/share", protectCrmPanel, crmPanelController.shareQRCode);
 
+router.get("/candidates", protectCrmPanel, crmPanelController.getCandidates);
 router.get("/applications", protectCrmPanel, crmPanelController.getApplications);
 router.patch(
   "/applications/:id/status",

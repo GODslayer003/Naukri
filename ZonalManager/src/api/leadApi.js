@@ -108,6 +108,41 @@ export async function fetchStateManagers() {
   return data.data;
 }
 
+export async function fetchStateManagerMeta(params = {}) {
+  const normalizedParams = {};
+
+  if (params.excludeUserId) {
+    normalizedParams.excludeUserId = params.excludeUserId;
+  }
+
+  if (params.currentState) {
+    normalizedParams.currentState = params.currentState;
+  }
+
+  const { data } = await http.get("/state-managers/meta", { params: normalizedParams });
+  return data.data;
+}
+
+export async function fetchStateManagerRegistry() {
+  const { data } = await http.get("/state-managers/registry");
+  return data.data;
+}
+
+export async function createStateManagerAccount(payload) {
+  const { data } = await http.post("/state-managers", payload);
+  return data.data;
+}
+
+export async function reviewStateManagerAccount(managerId, payload) {
+  const { data } = await http.patch(`/state-managers/${managerId}/review`, payload);
+  return data.data;
+}
+
+export async function deleteStateManagerAccount(managerId) {
+  const { data } = await http.delete(`/state-managers/${managerId}`);
+  return data.data;
+}
+
 export async function assignLeadToStateManager(leadId, stateManagerId) {
   const { data } = await http.patch(`/leads/${leadId}/assign`, { stateManagerId });
   return data.data;

@@ -5,8 +5,12 @@ const createHttpError = require("http-errors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const {
+  CANONICAL_ZONES,
   normalizeZoneInput,
+  normalizeIndianStateInput,
   inferZoneFromTerritory,
+  isValidStateForZone,
+  getAvailableStatesForZone,
   buildZoneRegex,
 } = require("../utils/zone.util");
 const { replaceCrmProfileImage } = require("../services/profile-image-storage.service");
@@ -18,9 +22,14 @@ const FULL_NAME_PATTERN = /^[A-Za-z][A-Za-z .'-]*$/;
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 };
+const escapeRegExp = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const getUserZone = (user = {}) => {
   return normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory);
+};
+
+const getUserState = (user = {}) => {
+  return normalizeIndianStateInput(user.state);
 };
 
 const buildTerritoryFilter = (zone = "") => {
@@ -30,6 +39,67 @@ const buildTerritoryFilter = (zone = "") => {
   }
 
   return { territory: regex };
+};
+
+const RESERVED_STATE_MANAGER_STATUSES = ["ACTIVE", "PENDING_INVITE"];
+const MANAGED_MEMBER_ROLES = ["LEAD_GENERATOR", "FSE"];
+const DEFAULT_TEAM_MEMBER_LIMIT = 10;
+const MAX_TEAM_MEMBER_LIMIT = 50;
+
+const buildStateReservationQuery = (zone = "", state = "", excludedUserId = null) => {
+  const normalizedZone = normalizeZoneInput(zone);
+  const normalizedState = normalizeIndianStateInput(state);
+
+  if (!normalizedZone || !normalizedState) {
+    return null;
+  }
+
+  const query = {
+    role: "STATE_MANAGER",
+    ...buildTerritoryFilter(normalizedZone),
+    state: normalizedState,
+    accessStatus: { $in: RESERVED_STATE_MANAGER_STATUSES },
+  };
+
+  if (excludedUserId) {
+    query._id = { $ne: excludedUserId };
+  }
+
+  return query;
+};
+
+const getReservedStatesForZone = async (zone = "", excludedUserId = null) => {
+  const normalizedZone = normalizeZoneInput(zone);
+  if (!normalizedZone) {
+    return [];
+  }
+
+  const query = {
+    role: "STATE_MANAGER",
+    ...buildTerritoryFilter(normalizedZone),
+    accessStatus: { $in: RESERVED_STATE_MANAGER_STATUSES },
+  };
+
+  if (excludedUserId) {
+    query._id = { $ne: excludedUserId };
+  }
+
+  const managers = await CrmUser.find(query).select("state");
+  return managers
+    .map((item) => normalizeIndianStateInput(item.state))
+    .filter(Boolean);
+};
+
+const resolvePageOptions = (page = 1, limit = DEFAULT_TEAM_MEMBER_LIMIT) => {
+  const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
+  const parsedLimit = Number.parseInt(limit, 10) || DEFAULT_TEAM_MEMBER_LIMIT;
+  const safeLimit = Math.min(MAX_TEAM_MEMBER_LIMIT, Math.max(1, parsedLimit));
+
+  return {
+    page: safePage,
+    limit: safeLimit,
+    skip: (safePage - 1) * safeLimit,
+  };
 };
 
 const buildManagerOwnershipFilter = (managerId) => ({
@@ -71,11 +141,48 @@ const normalizeFullName = (value = "") => {
   return normalized;
 };
 
-exports.signup = asyncHandler(async (req, res) => {
-  const { email, zone, password, confirmPassword, fullName } = req.body;
+exports.getSignupMeta = asyncHandler(async (req, res) => {
+  const requestedZone = normalizeZoneInput(req.query.zone);
+  if (req.query.zone && !requestedZone) {
+    throw createHttpError(400, "Invalid zone. Use North, South, East, or West.");
+  }
 
-  if (!email || !zone || !password || !confirmPassword || !fullName) {
-    throw createHttpError(400, "All fields are required (fullName, email, zone, password, confirmPassword)");
+  if (requestedZone) {
+    const occupiedStates = await getReservedStatesForZone(requestedZone);
+    return res.status(200).json({
+      success: true,
+      data: {
+        zones: CANONICAL_ZONES,
+        selectedZone: requestedZone,
+        availableStates: getAvailableStatesForZone(requestedZone, occupiedStates),
+      },
+    });
+  }
+
+  const availableStatesByZoneEntries = await Promise.all(
+    CANONICAL_ZONES.map(async (zone) => {
+      const occupiedStates = await getReservedStatesForZone(zone);
+      return [zone, getAvailableStatesForZone(zone, occupiedStates)];
+    }),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      zones: CANONICAL_ZONES,
+      availableStatesByZone: Object.fromEntries(availableStatesByZoneEntries),
+    },
+  });
+});
+
+exports.signup = asyncHandler(async (req, res) => {
+  const { email, zone, state, password, confirmPassword, fullName } = req.body;
+
+  if (!email || !zone || !state || !password || !confirmPassword || !fullName) {
+    throw createHttpError(
+      400,
+      "All fields are required (fullName, email, zone, state, password, confirmPassword)",
+    );
   }
 
   if (password !== confirmPassword) {
@@ -91,12 +198,24 @@ exports.signup = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Valid zone is required (North, South, East, West)");
   }
 
+  const normalizedState = normalizeIndianStateInput(state);
+  if (!normalizedState || !isValidStateForZone(normalizedState, normalizedZone)) {
+    throw createHttpError(400, "Selected state is not valid for the selected zone.");
+  }
+
   const normalizedFullName = normalizeFullName(fullName);
   const normalizedEmail = email.trim().toLowerCase();
-  const existingUser = await CrmUser.findOne({ email: normalizedEmail });
+  const [existingUser, existingZoneStateManager] = await Promise.all([
+    CrmUser.findOne({ email: normalizedEmail }),
+    CrmUser.findOne(buildStateReservationQuery(normalizedZone, normalizedState)).select("_id"),
+  ]);
 
   if (existingUser) {
     throw createHttpError(409, "User with this email already exists");
+  }
+
+  if (existingZoneStateManager) {
+    throw createHttpError(409, `${normalizedState} is already assigned to another State Manager in ${normalizedZone} zone.`);
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -106,20 +225,22 @@ exports.signup = asyncHandler(async (req, res) => {
     password: hashedPassword,
     role: "STATE_MANAGER",
     territory: normalizedZone,
-    accessStatus: "ACTIVE",
-    isActive: true,
+    state: normalizedState,
+    accessStatus: "PENDING_INVITE",
+    isActive: false,
   });
 
   res.status(201).json({
     success: true,
-    message: "State Manager registered successfully",
-    token: generateToken(user._id),
+    message: "Signup request submitted. Please wait for zonal manager approval.",
     user: {
       id: String(user._id),
       fullName: user.fullName,
       email: user.email,
       zone: normalizedZone,
+      state: normalizedState,
       role: user.role,
+      accessStatus: user.accessStatus,
       profileImage: user.profileImageUrl || "",
     },
   });
@@ -148,8 +269,12 @@ exports.login = asyncHandler(async (req, res) => {
     throw createHttpError(401, "Incorrect zone for this user");
   }
 
-  if (!user.isActive || user.accessStatus === "RESTRICTED") {
-    throw createHttpError(403, "Account is inactive or restricted.");
+  if (user.accessStatus === "PENDING_INVITE") {
+    throw createHttpError(403, "Your account is pending zonal manager approval.");
+  }
+
+  if (user.accessStatus === "RESTRICTED" || !user.isActive) {
+    throw createHttpError(403, "Your account is restricted. Please contact your zonal manager.");
   }
 
   const isPasswordMatch = await bcrypt.compare(password, user.password);
@@ -166,6 +291,7 @@ exports.login = asyncHandler(async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       zone: normalizedZone,
+      state: user.state || "",
       role: user.role,
       profileImage: user.profileImageUrl || "",
     },
@@ -215,6 +341,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
       email: req.user.email,
       role: req.user.role,
       zone,
+      state: req.user.state || "",
       phone: req.user.phone || "",
       profileImage: req.user.profileImageUrl || "",
     },
@@ -247,6 +374,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       zone: getUserZone(user),
+      state: user.state || "",
       phone: user.phone || "",
       profileImage: user.profileImageUrl || "",
     },
@@ -282,6 +410,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       zone: getUserZone(user),
+      state: user.state || "",
       profileImage: user.profileImageUrl || "",
     },
   });
@@ -294,8 +423,12 @@ exports.getLeads = asyncHandler(async (req, res) => {
 
   // State Manager can only see leads forwarded by Lead Generators in their Zone
   let targetZone = req.user.role === "STATE_MANAGER" ? getUserZone(req.user) : "";
+  const managerState = getUserState(req.user);
   if (!targetZone) {
     throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
+  }
+  if (!managerState) {
+    throw createHttpError(403, "Unable to resolve state for this State Manager account.");
   }
 
   if (location && location !== "All Zones") {
@@ -317,7 +450,11 @@ exports.getLeads = asyncHandler(async (req, res) => {
     targetZone = requestedZone;
   }
 
-  const zoneQuery = { role: "LEAD_GENERATOR", ...buildTerritoryFilter(targetZone) };
+  const zoneQuery = {
+    role: "LEAD_GENERATOR",
+    ...buildTerritoryFilter(targetZone),
+    state: managerState,
+  };
 
   // Find all lead generators matching the zone constraint
   const zoneLGUsers = await CrmUser.find(zoneQuery).select("_id");
@@ -326,6 +463,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
   // Build Query
   const query = {
     createdBy: { $in: generatorIds },
+    state: managerState,
     status: { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"] },
   };
 
@@ -394,16 +532,21 @@ exports.getLeads = asyncHandler(async (req, res) => {
 
 exports.getFSEs = asyncHandler(async (req, res) => {
   const myZone = getUserZone(req.user);
+  const myState = getUserState(req.user);
   if (!myZone) {
     throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
+  }
+  if (!myState) {
+    throw createHttpError(403, "Unable to resolve state for this State Manager account.");
   }
 
   const fses = await CrmUser.find({
     role: "FSE",
     ...buildTerritoryFilter(myZone),
+    state: myState,
     isActive: true,
     accessStatus: { $ne: "RESTRICTED" },
-  }).select("_id fullName email territory phone profileImageUrl");
+  }).select("_id fullName email territory state phone profileImageUrl");
 
   const fseIds = fses.map((fse) => fse._id);
   const leadCounts = fseIds.length
@@ -434,10 +577,241 @@ exports.getFSEs = asyncHandler(async (req, res) => {
       fullName: fse.fullName,
       email: fse.email,
       zone: getUserZone(fse),
+      state: fse.state || "",
       phone: fse.phone || "",
       activeLeads: activeLeadMap.get(String(fse._id)) || 0,
       profileImage: fse.profileImageUrl || "",
     })),
+  });
+});
+
+exports.getManagedMembers = asyncHandler(async (req, res) => {
+  const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
+  const role = String(req.query.role || "").trim().toUpperCase();
+  const search = String(req.query.search || "").trim();
+  const { page, limit, skip } = resolvePageOptions(req.query.page, req.query.limit);
+
+  if (!managerZone || !managerState) {
+    throw createHttpError(403, "State Manager zone/state is not configured.");
+  }
+
+  if (!MANAGED_MEMBER_ROLES.includes(role)) {
+    throw createHttpError(400, `role must be one of: ${MANAGED_MEMBER_ROLES.join(", ")}`);
+  }
+
+  const baseFilter = {
+    role,
+    ...buildTerritoryFilter(managerZone),
+    state: managerState,
+    isActive: true,
+    accessStatus: { $ne: "RESTRICTED" },
+  };
+
+  const query = { ...baseFilter };
+  if (search) {
+    const searchRegex = { $regex: escapeRegExp(search), $options: "i" };
+    query.$or = [
+      { fullName: searchRegex },
+      { email: searchRegex },
+      { phone: searchRegex },
+    ];
+  }
+
+  const [members, total] = await Promise.all([
+    CrmUser.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select("_id fullName email role territory state phone isActive accessStatus profileImageUrl createdAt updatedAt"),
+    CrmUser.countDocuments(query),
+  ]);
+
+  const memberIds = members.map((member) => member._id);
+  const generatedLeadCounts = memberIds.length
+    ? await Lead.aggregate([
+        {
+          $match: {
+            createdBy: { $in: memberIds },
+          },
+        },
+        {
+          $group: {
+            _id: "$createdBy",
+            totalLeadsGenerated: { $sum: 1 },
+            convertedLeads: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "CONVERTED"] }, 1, 0],
+              },
+            },
+          },
+        },
+      ])
+    : [];
+
+  const generatedLeadMap = new Map(
+    generatedLeadCounts.map((item) => [
+      String(item._id),
+      {
+        totalLeadsGenerated: Number(item.totalLeadsGenerated || 0),
+        convertedLeads: Number(item.convertedLeads || 0),
+      },
+    ]),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      items: members.map((member) => {
+        const stats = generatedLeadMap.get(String(member._id)) || {
+          totalLeadsGenerated: 0,
+          convertedLeads: 0,
+        };
+
+        return {
+          id: String(member._id),
+          fullName: member.fullName,
+          email: member.email,
+          role: member.role,
+          zone: getUserZone(member),
+          state: member.state || "",
+          phone: member.phone || "",
+          profileImage: member.profileImageUrl || "",
+          accessStatus: member.accessStatus,
+          isActive: Boolean(member.isActive),
+          totalLeadsGenerated: stats.totalLeadsGenerated,
+          convertedLeads: stats.convertedLeads,
+          createdAt: member.createdAt,
+          updatedAt: member.updatedAt,
+        };
+      }),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    },
+  });
+});
+
+exports.getManagedMemberById = asyncHandler(async (req, res) => {
+  const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
+  const { id } = req.params;
+
+  if (!managerZone || !managerState) {
+    throw createHttpError(403, "State Manager zone/state is not configured.");
+  }
+
+  const member = await CrmUser.findOne({
+    _id: id,
+    role: { $in: MANAGED_MEMBER_ROLES },
+    ...buildTerritoryFilter(managerZone),
+    state: managerState,
+  }).select("_id fullName email role territory state phone department scope isActive accessStatus profileImageUrl createdAt updatedAt");
+
+  if (!member) {
+    throw createHttpError(404, "Team member not found in your state.");
+  }
+
+  const [leadStats] = await Lead.aggregate([
+    {
+      $match: {
+        createdBy: member._id,
+      },
+    },
+    {
+      $group: {
+        _id: "$createdBy",
+        totalLeadsGenerated: { $sum: 1 },
+        convertedLeads: {
+          $sum: {
+            $cond: [{ $eq: ["$status", "CONVERTED"] }, 1, 0],
+          },
+        },
+        forwardedLeads: {
+          $sum: {
+            $cond: [{ $in: ["$status", ["FORWARDED", "ASSIGNED"]] }, 1, 0],
+          },
+        },
+      },
+    },
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      id: String(member._id),
+      fullName: member.fullName,
+      email: member.email,
+      role: member.role,
+      zone: getUserZone(member),
+      state: member.state || "",
+      phone: member.phone || "",
+      department: member.department || "",
+      scope: member.scope || "",
+      profileImage: member.profileImageUrl || "",
+      isActive: Boolean(member.isActive),
+      accessStatus: member.accessStatus,
+      createdAt: member.createdAt,
+      updatedAt: member.updatedAt,
+      totalLeadsGenerated: Number(leadStats?.totalLeadsGenerated || 0),
+      convertedLeads: Number(leadStats?.convertedLeads || 0),
+      forwardedLeads: Number(leadStats?.forwardedLeads || 0),
+    },
+  });
+});
+
+exports.deleteManagedMember = asyncHandler(async (req, res) => {
+  const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
+  const { id } = req.params;
+
+  if (!managerZone || !managerState) {
+    throw createHttpError(403, "State Manager zone/state is not configured.");
+  }
+
+  const member = await CrmUser.findOne({
+    _id: id,
+    role: { $in: MANAGED_MEMBER_ROLES },
+    ...buildTerritoryFilter(managerZone),
+    state: managerState,
+  }).select("_id fullName email role");
+
+  if (!member) {
+    throw createHttpError(404, "Team member not found in your state.");
+  }
+
+  member.isActive = false;
+  member.accessStatus = "RESTRICTED";
+  await member.save();
+
+  if (member.role === "FSE") {
+    await Lead.updateMany(
+      {
+        assignedTo: member._id,
+        status: { $nin: ["CONVERTED", "LOST", "REJECTED"] },
+      },
+      {
+        $set: {
+          assignedTo: null,
+          assignedBy: req.user._id,
+          updatedBy: req.user._id,
+          status: "FORWARDED",
+        },
+      },
+    );
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `${member.role === "FSE" ? "FSE" : "Lead Generator"} deleted successfully.`,
+    data: {
+      id: String(member._id),
+      role: member.role,
+      email: member.email,
+    },
   });
 });
 
@@ -450,8 +824,12 @@ exports.assignLead = asyncHandler(async (req, res) => {
   }
 
   const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
   if (!managerZone) {
     throw createHttpError(403, "State Manager zone is not configured.");
+  }
+  if (!managerState) {
+    throw createHttpError(403, "State Manager state is not configured.");
   }
 
   const [lead, fse] = await Promise.all([
@@ -469,9 +847,15 @@ exports.assignLead = asyncHandler(async (req, res) => {
 
   const leadZone = inferZoneFromTerritory(lead.createdBy?.territory);
   const fseZone = getUserZone(fse);
+  const fseState = getUserState(fse);
+  const leadState = normalizeIndianStateInput(lead.state);
 
   if (!leadZone || leadZone !== managerZone) {
     throw createHttpError(403, "This lead does not belong to your zone.");
+  }
+
+  if (!leadState || leadState !== managerState) {
+    throw createHttpError(403, "This lead does not belong to your state.");
   }
 
   if (!managerOwnsLead(lead, req.user._id)) {
@@ -480,6 +864,10 @@ exports.assignLead = asyncHandler(async (req, res) => {
 
   if (!fseZone || fseZone !== managerZone) {
     throw createHttpError(403, "FSE must belong to the same zone as the State Manager.");
+  }
+
+  if (!fseState || fseState !== managerState) {
+    throw createHttpError(403, "FSE must belong to the same state as the State Manager.");
   }
 
   lead.status = "ASSIGNED";
@@ -502,18 +890,24 @@ exports.assignLead = asyncHandler(async (req, res) => {
 
 exports.getDashboard = asyncHandler(async (req, res) => {
   const myZone = getUserZone(req.user);
+  const myState = getUserState(req.user);
   if (!myZone) {
     throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
+  }
+  if (!myState) {
+    throw createHttpError(403, "Unable to resolve state for this State Manager account.");
   }
 
   const [zoneLGUsers, zoneFSEUsers] = await Promise.all([
     CrmUser.find({
       role: "LEAD_GENERATOR",
       ...buildTerritoryFilter(myZone),
+      state: myState,
     }).select("_id"),
     CrmUser.find({
       role: "FSE",
       ...buildTerritoryFilter(myZone),
+      state: myState,
       isActive: true,
       accessStatus: { $ne: "RESTRICTED" },
     })
@@ -589,7 +983,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
       id: String(fse._id),
       initials,
       name,
-      location: myZone,
+      location: myState,
       activeLeads: activeLeadMap.get(String(fse._id)) || 0,
       status: "Active",
       profileImage: fse.profileImageUrl || "",
@@ -635,8 +1029,12 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
   }
 
   const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
   if (!managerZone) {
     throw createHttpError(403, "State Manager zone is not configured.");
+  }
+  if (!managerState) {
+    throw createHttpError(403, "State Manager state is not configured.");
   }
 
   const lead = await Lead.findById(id).populate("createdBy", "territory");
@@ -646,8 +1044,12 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
   }
 
   const leadZone = inferZoneFromTerritory(lead.createdBy?.territory);
+  const leadState = normalizeIndianStateInput(lead.state);
   if (!leadZone || leadZone !== managerZone) {
     throw createHttpError(403, "You can only update leads from your own zone.");
+  }
+  if (!leadState || leadState !== managerState) {
+    throw createHttpError(403, "You can only update leads from your own state.");
   }
 
   if (!managerOwnsLead(lead, req.user._id)) {

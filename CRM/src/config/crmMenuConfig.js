@@ -8,6 +8,7 @@ import {
   LuQrCode,
   LuSettings,
   LuShieldCheck,
+  LuUser,
   LuUsers,
 } from "react-icons/lu";
 
@@ -18,6 +19,7 @@ export const crmMenu = [
   { title: "Approval Queue", path: "/crm/approvals", icon: LuShieldCheck },
   { title: "Packages", path: "/crm/packages", icon: LuBadgePercent },
   { title: "QR Management", path: "/crm/qr-codes", icon: LuQrCode },
+  { title: "Candidates", path: "/crm/candidates", icon: LuUser },
   { title: "Applications", path: "/crm/applications", icon: LuUsers },
   { title: "Notifications", path: "/crm/notifications", icon: LuBellRing },
   { title: "Analytics", path: "/crm/analytics", icon: LuChartColumnIncreasing },

@@ -3,6 +3,7 @@ import CrmLayout from "../layout/CrmLayout";
 import AnalyticsPage from "../pages/AnalyticsPage";
 import ApplicationsPage from "../pages/ApplicationsPage";
 import ApprovalsPage from "../pages/ApprovalsPage";
+import CandidatesPage from "../pages/CandidatesPage";
 import ClientsPage from "../pages/ClientsPage";
 import CrmDashboard from "../pages/CrmDashboard";
 import JobsPage from "../pages/JobsPage";
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
           { path: "/crm/approvals", element: <ApprovalsPage /> },
           { path: "/crm/packages", element: <PackagesPage /> },
           { path: "/crm/qr-codes", element: <QRCodesPage /> },
+          { path: "/crm/candidates", element: <CandidatesPage /> },
           { path: "/crm/applications", element: <ApplicationsPage /> },
           { path: "/crm/notifications", element: <NotificationsPage /> },
           { path: "/crm/analytics", element: <AnalyticsPage /> },

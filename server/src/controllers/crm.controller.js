@@ -2,7 +2,12 @@
 
 const CrmUser = require("../models/CrmUser");
 const bcrypt = require("bcryptjs");
-const { normalizeZoneInput, buildZoneRegex } = require("../utils/zone.util");
+const {
+  normalizeZoneInput,
+  normalizeIndianStateInput,
+  isValidStateForZone,
+  buildZoneRegex,
+} = require("../utils/zone.util");
 
 const ALLOWED_CRM_ROLES = [
   "LEAD_GENERATOR",
@@ -92,6 +97,43 @@ exports.registerCrmUser = async (req, res) => {
       normalizedTerritory = normalizedZone;
     }
 
+    let normalizedState = String(state || "").trim();
+    if (normalizedRole === "STATE_MANAGER") {
+      const normalizedZone = normalizeZoneInput(territory);
+      const normalizedManagerState = normalizeIndianStateInput(state);
+
+      if (!normalizedZone) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid zone is required for State Manager (North, South, East, West).",
+        });
+      }
+
+      if (!normalizedManagerState || !isValidStateForZone(normalizedManagerState, normalizedZone)) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid state is required for the selected zone.",
+        });
+      }
+
+      const existingStateManager = await CrmUser.findOne({
+        role: "STATE_MANAGER",
+        ...{ territory: { $regex: buildZoneRegex(normalizedZone) } },
+        state: normalizedManagerState,
+        accessStatus: { $in: ["ACTIVE", "PENDING_INVITE"] },
+      }).select("_id");
+
+      if (existingStateManager) {
+        return res.status(409).json({
+          success: false,
+          message: `${normalizedManagerState} already has an active or pending State Manager.`,
+        });
+      }
+
+      normalizedTerritory = normalizedZone;
+      normalizedState = normalizedManagerState;
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -103,7 +145,7 @@ exports.registerCrmUser = async (req, res) => {
       phone,
       role: normalizedRole,
       territory: normalizedTerritory,
-      state,
+      state: normalizedState,
     });
 
     return res.status(201).json({

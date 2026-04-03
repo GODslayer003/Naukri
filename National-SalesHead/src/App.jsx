@@ -15,6 +15,7 @@ import ZoneBreakdown from "./pages/ZoneBreakdown";
 import AllLeads from "./pages/AllLeads";
 import Profile from "./pages/Profile";
 import Login from "./pages/Login";
+import TeamManagement from "./pages/TeamManagement";
 
 const SESSION_KEY = "crm_panel_session";
 
@@ -87,6 +88,14 @@ export default function App() {
                   </NavLink>
 
                   <NavLink
+                    to="/team"
+                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
+                  >
+                    <LuUsers />
+                    Team Control
+                  </NavLink>
+
+                  <NavLink
                     to="/profile"
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
@@ -147,6 +156,7 @@ export default function App() {
                     <Route index element={<Dashboard />} />
                     <Route path="/zones" element={<ZoneBreakdown />} />
                     <Route path="/leads" element={<AllLeads />} />
+                    <Route path="/team" element={<TeamManagement />} />
                     <Route path="/profile" element={<Profile />} />
                   </Routes>
                 </div>

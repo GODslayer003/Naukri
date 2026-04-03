@@ -7,10 +7,12 @@ import {
   LuList,
   LuLogOut,
   LuUser,
+  LuUsers,
 } from "react-icons/lu";
 import logo from "./assets/maven-logo.svg";
 import Dashboard from "./pages/Dashboard";
 import ValidationQueue from "./pages/ValidationQueue";
+import StateManagers from "./pages/StateManagers";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
@@ -91,6 +93,14 @@ export default function App() {
                   </NavLink>
 
                   <NavLink
+                    to="/state-managers"
+                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
+                  >
+                    <LuUsers />
+                    State Managers
+                  </NavLink>
+
+                  <NavLink
                     to="/profile"
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
@@ -157,6 +167,7 @@ export default function App() {
                 <Routes>
                   <Route index element={<Dashboard />} />
                   <Route path="/zone-leads" element={<ValidationQueue />} />
+                  <Route path="/state-managers" element={<StateManagers />} />
                   <Route path="/validation-queue" element={<Navigate to="/zone-leads" replace />} />
                   <Route path="/profile" element={<Profile />} />
                 </Routes>

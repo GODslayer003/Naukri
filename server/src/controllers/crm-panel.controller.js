@@ -78,6 +78,73 @@ const normalizeClientStatus = (value = "ACTIVE") => {
   return ["ACTIVE", "INACTIVE"].includes(normalized) ? normalized : "ACTIVE";
 };
 
+const escapeRegExp = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const resolveCandidateStatus = (candidateUser = {}) => {
+  if (candidateUser.accessStatus === "PENDING_INVITE") {
+    return "PENDING_INVITE";
+  }
+
+  if (!candidateUser.isActive || candidateUser.accessStatus === "RESTRICTED") {
+    return "RESTRICTED";
+  }
+
+  return "ACTIVE";
+};
+
+const resolveMostRecentDate = (...values) => {
+  const dates = values
+    .map((value) => (value ? new Date(value) : null))
+    .filter((date) => date instanceof Date && !Number.isNaN(date.getTime()));
+
+  if (!dates.length) {
+    return null;
+  }
+
+  return dates.reduce((latest, current) => (current > latest ? current : latest), dates[0]);
+};
+
+const formatCandidateRecord = ({
+  candidateUser,
+  candidateProfile = null,
+  applicationSummary = null,
+} = {}) => {
+  const status = resolveCandidateStatus(candidateUser);
+  const lastUpdatedAt = resolveMostRecentDate(
+    candidateUser?.updatedAt,
+    candidateProfile?.updatedAt,
+    applicationSummary?.lastAppliedAt,
+    candidateProfile?.resume?.uploadedAt,
+  );
+
+  return {
+    id: String(candidateUser?._id || ""),
+    candidateName: candidateUser?.name || "Candidate",
+    candidateEmail: candidateUser?.email || "",
+    status,
+    accessStatus: candidateUser?.accessStatus || "ACTIVE",
+    isActive: Boolean(candidateUser?.isActive),
+    candidatePhone: candidateProfile?.phone || "",
+    candidateAltPhone: candidateProfile?.altPhone || "",
+    candidateDesignation: candidateProfile?.currentTitle || "",
+    candidateCurrentCompany: candidateProfile?.currentCompany || "",
+    candidateExperience: candidateProfile?.totalExperience || "",
+    candidateCity: candidateProfile?.currentCity || "",
+    candidateState: candidateProfile?.currentState || "",
+    candidateCountry: candidateProfile?.currentCountry || "",
+    candidateSkillsCount: Array.isArray(candidateProfile?.skills) ? candidateProfile.skills.length : 0,
+    candidateSkills: Array.isArray(candidateProfile?.skills) ? candidateProfile.skills : [],
+    resumeAvailable: Boolean(candidateProfile?.resume?.url),
+    resumeFileName: candidateProfile?.resume?.fileName || "",
+    resumeUploadedAt: candidateProfile?.resume?.uploadedAt || null,
+    totalApplications: Number(applicationSummary?.totalApplications || 0),
+    lastAppliedAt: applicationSummary?.lastAppliedAt || null,
+    createdAt: candidateUser?.createdAt || null,
+    updatedAt: lastUpdatedAt,
+    lastUpdated: formatRelativeTime(lastUpdatedAt),
+  };
+};
+
 const ensureCrmSetup = async () => {
   await Promise.all(
     defaultPackages.map((pkg) =>
@@ -1126,6 +1193,131 @@ exports.shareQRCode = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: formatQRCodeRecord(qrCode),
+  });
+});
+
+exports.getCandidates = asyncHandler(async (req, res) => {
+  const search = String(req.query.search || "").trim();
+  const statusFilter = String(req.query.status || "ALL").trim().toUpperCase();
+  const allowedStatuses = ["ALL", "ACTIVE", "PENDING_INVITE", "RESTRICTED"];
+
+  if (!allowedStatuses.includes(statusFilter)) {
+    throw createHttpError(400, `status must be one of ${allowedStatuses.join(", ")}`);
+  }
+
+  const candidateQuery = {
+    role: "CANDIDATE",
+  };
+
+  if (statusFilter === "ACTIVE") {
+    candidateQuery.isActive = true;
+    candidateQuery.accessStatus = "ACTIVE";
+  } else if (statusFilter === "PENDING_INVITE") {
+    candidateQuery.accessStatus = "PENDING_INVITE";
+  } else if (statusFilter === "RESTRICTED") {
+    candidateQuery.$or = [{ accessStatus: "RESTRICTED" }, { isActive: false }];
+  }
+
+  if (search) {
+    const regex = { $regex: escapeRegExp(search), $options: "i" };
+    const searchClause = {
+      $or: [{ name: regex }, { email: regex }],
+    };
+
+    if (candidateQuery.$or) {
+      candidateQuery.$and = [searchClause, { $or: candidateQuery.$or }];
+      delete candidateQuery.$or;
+    } else {
+      Object.assign(candidateQuery, searchClause);
+    }
+  }
+
+  const [candidateUsers, allCandidateUsers, candidateProfiles, networkCoverageResult] = await Promise.all([
+    User.find(candidateQuery)
+      .select("_id name email accessStatus isActive createdAt updatedAt")
+      .sort({ updatedAt: -1, createdAt: -1 }),
+    User.find({ role: "CANDIDATE" }).select("_id accessStatus isActive"),
+    CandidateProfile.find({})
+      .select("userId phone altPhone currentTitle currentCompany totalExperience currentCity currentState currentCountry skills resume updatedAt"),
+    CandidateProfile.aggregate([
+      {
+        $match: {
+          "resume.storageProvider": { $exists: true, $ne: "" },
+        },
+      },
+      {
+        $group: {
+          _id: "$resume.storageProvider",
+        },
+      },
+      {
+        $count: "total",
+      },
+    ]),
+  ]);
+
+  const candidateIds = candidateUsers.map((user) => user._id);
+  const applicationSummaries = candidateIds.length
+    ? await Application.aggregate([
+        {
+          $match: {
+            candidateId: { $in: candidateIds },
+          },
+        },
+        {
+          $group: {
+            _id: "$candidateId",
+            totalApplications: { $sum: 1 },
+            lastAppliedAt: { $max: "$updatedAt" },
+          },
+        },
+      ])
+    : [];
+
+  const profileMap = new Map(
+    candidateProfiles.map((profile) => [String(profile.userId), profile]),
+  );
+  const applicationMap = new Map(
+    applicationSummaries.map((item) => [String(item._id), item]),
+  );
+
+  const totalCandidates = allCandidateUsers.length;
+  const verifiedAccess = allCandidateUsers.filter(
+    (item) => item.isActive && item.accessStatus === "ACTIVE",
+  ).length;
+  const pendingInvite = allCandidateUsers.filter(
+    (item) => item.accessStatus === "PENDING_INVITE",
+  ).length;
+  const restrictedProfiles = allCandidateUsers.filter(
+    (item) => item.accessStatus === "RESTRICTED" || !item.isActive,
+  ).length;
+  const networkCoverageChannels = Number(networkCoverageResult[0]?.total || 0);
+
+  const items = candidateUsers.map((candidateUser) =>
+    formatCandidateRecord({
+      candidateUser,
+      candidateProfile: profileMap.get(String(candidateUser._id)),
+      applicationSummary: applicationMap.get(String(candidateUser._id)),
+    }),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      summary: {
+        candidateProfiles: candidateProfiles.length,
+        verifiedAccess,
+        pendingInvite,
+      },
+      focusAreas: {
+        activeTalentPool: verifiedAccess,
+        networkCoverageChannels,
+        restrictedProfiles,
+      },
+      totalCandidates,
+      filteredCount: items.length,
+      items,
+    },
   });
 });
 

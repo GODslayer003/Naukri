@@ -69,6 +69,26 @@ export async function fetchZoneStats() {
   return data.data;
 }
 
+export async function fetchZonalManagers() {
+  const { data } = await http.get("/zonal-managers");
+  return data.data;
+}
+
+export async function createZonalManager(payload) {
+  const { data } = await http.post("/zonal-managers", payload);
+  return data;
+}
+
+export async function deleteZonalManager(zonalManagerId) {
+  const { data } = await http.delete(`/zonal-managers/${zonalManagerId}`);
+  return data;
+}
+
+export async function fetchStateManagersOverview(params = {}) {
+  const { data } = await http.get("/state-managers/overview", { params });
+  return data.data;
+}
+
 export async function fetchAllLeads(params = {}) {
   const { data } = await http.get("/leads", { params });
   return data;

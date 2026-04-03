@@ -4,11 +4,23 @@ import {
   LuArrowRight,
   LuBadgeCheck,
   LuClock3,
-  LuCircleX,
   LuPlus,
   LuSparkles,
+  LuSend,
 } from "react-icons/lu";
 import { fetchLeadDashboard } from "../api/leadApi";
+
+const SESSION_KEY = "crm_panel_session";
+
+const getSessionUser = () => {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed?.user || null;
+  } catch {
+    return null;
+  }
+};
 
 const statusToneMap = {
   NEW: "tag-blue",
@@ -17,6 +29,9 @@ const statusToneMap = {
   FOLLOW_UP: "tag-orange",
   WON: "tag-green",
   LOST: "tag-rose",
+  CONVERTED: "tag-green",
+  FORWARDED: "tag-blue",
+  ASSIGNED: "tag-blue",
 };
 
 const formatDate = (value) => {
@@ -42,6 +57,7 @@ export default function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const sessionUser = getSessionUser();
 
   useEffect(() => {
     let mounted = true;
@@ -75,12 +91,24 @@ export default function Dashboard() {
   const summary = dashboard?.summary || {};
   const recentLeads = dashboard?.recentLeads || [];
   const pipeline = dashboard?.pipeline || [];
-  const approvedCount = pipeline
-    .filter((item) => ["QUALIFIED", "WON"].includes(item.label))
-    .reduce((total, item) => total + item.value, 0);
-  const rejectedCount = pipeline
-    .filter((item) => item.label === "LOST")
-    .reduce((total, item) => total + item.value, 0);
+  const activeZone = sessionUser?.zone || dashboard?.zone || "";
+  const activeState = sessionUser?.state || dashboard?.state || "";
+
+  const countByStatuses = (statuses = []) =>
+    pipeline
+      .filter((item) => statuses.includes(String(item.label || "").toUpperCase()))
+      .reduce((total, item) => total + Number(item.value || 0), 0);
+
+  const convertedCount = countByStatuses(["CONVERTED", "WON"]);
+  const forwardedCount = countByStatuses(["FORWARDED", "ASSIGNED"]);
+
+  const totalConverted = convertedCount;
+  const totalForwarded = forwardedCount;
+
+  const convertedDescription = "Successfully converted";
+  const forwardedDescription = "Sent to State Manager pipeline";
+
+  const totalConvertedSafe = Number(totalConverted || 0);
 
   return (
     <div className="page-section">
@@ -94,6 +122,11 @@ export default function Dashboard() {
           <p>
             Here's what is happening with your leads today.
           </p>
+          {activeZone || activeState ? (
+            <p style={{ marginTop: "8px", fontWeight: 600, color: "#0f172a" }}>
+              Territory: {activeState || "State not assigned"}{activeZone ? `, ${activeZone} Zone` : ""}
+            </p>
+          ) : null}
         </div>
 
         <div className="hero-actions">
@@ -120,24 +153,24 @@ export default function Dashboard() {
 
         <article className="stat-card stat-card-approved">
           <div className="stat-card-top">
-            <span>Approved Leads</span>
+            <span>Converted Leads</span>
             <span className="stat-icon stat-icon-green">
               <LuBadgeCheck />
             </span>
           </div>
-          <h2>{loading ? "..." : approvedCount}</h2>
-          <p>Validated records</p>
+          <h2>{loading ? "..." : totalConvertedSafe || 0}</h2>
+          <p>{convertedDescription}</p>
         </article>
 
-        <article className="stat-card stat-card-rejected">
+        <article className="stat-card stat-card-forwarded">
           <div className="stat-card-top">
-            <span>Rejected Leads</span>
-            <span className="stat-icon stat-icon-red">
-              <LuCircleX />
+            <span>Forwarded Leads</span>
+            <span className="stat-icon stat-icon-blue">
+              <LuSend />
             </span>
           </div>
-          <h2>{loading ? "..." : rejectedCount}</h2>
-          <p>Needs correction</p>
+          <h2>{loading ? "..." : totalForwarded || 0}</h2>
+          <p>{forwardedDescription}</p>
         </article>
       </section>
 

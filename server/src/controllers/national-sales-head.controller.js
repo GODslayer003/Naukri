@@ -12,6 +12,9 @@ const PENDING_STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "FOLLOW_UP"];
 const FORWARDED_OR_ASSIGNED = ["FORWARDED", "ASSIGNED"];
 const DEFAULT_PAGE_LIMIT = 50;
 const MAX_PAGE_LIMIT = 200;
+const FULL_NAME_MIN_LENGTH = 2;
+const FULL_NAME_MAX_LENGTH = 80;
+const FULL_NAME_PATTERN = /^[A-Za-z][A-Za-z .'-]*$/;
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -26,7 +29,9 @@ const ensureNationalSalesHead = (req) => {
 const escapeRegExp = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalizeZone = (value = "") => {
-  const next = String(value || "").trim();
+  const next = String(value || "")
+    .replace(/\bzone\b/gi, "")
+    .trim();
   if (!next) {
     return "";
   }
@@ -112,6 +117,111 @@ const resolvePagination = (page, limit) => {
     limit: safeLimit,
     skip: (safePage - 1) * safeLimit,
   };
+};
+
+const normalizeFullName = (value = "") => {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!normalized) {
+    throw createHttpError(400, "Full name is required.");
+  }
+
+  if (normalized.length < FULL_NAME_MIN_LENGTH || normalized.length > FULL_NAME_MAX_LENGTH) {
+    throw createHttpError(
+      400,
+      `Full name must be between ${FULL_NAME_MIN_LENGTH} and ${FULL_NAME_MAX_LENGTH} characters.`,
+    );
+  }
+
+  if (!FULL_NAME_PATTERN.test(normalized)) {
+    throw createHttpError(400, "Full name can only contain letters, spaces, apostrophes, hyphens, and periods.");
+  }
+
+  return normalized;
+};
+
+const normalizeEmail = (value = "") => String(value || "").trim().toLowerCase();
+
+const resolveAccountStatus = (user = {}) => {
+  if (user.accessStatus === "PENDING_INVITE") {
+    return "PENDING_APPROVAL";
+  }
+
+  if (user.accessStatus === "RESTRICTED" || !user.isActive) {
+    return "DENIED";
+  }
+
+  return "ACTIVE";
+};
+
+const toZonalManagerSummary = (user = {}) => {
+  const zone = getZoneFromValue(user.territory);
+
+  return {
+    id: String(user._id),
+    fullName: user.fullName,
+    email: user.email,
+    zone: ZONES.includes(zone) ? zone : "Unknown",
+    accessStatus: user.accessStatus || "ACTIVE",
+    accountStatus: resolveAccountStatus(user),
+    isActive: Boolean(user.isActive),
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+};
+
+const toStateManagerSummary = (user = {}, metrics = {}) => {
+  const zone = getZoneFromValue(user.territory);
+  const totalAssignedLeads = Number(metrics.totalAssignedLeads || 0);
+  const convertedLeads = Number(metrics.convertedLeads || 0);
+
+  return {
+    id: String(user._id),
+    fullName: user.fullName,
+    email: user.email,
+    zone: ZONES.includes(zone) ? zone : "Unknown",
+    state: user.state || "",
+    phone: user.phone || "",
+    accessStatus: user.accessStatus || "ACTIVE",
+    accountStatus: resolveAccountStatus(user),
+    isActive: Boolean(user.isActive),
+    totalAssignedLeads,
+    convertedLeads,
+    conversionRate: totalAssignedLeads > 0 ? Math.round((convertedLeads / totalAssignedLeads) * 100) : 0,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+};
+
+const buildStateManagerStatusFilter = (status = "") => {
+  const normalizedStatus = String(status || "").trim().toUpperCase();
+
+  if (!normalizedStatus || normalizedStatus === "ALL") {
+    return null;
+  }
+
+  if (normalizedStatus === "ACTIVE") {
+    return {
+      accessStatus: "ACTIVE",
+      isActive: true,
+    };
+  }
+
+  if (normalizedStatus === "PENDING_APPROVAL") {
+    return {
+      accessStatus: "PENDING_INVITE",
+    };
+  }
+
+  if (normalizedStatus === "DENIED") {
+    return {
+      $or: [{ accessStatus: "RESTRICTED" }, { isActive: false }],
+    };
+  }
+
+  throw createHttpError(400, "status must be one of ALL, ACTIVE, PENDING_APPROVAL, DENIED.");
 };
 
 const isValidDate = (value) => {
@@ -1334,6 +1444,310 @@ exports.updateApprovalPolicy = asyncHandler(async (req, res) => {
     success: true,
     message: "Approval policy updated successfully.",
     data: toPolicyResponse(policy),
+  });
+});
+
+// GET /zonal-managers
+exports.getZonalManagers = asyncHandler(async (req, res) => {
+  ensureNationalSalesHead(req);
+
+  const zonalManagers = await CrmUser.find({ role: "ZONAL_MANAGER" })
+    .select("_id fullName email territory accessStatus isActive createdAt updatedAt")
+    .sort({ territory: 1, createdAt: 1 });
+
+  const items = zonalManagers.map(toZonalManagerSummary);
+  const managerByZone = new Map();
+
+  items.forEach((item) => {
+    if (!managerByZone.has(item.zone)) {
+      managerByZone.set(item.zone, item);
+    }
+  });
+
+  const zoneSlots = ZONES.map((zone) => ({
+    zone,
+    occupied: managerByZone.has(zone),
+    manager: managerByZone.get(zone) || null,
+  }));
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalSlots: ZONES.length,
+      usedSlots: items.length,
+      availableSlots: Math.max(0, ZONES.length - items.length),
+      zones: zoneSlots,
+      items,
+    },
+  });
+});
+
+// POST /zonal-managers
+exports.createZonalManager = asyncHandler(async (req, res) => {
+  ensureNationalSalesHead(req);
+
+  const { fullName, email, password, confirmPassword, zone } = req.body;
+  const normalizedZone = normalizeZone(zone);
+
+  if (!fullName || !email || !password || !confirmPassword || !normalizedZone) {
+    throw createHttpError(
+      400,
+      "All fields are required (fullName, email, zone, password, confirmPassword).",
+    );
+  }
+
+  if (password !== confirmPassword) {
+    throw createHttpError(400, "Passwords do not match.");
+  }
+
+  if (String(password).length < 8) {
+    throw createHttpError(400, "Password must be at least 8 characters.");
+  }
+
+  const normalizedFullName = normalizeFullName(fullName);
+  const normalizedEmail = normalizeEmail(email);
+
+  const [existingUserByEmail, existingManagerForZone, zonalManagerCount] = await Promise.all([
+    CrmUser.findOne({ email: normalizedEmail }).select("_id"),
+    CrmUser.findOne({
+      role: "ZONAL_MANAGER",
+      ...buildZoneTerritoryQuery(normalizedZone),
+    }).select("_id"),
+    CrmUser.countDocuments({ role: "ZONAL_MANAGER" }),
+  ]);
+
+  if (existingUserByEmail) {
+    throw createHttpError(409, "User with this email already exists.");
+  }
+
+  if (existingManagerForZone) {
+    throw createHttpError(
+      409,
+      `${normalizedZone} Zone already has a Zonal Manager. Delete that account before creating a new one.`,
+    );
+  }
+
+  if (zonalManagerCount >= ZONES.length) {
+    throw createHttpError(
+      409,
+      "All 4 zonal manager slots are occupied. Delete one zonal manager to create a new account.",
+    );
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const createdManager = await CrmUser.create({
+    fullName: normalizedFullName,
+    email: normalizedEmail,
+    password: hashedPassword,
+    role: "ZONAL_MANAGER",
+    territory: normalizedZone,
+    accessStatus: "ACTIVE",
+    isActive: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: `${normalizedZone} Zone Manager created successfully.`,
+    data: toZonalManagerSummary(createdManager),
+  });
+});
+
+// DELETE /zonal-managers/:id
+exports.deleteZonalManager = asyncHandler(async (req, res) => {
+  ensureNationalSalesHead(req);
+
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    throw createHttpError(400, "Invalid zonal manager id.");
+  }
+
+  const manager = await CrmUser.findOne({
+    _id: id,
+    role: "ZONAL_MANAGER",
+  }).select("_id fullName email territory accessStatus isActive createdAt updatedAt");
+
+  if (!manager) {
+    throw createHttpError(404, "Zonal Manager not found.");
+  }
+
+  await CrmUser.deleteOne({ _id: manager._id });
+
+  res.status(200).json({
+    success: true,
+    message: "Zonal Manager deleted successfully.",
+    data: {
+      id: String(manager._id),
+      fullName: manager.fullName,
+      email: manager.email,
+      zone: getZoneFromValue(manager.territory),
+    },
+  });
+});
+
+// GET /state-managers/overview
+exports.getStateManagersOverview = asyncHandler(async (req, res) => {
+  ensureNationalSalesHead(req);
+
+  const zone = normalizeZone(req.query.zone);
+  const stateFilter = String(req.query.state || "").trim();
+  const search = String(req.query.search || "").trim();
+  const statusFilter = buildStateManagerStatusFilter(req.query.status);
+  const { page, limit, skip } = resolvePagination(req.query.page, req.query.limit);
+
+  const conditions = [{ role: "STATE_MANAGER" }];
+
+  if (zone) {
+    conditions.push(buildZoneTerritoryQuery(zone));
+  }
+
+  if (stateFilter) {
+    conditions.push({
+      state: {
+        $regex: `^${escapeRegExp(stateFilter)}$`,
+        $options: "i",
+      },
+    });
+  }
+
+  if (search) {
+    const regex = { $regex: escapeRegExp(search), $options: "i" };
+    conditions.push({
+      $or: [{ fullName: regex }, { email: regex }, { state: regex }, { territory: regex }],
+    });
+  }
+
+  if (statusFilter) {
+    conditions.push(statusFilter);
+  }
+
+  const query = conditions.length === 1 ? conditions[0] : { $and: conditions };
+
+  const [items, total, allManagers] = await Promise.all([
+    CrmUser.find(query)
+      .select("_id fullName email territory state phone accessStatus isActive createdAt updatedAt")
+      .sort({ territory: 1, state: 1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    CrmUser.countDocuments(query),
+    CrmUser.find({ role: "STATE_MANAGER" }).select("_id territory accessStatus isActive"),
+  ]);
+
+  const itemIds = items.map((item) => item._id);
+  const allManagerIds = allManagers.map((item) => item._id);
+
+  const [itemLeadMetrics, overallLeadMetrics] = await Promise.all([
+    itemIds.length
+      ? Lead.aggregate([
+          {
+            $match: {
+              assignedTo: { $in: itemIds },
+            },
+          },
+          {
+            $group: {
+              _id: "$assignedTo",
+              totalAssignedLeads: { $sum: 1 },
+              convertedLeads: {
+                $sum: {
+                  $cond: [{ $eq: ["$status", "CONVERTED"] }, 1, 0],
+                },
+              },
+            },
+          },
+        ])
+      : Promise.resolve([]),
+    allManagerIds.length
+      ? Lead.aggregate([
+          {
+            $match: {
+              assignedTo: { $in: allManagerIds },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalAssignedLeads: { $sum: 1 },
+              convertedLeads: {
+                $sum: {
+                  $cond: [{ $eq: ["$status", "CONVERTED"] }, 1, 0],
+                },
+              },
+            },
+          },
+        ])
+      : Promise.resolve([]),
+  ]);
+
+  const leadMetricMap = new Map(itemLeadMetrics.map((item) => [String(item._id), item]));
+  const totalAssignedLeads = Number(overallLeadMetrics[0]?.totalAssignedLeads || 0);
+  const totalConvertedLeads = Number(overallLeadMetrics[0]?.convertedLeads || 0);
+
+  const baseZoneSummary = new Map(
+    ZONES.map((zoneName) => [
+      zoneName,
+      {
+        zone: zoneName,
+        totalStateManagers: 0,
+        activeStateManagers: 0,
+        pendingApprovals: 0,
+        deniedStateManagers: 0,
+      },
+    ]),
+  );
+
+  let activeStateManagers = 0;
+  let pendingApprovals = 0;
+  let deniedStateManagers = 0;
+
+  allManagers.forEach((manager) => {
+    const accountStatus = resolveAccountStatus(manager);
+    const zoneName = getZoneFromValue(manager.territory);
+
+    if (accountStatus === "ACTIVE") {
+      activeStateManagers += 1;
+    } else if (accountStatus === "PENDING_APPROVAL") {
+      pendingApprovals += 1;
+    } else {
+      deniedStateManagers += 1;
+    }
+
+    if (!baseZoneSummary.has(zoneName)) {
+      return;
+    }
+
+    const zoneEntry = baseZoneSummary.get(zoneName);
+    zoneEntry.totalStateManagers += 1;
+    if (accountStatus === "ACTIVE") {
+      zoneEntry.activeStateManagers += 1;
+    } else if (accountStatus === "PENDING_APPROVAL") {
+      zoneEntry.pendingApprovals += 1;
+    } else {
+      zoneEntry.deniedStateManagers += 1;
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      summary: {
+        totalStateManagers: allManagers.length,
+        activeStateManagers,
+        pendingApprovals,
+        deniedStateManagers,
+        totalAssignedLeads,
+        totalConvertedLeads,
+        conversionRate:
+          totalAssignedLeads > 0 ? Math.round((totalConvertedLeads / totalAssignedLeads) * 100) : 0,
+      },
+      zoneSummary: Array.from(baseZoneSummary.values()),
+      items: items.map((item) => toStateManagerSummary(item, leadMetricMap.get(String(item._id)) || {})),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 0,
+      },
+    },
   });
 });
 
