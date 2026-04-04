@@ -15,7 +15,7 @@ const ZoneReportTemplate = React.forwardRef(({ zoneData }, ref) => {
   });
 
   return (
-    <div 
+    <div
       ref={ref}
       style={{
         width: "800px",

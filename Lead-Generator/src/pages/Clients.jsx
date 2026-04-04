@@ -266,10 +266,12 @@ export default function Clients() {
                     <td>
                       <div className="client-role-cell">
                         <span>{client.roleTitle || "Role via JD upload"}</span>
-                        <small>
-                          <LuFileText />
-                          {Number(client.jdAttachmentCount || 0)} JD file(s)
-                        </small>
+                        {Number(client.jdAttachmentCount || 0) > 0 ? (
+                          <small>
+                            <LuFileText />
+                            {Number(client.jdAttachmentCount || 0)} JD file(s)
+                          </small>
+                        ) : null}
                       </div>
                     </td>
                     <td>

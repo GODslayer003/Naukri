@@ -398,7 +398,7 @@ exports.register = asyncHandler(async (req, res) => {
   if (!req.file) {
     throw createHttpError(400, "CV upload is mandatory.");
   }
-
+ 
   const normalizedEmail = String(email).trim().toLowerCase();
   const existingUser = await User.findOne({ email: normalizedEmail });
 
