@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   LuBell,
+  LuBuilding2,
   LuCircleUserRound,
   LuLayoutDashboard,
   LuList,
@@ -13,6 +14,7 @@ import logo from "./assets/maven-logo.svg";
 import Dashboard from "./pages/Dashboard";
 import AddLead from "./pages/AddLead";
 import MyLeads from "./pages/MyLeads";
+import Clients from "./pages/Clients";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 
@@ -99,6 +101,14 @@ export default function App() {
                   </NavLink>
 
                   <NavLink
+                    to="/clients"
+                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
+                  >
+                    <LuBuilding2 />
+                    Clients
+                  </NavLink>
+
+                  <NavLink
                     to="/profile"
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
@@ -166,6 +176,7 @@ export default function App() {
                   <Route index element={<Dashboard />} />
                   <Route path="/add-lead" element={<AddLead />} />
                   <Route path="/my-leads" element={<MyLeads />} />
+                  <Route path="/clients" element={<Clients />} />
                   <Route path="/profile" element={<Profile />} />
                 </Routes>
               </main>

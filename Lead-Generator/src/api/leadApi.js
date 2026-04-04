@@ -103,6 +103,28 @@ export async function fetchLeads(params = {}) {
   return data.data;
 }
 
+export async function fetchClientIntakes(params = {}) {
+  const normalizedParams = {
+    page: Math.max(1, Number(params.page) || 1),
+    limit: Math.min(50, Math.max(1, Number(params.limit) || 10)),
+  };
+
+  if (params.search?.trim()) {
+    normalizedParams.search = params.search.trim();
+  }
+
+  if (params.status?.trim()) {
+    normalizedParams.status = params.status.trim();
+  }
+
+  if (params.submissionMode?.trim()) {
+    normalizedParams.submissionMode = params.submissionMode.trim();
+  }
+
+  const { data } = await http.get("/clients", { params: normalizedParams });
+  return data.data;
+}
+
 export async function createLead(payload) {
   const { data } = await http.post("/leads", payload);
   return data.data;

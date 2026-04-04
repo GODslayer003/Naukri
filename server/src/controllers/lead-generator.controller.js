@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const CrmUser = require("../models/CrmUser");
 const Lead = require("../models/Lead");
+const ClientIntake = require("../models/ClientIntake");
 const {
   CANONICAL_ZONES,
   normalizeZoneInput,
@@ -19,6 +20,7 @@ const {
   LEAD_PRIORITIES,
 } = require("../constants/lead-generator.constants");
 const { replaceCrmProfileImage } = require("../services/profile-image-storage.service");
+const { uploadClientJdFile } = require("../services/client-intake-storage.service");
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -29,6 +31,17 @@ const createHttpError = (statusCode, message) => {
 const FULL_NAME_MIN_LENGTH = 2;
 const FULL_NAME_MAX_LENGTH = 80;
 const FULL_NAME_PATTERN = /^[A-Za-z][A-Za-z .'-]*$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEFAULT_CLIENT_PAGE_LIMIT = 10;
+const MAX_CLIENT_PAGE_LIMIT = 50;
+const CLIENT_INTAKE_STATUSES = ["NEW", "IN_REVIEW", "CONTACTED", "CLOSED"];
+const CLIENT_SUBMISSION_MODES = ["MANUAL", "UPLOAD_JD", "BOTH"];
+const MAX_CLIENT_JD_FILES = 5;
+const COMPANY_NAME_MIN_LENGTH = 2;
+const COMPANY_NAME_MAX_LENGTH = 120;
+const ROLE_TITLE_MAX_LENGTH = 120;
+const ROLE_DESCRIPTION_MAX_LENGTH = 2000;
+const BUDGET_MAX_LENGTH = 120;
 
 const generateToken = (id) =>
   jwt.sign({ id, type: "CRM_PANEL" }, process.env.JWT_SECRET, {
@@ -113,6 +126,98 @@ const buildDateFilter = (date = "") => {
 
   return null;
 };
+
+const normalizeClientEmail = (value = "") => {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (!normalized || !EMAIL_PATTERN.test(normalized)) {
+    throw createHttpError(400, "Enter a valid email address.");
+  }
+
+  return normalized;
+};
+
+const normalizeClientTextField = (
+  value = "",
+  { label, min = 0, max = 0, required = false, collapse = true } = {},
+) => {
+  const normalizedRaw = String(value || "").trim();
+  const normalized = collapse ? normalizedRaw.replace(/\s+/g, " ") : normalizedRaw;
+
+  if (!normalized) {
+    if (required) {
+      throw createHttpError(400, `${label} is required.`);
+    }
+    return "";
+  }
+
+  if (min && normalized.length < min) {
+    throw createHttpError(400, `${label} must be at least ${min} characters.`);
+  }
+
+  if (max && normalized.length > max) {
+    throw createHttpError(400, `${label} must be ${max} characters or fewer.`);
+  }
+
+  return normalized;
+};
+
+const normalizeClientPhone = (value = "") => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+91${digits.slice(2)}`;
+  }
+
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+
+  throw createHttpError(400, "Phone number must contain exactly 10 digits.");
+};
+
+const normalizeClientPageOptions = (page = 1, limit = DEFAULT_CLIENT_PAGE_LIMIT) => {
+  const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
+  const requestedLimit = Number.parseInt(limit, 10) || DEFAULT_CLIENT_PAGE_LIMIT;
+  const safeLimit = Math.min(MAX_CLIENT_PAGE_LIMIT, Math.max(1, requestedLimit));
+
+  return {
+    page: safePage,
+    limit: safeLimit,
+    skip: (safePage - 1) * safeLimit,
+  };
+};
+
+const buildClientReferenceId = () => {
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `CLI-${stamp}-${suffix}`;
+};
+
+const formatClientIntake = (intake = {}) => ({
+  id: String(intake._id || ""),
+  referenceId: intake.referenceId || "",
+  companyName: intake.companyName || "",
+  email: intake.email || "",
+  phone: intake.phone || "",
+  roleTitle: intake.roleTitle || "",
+  roleDescription: intake.roleDescription || "",
+  budget: intake.budget || "",
+  submissionMode: intake.submissionMode || "MANUAL",
+  status: intake.status || "NEW",
+  jdAttachmentCount: Array.isArray(intake.jdAttachments) ? intake.jdAttachments.length : 0,
+  jdAttachments: Array.isArray(intake.jdAttachments)
+    ? intake.jdAttachments.map((item) => ({
+        fileName: item.fileName || "",
+        url: item.url || "",
+        mimeType: item.mimeType || "",
+        sizeBytes: Number(item.sizeBytes || 0),
+        uploadedAt: item.uploadedAt || null,
+      }))
+    : [],
+  qrToken: intake.qrToken || "",
+  createdAt: intake.createdAt || null,
+  updatedAt: intake.updatedAt || null,
+});
 
 const getAvailableZonesForFilter = async (baseFilter, user) => {
   const creatorIds = await Lead.distinct("createdBy", baseFilter);
@@ -469,6 +574,142 @@ const ensureLeadPayload = (payload = {}) => {
     }
   });
 };
+
+exports.submitClientIntake = asyncHandler(async (req, res) => {
+  const requestBody = req.body && typeof req.body === "object" ? req.body : {};
+  const {
+    companyName = "",
+    email = "",
+    phone = "",
+    roleTitle = "",
+    roleDescription = "",
+    budget = "",
+    qrToken = "",
+  } = requestBody;
+
+  const normalizedCompanyName = normalizeClientTextField(companyName, {
+    label: "Company name",
+    min: COMPANY_NAME_MIN_LENGTH,
+    max: COMPANY_NAME_MAX_LENGTH,
+    required: true,
+  });
+  const normalizedEmail = normalizeClientEmail(email);
+  const normalizedPhone = normalizeClientPhone(phone);
+  const normalizedRoleTitle = normalizeClientTextField(roleTitle, {
+    label: "Role title",
+    max: ROLE_TITLE_MAX_LENGTH,
+  });
+  const normalizedRoleDescription = normalizeClientTextField(roleDescription, {
+    label: "Role description",
+    max: ROLE_DESCRIPTION_MAX_LENGTH,
+    collapse: false,
+  });
+  const normalizedBudget = normalizeClientTextField(budget, {
+    label: "Budget",
+    max: BUDGET_MAX_LENGTH,
+  });
+  const normalizedQrToken = String(qrToken || "").trim();
+  const files = Array.isArray(req.files) ? req.files.filter(Boolean) : [];
+
+  if (files.length > MAX_CLIENT_JD_FILES) {
+    throw createHttpError(400, `You can upload up to ${MAX_CLIENT_JD_FILES} JD files.`);
+  }
+
+  if (!normalizedRoleTitle && !files.length) {
+    throw createHttpError(400, "Provide either a role title (manual entry) or upload at least one JD file.");
+  }
+
+  const referenceId = buildClientReferenceId();
+  const uploadedAttachments = files.length
+    ? await Promise.all(files.map((file) => uploadClientJdFile(file, referenceId)))
+    : [];
+
+  const submissionMode =
+    normalizedRoleTitle && uploadedAttachments.length
+      ? "BOTH"
+      : normalizedRoleTitle
+        ? "MANUAL"
+        : "UPLOAD_JD";
+
+  const createdIntake = await ClientIntake.create({
+    referenceId,
+    companyName: normalizedCompanyName,
+    email: normalizedEmail,
+    phone: normalizedPhone,
+    roleTitle: normalizedRoleTitle,
+    roleDescription: normalizedRoleDescription,
+    budget: normalizedBudget,
+    jdAttachments: uploadedAttachments,
+    submissionMode,
+    qrToken: normalizedQrToken,
+    sourcePath: String(req.originalUrl || "").trim(),
+    sourceIp: String(req.ip || "").trim(),
+    sourceUserAgent: String(req.get("user-agent") || "").trim(),
+    status: "NEW",
+  });
+
+  res.status(201).json({
+    success: true,
+    referenceId: createdIntake.referenceId,
+    message: "Client role posting submitted successfully.",
+    data: formatClientIntake(createdIntake),
+  });
+});
+
+exports.getClientIntakes = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = normalizeClientPageOptions(req.query.page, req.query.limit);
+  const search = String(req.query.search || "").trim();
+  const status = String(req.query.status || "").trim().toUpperCase();
+  const submissionMode = String(req.query.submissionMode || "").trim().toUpperCase();
+
+  const query = {};
+
+  if (search) {
+    const safeRegex = { $regex: escapeRegExp(search), $options: "i" };
+    query.$or = [
+      { referenceId: safeRegex },
+      { companyName: safeRegex },
+      { email: safeRegex },
+      { phone: { $regex: escapeRegExp(search) } },
+      { roleTitle: safeRegex },
+    ];
+  }
+
+  if (status) {
+    if (!CLIENT_INTAKE_STATUSES.includes(status)) {
+      throw createHttpError(400, `Invalid status filter. Allowed: ${CLIENT_INTAKE_STATUSES.join(", ")}`);
+    }
+    query.status = status;
+  }
+
+  if (submissionMode) {
+    if (!CLIENT_SUBMISSION_MODES.includes(submissionMode)) {
+      throw createHttpError(
+        400,
+        `Invalid submissionMode filter. Allowed: ${CLIENT_SUBMISSION_MODES.join(", ")}`,
+      );
+    }
+    query.submissionMode = submissionMode;
+  }
+
+  const [items, total] = await Promise.all([
+    ClientIntake.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    ClientIntake.countDocuments(query),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      items: items.map(formatClientIntake),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    },
+  });
+});
 
 exports.getLeadGeneratorMeta = asyncHandler(async (req, res) => {
   res.status(200).json({

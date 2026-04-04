@@ -1,12 +1,21 @@
 const express = require("express");
+const multer = require("multer");
 const controller = require("../controllers/lead-generator.controller");
 const { protectCRM } = require("../middleware/auth.middleware");
 const role = require("../middleware/role.middleware");
 const uploadProfilePhoto = require("../middleware/profile-image-upload.middleware");
 
 const router = express.Router();
+const uploadClientJd = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 8 * 1024 * 1024,
+    files: 5,
+  },
+});
 
 router.post("/auth/login", controller.login);
+router.post("/client-intakes", uploadClientJd.array("jdFiles", 5), controller.submitClientIntake);
 
 router.use(protectCRM);
 router.use(role("LEAD_GENERATOR", "STATE_MANAGER", "APPROVER", "ADMIN"));
@@ -14,6 +23,7 @@ router.use(role("LEAD_GENERATOR", "STATE_MANAGER", "APPROVER", "ADMIN"));
 router.get("/meta", controller.getLeadGeneratorMeta);
 router.get("/dashboard", controller.getLeadGeneratorDashboard);
 router.get("/leads", controller.getLeads);
+router.get("/clients", controller.getClientIntakes);
 router.post("/leads", controller.createLead);
 router.patch("/leads/:id/status", controller.updateLeadStatus);
 router.post("/leads/:id/activity", controller.logLeadActivity);
