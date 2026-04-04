@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import ActionConfirmModal from "../components/ActionConfirmModal";
 import {
   deleteManagedMember,
+  createManagedMember,
   fetchManagedMemberDetail,
   fetchManagedMembers,
 } from "../api/leadApi";
@@ -24,6 +25,13 @@ const ROLE_TABS = [
   { key: "LEAD_GENERATOR", label: "Lead Generators" },
   { key: "FSE", label: "FSEs" },
 ];
+const EMPTY_CREATE_FORM = {
+  fullName: "",
+  email: "",
+  phone: "",
+  password: "",
+  confirmPassword: "",
+};
 
 const formatDateTime = (value) => {
   if (!value) {
@@ -72,6 +80,10 @@ export default function TeamManagement() {
 
   const [memberToDelete, setMemberToDelete] = useState(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const currentPage = pageByRole[activeRole] || 1;
 
@@ -194,6 +206,44 @@ export default function TeamManagement() {
     }
   };
 
+  const handleCreateMember = async (event) => {
+    event.preventDefault();
+
+    const payload = {
+      role: activeRole,
+      fullName: createForm.fullName.trim(),
+      email: createForm.email.trim(),
+      phone: createForm.phone.trim(),
+      password: createForm.password,
+      confirmPassword: createForm.confirmPassword,
+    };
+
+    if (!payload.fullName || !payload.email || !payload.password || !payload.confirmPassword) {
+      setCreateError("Full name, email, password and confirm password are required.");
+      return;
+    }
+
+    if (payload.password !== payload.confirmPassword) {
+      setCreateError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setCreateSubmitting(true);
+      setCreateError("");
+      await createManagedMember(payload);
+      toast.success(`${activeRole === "FSE" ? "FSE" : "Lead Generator"} account created successfully.`);
+      setCreateForm(EMPTY_CREATE_FORM);
+      setIsCreateModalOpen(false);
+      setPageByRole((prev) => ({ ...prev, [activeRole]: 1 }));
+      setRefreshKey((prev) => prev + 1);
+    } catch (requestError) {
+      setCreateError(requestError?.response?.data?.message || "Unable to create team member.");
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
+
   return (
     <div className="page-section my-leads-page">
       <section className="my-leads-heading">
@@ -215,19 +265,140 @@ export default function TeamManagement() {
           ))}
         </div>
 
-        <div className="my-leads-search" style={{ maxWidth: "420px" }}>
-          <LuSearch />
-          <input
-            type="text"
-            placeholder={`Search ${title.toLowerCase()}...`}
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              handlePageChange(1);
+        <div style={{ display: "flex", gap: "12px", alignItems: "center", width: "100%", justifyContent: "flex-end" }}>
+          <div className="my-leads-search" style={{ maxWidth: "420px" }}>
+            <LuSearch />
+            <input
+              type="text"
+              placeholder={`Search ${title.toLowerCase()}...`}
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                handlePageChange(1);
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={() => {
+              setCreateError("");
+              setCreateForm(EMPTY_CREATE_FORM);
+              setIsCreateModalOpen(true);
             }}
-          />
+          >
+            Create {activeRole === "FSE" ? "FSE" : "Lead Generator"}
+          </button>
         </div>
       </section>
+
+      {isCreateModalOpen ? (
+        <div className="modal-overlay" onClick={() => !createSubmitting && setIsCreateModalOpen(false)}>
+          <section
+            className="modal-content"
+            style={{ maxWidth: "560px" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Create ${activeRole === "FSE" ? "FSE" : "Lead Generator"}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="modal-header">
+              <div className="header-info">
+                <h2>Create {activeRole === "FSE" ? "FSE" : "Lead Generator"}</h2>
+                <p>This account will be created in your assigned state and zone.</p>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => !createSubmitting && setIsCreateModalOpen(false)}
+              >
+                &times;
+              </button>
+            </header>
+
+            <form className="modal-body" onSubmit={handleCreateMember}>
+              <div style={{ display: "grid", gap: "12px" }}>
+                <div>
+                  <label className="form-label" htmlFor="managed-member-full-name">Full Name</label>
+                  <input
+                    id="managed-member-full-name"
+                    className="form-input"
+                    type="text"
+                    value={createForm.fullName}
+                    onChange={(event) => setCreateForm((current) => ({ ...current, fullName: event.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="managed-member-email">Email</label>
+                  <input
+                    id="managed-member-email"
+                    className="form-input"
+                    type="email"
+                    value={createForm.email}
+                    onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="managed-member-phone">Phone (Optional)</label>
+                  <input
+                    id="managed-member-phone"
+                    className="form-input"
+                    type="text"
+                    value={createForm.phone}
+                    onChange={(event) => setCreateForm((current) => ({ ...current, phone: event.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="managed-member-password">Password</label>
+                  <input
+                    id="managed-member-password"
+                    className="form-input"
+                    type="password"
+                    value={createForm.password}
+                    onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
+                    minLength={8}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="managed-member-confirm-password">Confirm Password</label>
+                  <input
+                    id="managed-member-confirm-password"
+                    className="form-input"
+                    type="password"
+                    value={createForm.confirmPassword}
+                    onChange={(event) => setCreateForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                    minLength={8}
+                    required
+                  />
+                </div>
+              </div>
+
+              {createError ? (
+                <p style={{ marginTop: "12px", color: "#dc2626", fontSize: "0.875rem", fontWeight: 500 }}>
+                  {createError}
+                </p>
+              ) : null}
+
+              <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  disabled={createSubmitting}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="primary-btn" disabled={createSubmitting}>
+                  {createSubmitting ? "Creating..." : "Create Account"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
 
       <section className="my-leads-table-card">
         <div className="table-wrap">

@@ -18,6 +18,7 @@ const { replaceCrmProfileImage } = require("../services/profile-image-storage.se
 const FULL_NAME_MIN_LENGTH = 2;
 const FULL_NAME_MAX_LENGTH = 80;
 const FULL_NAME_PATTERN = /^[A-Za-z][A-Za-z .'-]*$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -140,6 +141,25 @@ const normalizeFullName = (value = "") => {
 
   return normalized;
 };
+
+const normalizeEmail = (value = "") => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) {
+    throw createHttpError(400, "Email is required.");
+  }
+
+  if (!EMAIL_PATTERN.test(normalized)) {
+    throw createHttpError(400, "Enter a valid email address.");
+  }
+
+  return normalized;
+};
+
+const normalizePhone = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 20);
 
 exports.getSignupMeta = asyncHandler(async (req, res) => {
   const requestedZone = normalizeZoneInput(req.query.zone);
@@ -582,6 +602,91 @@ exports.getFSEs = asyncHandler(async (req, res) => {
       activeLeads: activeLeadMap.get(String(fse._id)) || 0,
       profileImage: fse.profileImageUrl || "",
     })),
+  });
+});
+
+exports.createManagedMember = asyncHandler(async (req, res) => {
+  if (!req.user || req.user.role !== "STATE_MANAGER") {
+    throw createHttpError(403, "Only State Managers can create team members.");
+  }
+
+  const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
+
+  if (!managerZone || !managerState) {
+    throw createHttpError(403, "State Manager zone/state is not configured.");
+  }
+
+  const { fullName, email, phone, password, confirmPassword } = req.body;
+  const role = String(req.body.role || "").trim().toUpperCase();
+  const requestedZone = normalizeZoneInput(req.body.zone);
+  const requestedState = normalizeIndianStateInput(req.body.state);
+
+  if (!MANAGED_MEMBER_ROLES.includes(role)) {
+    throw createHttpError(400, `role must be one of: ${MANAGED_MEMBER_ROLES.join(", ")}`);
+  }
+
+  if (!fullName || !email || !password || !confirmPassword) {
+    throw createHttpError(
+      400,
+      "All required fields must be provided (fullName, email, password, confirmPassword, role).",
+    );
+  }
+
+  if (password !== confirmPassword) {
+    throw createHttpError(400, "Passwords do not match.");
+  }
+
+  if (String(password).length < 8) {
+    throw createHttpError(400, "Password must be at least 8 characters.");
+  }
+
+  if (requestedZone && requestedZone !== managerZone) {
+    throw createHttpError(403, "You can only create team members in your assigned zone.");
+  }
+
+  if (requestedState && requestedState !== managerState) {
+    throw createHttpError(403, "You can only create team members in your assigned state.");
+  }
+
+  const normalizedFullName = normalizeFullName(fullName);
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPhone = normalizePhone(phone);
+
+  const existingUser = await CrmUser.findOne({ email: normalizedEmail }).select("_id");
+  if (existingUser) {
+    throw createHttpError(409, "User with this email already exists.");
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const createdMember = await CrmUser.create({
+    fullName: normalizedFullName,
+    email: normalizedEmail,
+    phone: normalizedPhone,
+    password: hashedPassword,
+    role,
+    territory: managerZone,
+    state: managerState,
+    accessStatus: "ACTIVE",
+    isActive: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: `${role === "FSE" ? "FSE" : "Lead Generator"} account created successfully.`,
+    data: {
+      id: String(createdMember._id),
+      fullName: createdMember.fullName,
+      email: createdMember.email,
+      role: createdMember.role,
+      zone: getUserZone(createdMember),
+      state: createdMember.state || "",
+      phone: createdMember.phone || "",
+      accessStatus: createdMember.accessStatus,
+      isActive: Boolean(createdMember.isActive),
+      createdAt: createdMember.createdAt,
+      updatedAt: createdMember.updatedAt,
+    },
   });
 });
 

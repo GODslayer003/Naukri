@@ -6,11 +6,10 @@ const uploadProfilePhoto = require("../middleware/profile-image-upload.middlewar
 
 const router = express.Router();
 
-router.post("/auth/signup", controller.signup);
 router.post("/auth/login", controller.login);
 
 router.use(protectCRM);
-router.use(role("ZONAL_MANAGER", "ADMIN"));
+router.use(role("ZONAL_MANAGER"));
 
 router.patch("/auth/change-password", controller.changePassword);
 router.get("/dashboard", controller.getDashboard);

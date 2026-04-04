@@ -15,7 +15,6 @@ import AddLead from "./pages/AddLead";
 import ValidationQueue from "./pages/ValidationQueue";
 import TeamManagement from "./pages/TeamManagement";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
 
 const SESSION_KEY = "crm_panel_session";
@@ -64,7 +63,6 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
       <Route
         path="/*"
         element={

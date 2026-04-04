@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import { toast } from "sonner";
 import logo from "../assets/maven-logo.svg";
@@ -180,10 +180,7 @@ export default function Login() {
               {isSubmitting ? "Signing in..." : "Sign in"}
             </button>
             <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.875rem", color: "#475569", fontWeight: "500" }}>
-              New?{" "}
-              <Link to="/signup" style={{ color: "#1e40af", textDecoration: "none", fontWeight: "600" }}>
-                Sign Up
-              </Link>
+              Zonal Manager accounts are created by National Sales Head.
             </div>
           </form>
         </div>

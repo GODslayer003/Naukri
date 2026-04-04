@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import logo from "./assets/maven-logo.svg";
 
 const MAX_RESUME_SIZE = 8 * 1024 * 1024;
 const PHONE_DIGITS_MIN = 10;
-const PHONE_DIGITS_MAX = 15;
 
 const normalizeApiV1BaseUrl = (value = "") => {
   const rawValue = String(value || "").trim();
@@ -45,17 +44,16 @@ const parseResponseSafely = async (response) => {
 
 const isValidPhoneNumber = (value = "") => {
   const digits = String(value).replace(/\D/g, "");
-  return digits.length >= PHONE_DIGITS_MIN && digits.length <= PHONE_DIGITS_MAX;
+  return digits.length === PHONE_DIGITS_MIN;
 };
 
-const isPdfFile = (file) => {
-  if (!file) {
-    return true;
+const toIndianPhoneDigits = (value = "") => {
+  const digitsOnly = String(value || "").replace(/\D/g, "");
+  if (digitsOnly.startsWith("91") && digitsOnly.length > 10) {
+    return digitsOnly.slice(2, 12);
   }
 
-  const mimeMatches = file.type === "application/pdf";
-  const nameMatches = String(file.name || "").toLowerCase().endsWith(".pdf");
-  return mimeMatches || nameMatches;
+  return digitsOnly.slice(0, 10);
 };
 
 const resolveQrTokenFromLocation = () => {
@@ -82,14 +80,14 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
   const [candidateName, setCandidateName] = useState("");
+  const [referenceId, setReferenceId] = useState("");
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
-    designation: "",
+    preferredPosition: "",
     email: "",
     phone: "",
-    password: "",
-    confirmPassword: "",
   });
   const [resumeFile, setResumeFile] = useState(null);
 
@@ -104,14 +102,14 @@ export default function App() {
   const resetCandidateFlow = () => {
     setForm({
       name: "",
-      designation: "",
+      preferredPosition: "",
       email: "",
       phone: "",
-      password: "",
-      confirmPassword: "",
     });
     setResumeFile(null);
     setCandidateName("");
+    setReferenceId("");
+    setShowDownloadModal(false);
     setFeedback({ type: "", message: "" });
     setView("role");
   };
@@ -119,33 +117,23 @@ export default function App() {
   const validateCandidateForm = () => {
     if (
       !form.name.trim() ||
-      !form.designation.trim() ||
+      !form.preferredPosition.trim() ||
       !form.email.trim() ||
-      !form.phone.trim() ||
-      !form.password.trim() ||
-      !form.confirmPassword.trim()
+      !form.phone.trim()
     ) {
-      return "All fields are mandatory except resume.";
-    }
-
-    if (form.password !== form.confirmPassword) {
-      return "Password and confirm password must match.";
+      return "All fields are mandatory.";
     }
 
     if (!isValidPhoneNumber(form.phone)) {
-      return `Phone number must contain ${PHONE_DIGITS_MIN} to ${PHONE_DIGITS_MAX} digits.`;
+      return "Phone number must contain exactly 10 digits.";
     }
 
-    if (form.password.length < 8) {
-      return "Password must be at least 8 characters long.";
+    if (!resumeFile) {
+      return "CV upload is mandatory.";
     }
 
-    if (resumeFile && !isPdfFile(resumeFile)) {
-      return "Resume must be a PDF file.";
-    }
-
-    if (resumeFile && resumeFile.size > MAX_RESUME_SIZE) {
-      return "Resume size must be 8MB or less.";
+    if (resumeFile.size > MAX_RESUME_SIZE) {
+      return "CV size must be 8MB or less.";
     }
 
     return "";
@@ -163,16 +151,13 @@ export default function App() {
 
     const payload = new FormData();
     payload.append("name", form.name.trim());
-    payload.append("designation", form.designation.trim());
-    payload.append("phone", form.phone.trim());
+    payload.append("designation", form.preferredPosition.trim());
+    payload.append("phone", `+91${toIndianPhoneDigits(form.phone)}`);
     payload.append("email", form.email.trim());
-    payload.append("password", form.password);
     if (qrToken) {
       payload.append("qrToken", qrToken);
     }
-    if (resumeFile) {
-      payload.append("resume", resumeFile);
-    }
+    payload.append("resume", resumeFile);
 
     setIsSubmitting(true);
 
@@ -188,7 +173,9 @@ export default function App() {
       }
 
       setCandidateName(form.name.trim());
+      setReferenceId(String(parsed.referenceId || "").trim());
       setView("thanks");
+      setShowDownloadModal(true);
     } catch (error) {
       setFeedback({
         type: "error",
@@ -198,6 +185,21 @@ export default function App() {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!showDownloadModal) {
+      return undefined;
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setShowDownloadModal(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showDownloadModal]);
 
   return (
     <main className="landing-shell">
@@ -247,7 +249,7 @@ export default function App() {
           <>
             <h1 className="headline">Candidate Registration</h1>
             <p className="sub-copy">
-              Resume is optional. All other fields are mandatory.
+              Step 1: Personal details. Step 2: Upload CV (mandatory).
             </p>
 
             {feedback.message ? (
@@ -257,56 +259,59 @@ export default function App() {
             ) : null}
 
             <form className="candidate-form" onSubmit={submitCandidate} noValidate>
-              <label>
-                Full Name <span>*</span>
+              <label className="form-field">
+                <span className="field-label">
+                  Full Name <span className="required-asterisk">*</span>
+                </span>
                 <input type="text" value={form.name} onChange={updateField("name")} placeholder="Your full name" />
               </label>
 
-              <label>
-                Designation <span>*</span>
+              <label className="form-field">
+                <span className="field-label">
+                  Preferred Position <span className="required-asterisk">*</span>
+                </span>
                 <input
                   type="text"
-                  value={form.designation}
-                  onChange={updateField("designation")}
+                  value={form.preferredPosition}
+                  onChange={updateField("preferredPosition")}
                   placeholder="e.g. Software Engineer"
                 />
               </label>
 
-              <label>
-                Email <span>*</span>
+              <label className="form-field">
+                <span className="field-label">
+                  Email <span className="required-asterisk">*</span>
+                </span>
                 <input type="email" value={form.email} onChange={updateField("email")} placeholder="you@example.com" />
               </label>
 
-              <label>
-                Phone Number <span>*</span>
-                <input type="tel" value={form.phone} onChange={updateField("phone")} placeholder="+91 98765 43210" />
+              <label className="form-field">
+                <span className="field-label">
+                  Phone Number <span className="required-asterisk">*</span>
+                </span>
+                <div className="phone-input-row">
+                  <span className="country-code-pill">+91</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]{10}"
+                    maxLength={10}
+                    value={form.phone}
+                    onChange={(event) =>
+                      setForm((prev) => ({ ...prev, phone: toIndianPhoneDigits(event.target.value) }))
+                    }
+                    placeholder="9876543210"
+                  />
+                </div>
               </label>
 
-              <label>
-                Password <span>*</span>
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={updateField("password")}
-                  placeholder="Minimum 8 characters"
-                />
-              </label>
-
-              <label>
-                Confirm Password <span>*</span>
-                <input
-                  type="password"
-                  value={form.confirmPassword}
-                  onChange={updateField("confirmPassword")}
-                  placeholder="Repeat password"
-                />
-              </label>
-
-              <label>
-                Resume (Optional)
+              <label className="form-field">
+                <span className="field-label">
+                  Upload CV <span className="required-asterisk">*</span>
+                </span>
                 <input
                   type="file"
-                  accept=".pdf,application/pdf"
+                  accept="*/*"
                   onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
                 />
               </label>
@@ -339,17 +344,52 @@ export default function App() {
           <section className="thanks-card">
             <h1 className="headline">THANK YOU{candidateName ? `, ${candidateName}` : ""}</h1>
             <p className="sub-copy">
-              For tracking your application download our App.
+              Your application has been submitted successfully.
             </p>
+            {referenceId ? (
+              <p className="reference-copy">
+                Reference ID: <strong>{referenceId}</strong>
+              </p>
+            ) : null}
             <div className="thanks-actions">
-              <a className="button button-primary" href={appDownloadUrl} target="_blank" rel="noreferrer">
-                Download App
-              </a>
+              <button
+                type="button"
+                className="button button-primary"
+                onClick={() => setShowDownloadModal(true)}
+              >
+                Download MavenJobs App
+              </button>
               <button type="button" className="button button-secondary" onClick={resetCandidateFlow}>
                 Submit Another Candidate
               </button>
             </div>
           </section>
+        ) : null}
+
+        {showDownloadModal ? (
+          <div className="download-modal-backdrop" role="presentation" onClick={() => setShowDownloadModal(false)}>
+            <section
+              className="download-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Download MavenJobs App"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="download-modal-head">
+                <img src={logo} alt="Maven Jobs" className="download-modal-logo" />
+                <h2>Download MavenJobs App</h2>
+                <p>Track your application status and updates live from the app.</p>
+              </div>
+              <div className="download-modal-actions">
+                <a className="button button-primary" href={appDownloadUrl} target="_blank" rel="noreferrer">
+                  Download Now
+                </a>
+                <button type="button" className="button button-secondary" onClick={() => setShowDownloadModal(false)}>
+                  Continue on Web
+                </button>
+              </div>
+            </section>
+          </div>
         ) : null}
       </section>
     </main>

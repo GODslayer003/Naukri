@@ -6,9 +6,7 @@ const uploadProfilePhoto = require("../middleware/profile-image-upload.middlewar
 
 const router = express.Router();
 
-router.post("/auth/signup", controller.signup);
 router.post("/auth/login", controller.login);
-router.get("/auth/meta", controller.getSignupMeta);
 
 router.use(protectCRM);
 router.use(role("LEAD_GENERATOR", "STATE_MANAGER", "APPROVER", "ADMIN"));

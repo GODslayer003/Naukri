@@ -169,6 +169,11 @@ export async function fetchManagedMembers(params = {}) {
   return data.data;
 }
 
+export async function createManagedMember(payload) {
+  const { data } = await http.post("/team-members", payload);
+  return data.data;
+}
+
 export async function fetchManagedMemberDetail(memberId) {
   const { data } = await http.get(`/team-members/${memberId}`);
   return data.data;

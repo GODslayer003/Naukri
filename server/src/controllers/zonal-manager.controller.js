@@ -216,7 +216,7 @@ const resolveZoneLeadGeneratorIds = async (zone) => {
 };
 
 const assertZonalManagerAccess = (user = {}) => {
-  if (!user || (user.role !== "ZONAL_MANAGER" && user.role !== "ADMIN")) {
+  if (!user || user.role !== "ZONAL_MANAGER") {
     throw createHttpError(403, "Access denied. Zonal Manager role required.");
   }
 };

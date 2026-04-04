@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import logo from "../assets/maven-logo.svg";
 
@@ -190,7 +190,7 @@ export default function Login() {
               {isSubmitting ? "Signing in…" : "Sign in"}
             </button>
             <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.875rem", color: "#475569", fontWeight: "500" }}>
-              New? <Link to="/signup" style={{ color: "#1e40af", textDecoration: "none", fontWeight: "600" }}>Sign Up</Link>
+              Account creation is managed by your State Manager.
             </div>
           </form>
         </div>

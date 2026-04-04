@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import logo from "../assets/maven-logo.svg";
 import { loginFSE } from "../api/fseApi";
@@ -131,10 +131,7 @@ export default function Login() {
             </button>
 
             <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.875rem", color: "#475569", fontWeight: 500 }}>
-              New user?{" "}
-              <Link to="/signup" style={{ color: "#1e40af", textDecoration: "none", fontWeight: 600 }}>
-                Sign up
-              </Link>
+              Account creation is managed by your State Manager.
             </div>
           </form>
         </div>

@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const asyncHandler = require("../middleware/async.middleware");
 const User = require("../models/User");
 const Job = require("../models/Job");
@@ -20,15 +21,27 @@ const supportedResumeMimeTypes = new Set([
   "application/pdf"
 ]);
 
-const isValidPhoneNumber = (value = "") => {
-  const digits = String(value).replace(/\D/g, "");
-  return digits.length >= 10 && digits.length <= 15;
-};
-
 const generateToken = (id) =>
   jwt.sign({ id, type: "CANDIDATE_PANEL" }, process.env.JWT_SECRET, {
     expiresIn: "7d",
   });
+
+const generateTemporaryPassword = () =>
+  `Mvn!${crypto.randomBytes(8).toString("hex")}`;
+
+const normalizeIndianPhoneNumber = (value = "") => {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+91${digits.slice(2)}`;
+  }
+
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+
+  return "";
+};
 
 const formatRelativeTime = (value) => {
   if (!value) {
@@ -370,21 +383,20 @@ exports.register = asyncHandler(async (req, res) => {
     );
   }
 
-  if (!name.trim() || !designation.trim() || !phone.trim() || !email.trim() || !password.trim()) {
+  if (!name.trim() || !designation.trim() || !phone.trim() || !email.trim()) {
     throw createHttpError(
       400,
-      "Name, designation, phone number, email, and password are required",
+      "Name, preferred position, phone number, and email are required.",
     );
   }
 
-  if (!isValidPhoneNumber(phone)) {
-    throw createHttpError(400, "Phone number must contain 10 to 15 digits");
+  const normalizedPhone = normalizeIndianPhoneNumber(phone);
+  if (!normalizedPhone) {
+    throw createHttpError(400, "Phone number must contain exactly 10 digits.");
   }
 
-  if (req.file) {
-    if (!supportedResumeMimeTypes.has(req.file.mimetype)) {
-      throw createHttpError(400, "Only PDF files are supported");
-    }
+  if (!req.file) {
+    throw createHttpError(400, "CV upload is mandatory.");
   }
 
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -394,13 +406,15 @@ exports.register = asyncHandler(async (req, res) => {
     throw createHttpError(409, "Email already exists");
   }
 
+  const resolvedPassword = String(password || "").trim() || generateTemporaryPassword();
+
   let user = null;
 
   try {
     user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
-      password: await bcrypt.hash(password, 10),
+      password: await bcrypt.hash(resolvedPassword, 10),
       role: "CANDIDATE",
       department: designation.trim(),
       accessStatus: "ACTIVE",
@@ -414,7 +428,7 @@ exports.register = asyncHandler(async (req, res) => {
 
     const profileData = {
       userId: user._id,
-      phone: phone.trim(),
+      phone: normalizedPhone,
       currentTitle: designation.trim(),
       lastScannedQrToken: qrToken.trim(),
     };
@@ -445,7 +459,7 @@ exports.register = asyncHandler(async (req, res) => {
       changes.push({
         field: "phone",
         previousValue: "",
-        nextValue: phone.trim(),
+        nextValue: normalizedPhone,
       });
     }
 
@@ -483,6 +497,7 @@ exports.register = asyncHandler(async (req, res) => {
 
     res.status(201).json({
       success: true,
+      referenceId: `MVN-${String(user._id).slice(-8).toUpperCase()}`,
       token: generateToken(user._id),
       user: formatCandidateUser(user),
       profile: formatProfile(profile, user),
