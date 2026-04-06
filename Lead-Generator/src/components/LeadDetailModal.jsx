@@ -19,6 +19,7 @@ const getLeadContacts = (lead = {}) => {
           fullName: String(contact?.fullName || "").trim(),
           phone: String(contact?.phone || "").trim(),
           email: String(contact?.email || "").trim(),
+          designation: String(contact?.designation || "").trim(),
         }))
         .filter((contact) => contact.fullName || contact.phone || contact.email)
     : [];
@@ -88,6 +89,40 @@ const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEdit
                 <span className="detail-label"><LuMapPin /> ADDRESS</span>
                 <p className="detail-value">{lead.location}</p>
               </div>
+              {lead.sourcingDate && (
+                <div className="detail-item">
+                  <span className="detail-label"><LuCalendar /> SOURCING DATE</span>
+                  <p className="detail-value">{new Date(lead.sourcingDate).toLocaleDateString()}</p>
+                </div>
+              )}
+              <div className="detail-item">
+                <span className="detail-label"><LuBuilding2 /> STARTUP</span>
+                <p className="detail-value">{lead.isStartup ? "Yes" : "No"}</p>
+              </div>
+              {lead.masterUnion && (
+                <div className="detail-item">
+                  <span className="detail-label"><LuBuilding2 /> MASTER UNION</span>
+                  <p className="detail-value">{lead.masterUnion}</p>
+                </div>
+              )}
+              {lead.subStatus && (
+                <div className="detail-item">
+                  <span className="detail-label"><LuBuilding2 /> SUB STATUS</span>
+                  <p className="detail-value">{lead.subStatus}</p>
+                </div>
+              )}
+              {lead.franchiseStatus && (
+                <div className="detail-item">
+                  <span className="detail-label"><LuBuilding2 /> FRANCHISE STATUS</span>
+                  <p className="detail-value">{lead.franchiseStatus}</p>
+                </div>
+              )}
+              {lead.employeeCount && (
+                <div className="detail-item">
+                  <span className="detail-label"><LuBuilding2 /> COMPANY SIZE</span>
+                  <p className="detail-value">{lead.employeeCount}</p>
+                </div>
+              )}
             </div>
           </section>
 
@@ -108,9 +143,13 @@ const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEdit
                       <span className="detail-label"><LuPhone /> PHONE</span>
                       <p className="detail-value">{contact.phone || "Not available"}</p>
                     </div>
-                    <div className="detail-item full-width">
+                    <div className="detail-item">
                       <span className="detail-label"><LuMail /> EMAIL</span>
                       <p className="detail-value">{contact.email || "Not available"}</p>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label"><LuUserRound /> DESIGNATION</span>
+                      <p className="detail-value">{contact.designation || "-"}</p>
                     </div>
                   </div>
                 </article>

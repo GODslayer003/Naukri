@@ -283,6 +283,7 @@ const normalizeLeadContacts = (payload = {}) => {
       fullName: String(contact?.fullName || contact?.contactName || "").trim(),
       phone: String(contact?.phone || contact?.phoneNumber || "").trim(),
       email: String(contact?.email || "").trim().toLowerCase(),
+      designation: String(contact?.designation || "").trim(),
       isPrimary: Boolean(contact?.isPrimary),
     }))
     .filter((contact) => contact.fullName || contact.phone || contact.email);
@@ -311,6 +312,7 @@ const normalizeLeadContacts = (payload = {}) => {
     fullName: contact.fullName,
     phone: contact.phone,
     email: contact.email,
+    designation: contact.designation,
     isPrimary: index === resolvedPrimaryIndex,
   }));
 };
@@ -338,6 +340,12 @@ const normalizeCreateLeadInput = (payload = {}, user = {}) => {
     pincode: String(payload.pincode || "").trim(),
     notes: String(payload.notes || "").trim(),
     nextFollowUpAt: payload.nextFollowUpAt || null,
+    sourcingDate: payload.sourcingDate || null,
+    isStartup: Boolean(payload.isStartup),
+    masterUnion: String(payload.masterUnion || "").trim(),
+    subStatus: String(payload.subStatus || "").trim(),
+    franchiseStatus: String(payload.franchiseStatus || "").trim(),
+    employeeCount: String(payload.employeeCount || "").trim(),
   };
 };
 
@@ -440,6 +448,7 @@ const formatLead = (lead) => ({
           fullName: contact.fullName || "",
           phone: contact.phone || "",
           email: contact.email || "",
+          designation: contact.designation || "",
           isPrimary: Boolean(contact.isPrimary),
         }))
       : [
@@ -459,6 +468,12 @@ const formatLead = (lead) => ({
   address: lead.address || "",
   pincode: lead.pincode || "",
   notes: lead.notes || "",
+  sourcingDate: lead.sourcingDate || null,
+  isStartup: Boolean(lead.isStartup),
+  masterUnion: lead.masterUnion || "",
+  subStatus: lead.subStatus || "",
+  franchiseStatus: lead.franchiseStatus || "",
+  employeeCount: lead.employeeCount || "",
   nextFollowUpAt: lead.nextFollowUpAt,
   lastContactedAt: lead.lastContactedAt,
   activities: (Array.isArray(lead.activities) ? lead.activities : []).map((activity) => {
@@ -756,6 +771,18 @@ exports.getSignupMeta = asyncHandler(async (req, res) => {
 
 exports.getLeadGeneratorDashboard = asyncHandler(async (req, res) => {
   const accessFilter = buildLeadAccessFilter(req.user);
+  const { startDate, endDate } = req.query;
+
+  const matchFilter = { ...accessFilter };
+  if (startDate && endDate) {
+    const endObj = new Date(endDate);
+    endObj.setHours(23, 59, 59, 999);
+    matchFilter.createdAt = {
+      $gte: new Date(startDate),
+      $lte: endObj,
+    };
+  }
+
   const zone = getUserZone(req.user);
   const state = normalizeIndianStateInput(req.user?.state) || "";
   const now = new Date();
@@ -775,26 +802,28 @@ exports.getLeadGeneratorDashboard = asyncHandler(async (req, res) => {
     statusBreakdown,
     sourceBreakdown,
     categoryBreakdown,
+    allCalls,
+    interestedClientsList,
   ] = await Promise.all([
-    Lead.countDocuments(accessFilter),
-    Lead.countDocuments({ ...accessFilter, status: "NEW" }),
-    Lead.countDocuments({ ...accessFilter, status: "CONTACTED" }),
-    Lead.countDocuments({ ...accessFilter, status: "WON" }),
+    Lead.countDocuments(matchFilter),
+    Lead.countDocuments({ ...matchFilter, status: "NEW" }),
+    Lead.countDocuments({ ...matchFilter, status: "CONTACTED" }),
+    Lead.countDocuments({ ...matchFilter, status: "WON" }),
     Lead.countDocuments({
-      ...accessFilter,
+      ...matchFilter,
       nextFollowUpAt: { $gte: dayStart, $lt: dayEnd },
     }),
     Lead.countDocuments({
-      ...accessFilter,
+      ...matchFilter,
       createdAt: { $gte: monthStart },
     }),
-    Lead.find(accessFilter)
+    Lead.find(matchFilter)
       .sort({ createdAt: -1 })
-      .limit(8)
+      .limit(20)
       .populate("createdBy", "fullName role profileImageUrl")
       .populate("assignedTo", "fullName role profileImageUrl"),
     Lead.find({
-      ...accessFilter,
+      ...matchFilter,
       nextFollowUpAt: { $gte: dayStart },
     })
       .sort({ nextFollowUpAt: 1 })
@@ -802,23 +831,42 @@ exports.getLeadGeneratorDashboard = asyncHandler(async (req, res) => {
       .populate("createdBy", "fullName role profileImageUrl")
       .populate("assignedTo", "fullName role profileImageUrl"),
     Lead.aggregate([
-      { $match: accessFilter },
+      { $match: matchFilter },
       { $group: { _id: "$status", value: { $sum: 1 } } },
       { $sort: { value: -1, _id: 1 } },
     ]),
     Lead.aggregate([
-      { $match: accessFilter },
+      { $match: matchFilter },
       { $group: { _id: "$leadSource", value: { $sum: 1 } } },
       { $sort: { value: -1, _id: 1 } },
       { $limit: 6 },
     ]),
     Lead.aggregate([
-      { $match: accessFilter },
+      { $match: matchFilter },
       { $group: { _id: "$businessCategory", value: { $sum: 1 } } },
       { $sort: { value: -1, _id: 1 } },
       { $limit: 6 },
     ]),
+    Lead.find({ ...matchFilter, "activities.0": { $exists: true } })
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .select("leadCode companyName contactName activities"),
+    Lead.find({
+      ...matchFilter,
+      $or: [{ status: "QUALIFIED" }, { priority: "HIGH" }, { subStatus: "INTERESTED" }],
+    })
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .populate("createdBy", "fullName role profileImageUrl"),
   ]);
+
+  const latestCalls = allCalls.reduce((acc, lead) => {
+    return acc.concat(lead.activities.map(activity => ({
+      ...activity.toObject(),
+      leadCode: lead.leadCode,
+      companyName: lead.companyName,
+    })));
+  }, []).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
 
   res.status(200).json({
     success: true,
@@ -847,6 +895,8 @@ exports.getLeadGeneratorDashboard = asyncHandler(async (req, res) => {
       })),
       recentLeads: recentLeads.map(formatLead),
       upcomingFollowUps: upcomingFollowUps.map(formatLead),
+      calls: latestCalls,
+      interestedClients: interestedClientsList.map(formatLead),
     },
   });
 });

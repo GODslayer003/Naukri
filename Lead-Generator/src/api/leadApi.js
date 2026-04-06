@@ -55,8 +55,12 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
-export async function fetchLeadDashboard() {
-  const { data } = await http.get("/dashboard");
+export async function fetchLeadDashboard(params = {}) {
+  const normalizedParams = {};
+  if (params.startDate) normalizedParams.startDate = params.startDate;
+  if (params.endDate) normalizedParams.endDate = params.endDate;
+
+  const { data } = await http.get("/dashboard", { params: normalizedParams });
   return data.data;
 }
 

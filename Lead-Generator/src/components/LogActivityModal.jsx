@@ -77,7 +77,7 @@ const LogActivityModal = ({ lead, initialData, activityContact, onClose, onSubmi
             <label className="form-label">NEXT FOLLOW-UP</label>
             <div className="input-icon-container">
               <input 
-                type="datetime-local" 
+                type="date" 
                 value={nextFollowUp} 
                 onChange={(e) => setNextFollowUp(e.target.value)}
                 className="form-input"

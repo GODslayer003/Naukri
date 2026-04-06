@@ -27,6 +27,11 @@ const leadContactSchema = new mongoose.Schema(
       lowercase: true,
       default: "",
     },
+    designation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     isPrimary: {
       type: Boolean,
       default: false,
@@ -51,6 +56,11 @@ const activityContactSchema = new mongoose.Schema(
       type: String,
       trim: true,
       lowercase: true,
+      default: "",
+    },
+    designation: {
+      type: String,
+      trim: true,
       default: "",
     },
   },
@@ -137,6 +147,34 @@ const leadSchema = new mongoose.Schema(
       default: "",
     },
     notes: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    sourcingDate: {
+      type: Date,
+      default: null,
+    },
+    isStartup: {
+      type: Boolean,
+      default: false,
+    },
+    masterUnion: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    subStatus: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    franchiseStatus: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    employeeCount: {
       type: String,
       trim: true,
       default: "",
@@ -286,6 +324,7 @@ leadSchema.pre("save", async function () {
       fullName: String(contact?.fullName || "").trim(),
       phone: normalizePhoneNumber(String(contact?.phone || "")),
       email: String(contact?.email || "").trim().toLowerCase(),
+      designation: String(contact?.designation || "").trim(),
       isPrimary: Boolean(contact?.isPrimary),
     }))
     .filter((contact) => contact.fullName || contact.phone || contact.email);
@@ -325,6 +364,7 @@ leadSchema.pre("save", async function () {
           fullName: String(activity.contact.fullName || "").trim(),
           phone: normalizePhoneNumber(String(activity.contact.phone || "")),
           email: String(activity.contact.email || "").trim().toLowerCase(),
+          designation: String(activity.contact.designation || "").trim(),
         },
       };
     });

@@ -35,6 +35,7 @@ const createEmptyContact = () => ({
   fullName: "",
   phone: "",
   email: "",
+  designation: "",
 });
 
 const initialForm = {
@@ -43,6 +44,13 @@ const initialForm = {
   businessCategory: "",
   leadSource: "",
   address: "",
+  sourcingDate: "",
+  isStartup: false,
+  masterUnion: "",
+  subStatus: "",
+  franchiseStatus: "",
+  employeeCount: "",
+  nextFollowUpAt: "",
 };
 
 function Field({ label, children }) {
@@ -102,8 +110,11 @@ export default function AddLead() {
   }, []);
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    const { name, value, type, checked } = event.target;
+    setForm((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   const handleContactChange = (index, field, value) => {
@@ -142,6 +153,7 @@ export default function AddLead() {
       fullName: contact.fullName.trim(),
       phone: contact.phone.trim(),
       email: contact.email.trim().toLowerCase(),
+      designation: contact.designation?.trim() || "",
     }));
 
     if (!sanitizedContacts.length) {
@@ -198,11 +210,19 @@ export default function AddLead() {
           fullName: contact.fullName,
           phone: contact.phone,
           email: contact.email,
+          designation: contact.designation,
           isPrimary: index === 0,
         })),
         businessCategory: form.businessCategory,
         leadSource: form.leadSource,
         address: form.address.trim(),
+        sourcingDate: form.sourcingDate || null,
+        isStartup: form.isStartup,
+        masterUnion: form.masterUnion.trim(),
+        subStatus: form.subStatus.trim(),
+        franchiseStatus: form.franchiseStatus.trim(),
+        employeeCount: form.employeeCount.trim(),
+        nextFollowUpAt: form.nextFollowUpAt || null,
       };
       const lead = await createLead(payload);
       toast.success(`Lead ${lead.leadCode} saved successfully.`);
@@ -272,6 +292,39 @@ export default function AddLead() {
               </div>
 
               <div className="lead-block-grid one-col">
+                <Field label="Employee Count / Company Size">
+                  <input
+                    className="input add-lead-input"
+                    name="employeeCount"
+                    value={form.employeeCount}
+                    onChange={handleChange}
+                    placeholder="E.g. 10-50, 50-100"
+                  />
+                </Field>
+
+                <Field label="Is Startup">
+                  <div style={{ display: 'flex', alignItems: 'center', height: '42px', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      name="isStartup"
+                      checked={form.isStartup}
+                      onChange={handleChange}
+                      style={{ width: '18px', height: '18px' }}
+                    />
+                    <span style={{ fontSize: '15px', color: '#334155' }}>Company is a Startup</span>
+                  </div>
+                </Field>
+                
+                <Field label="Master Union">
+                  <input
+                    className="input add-lead-input"
+                    name="masterUnion"
+                    value={form.masterUnion}
+                    onChange={handleChange}
+                    placeholder="Master Union"
+                  />
+                </Field>
+
                 <Field label="Location or Address">
                   <div className="input-shell">
                     <input
@@ -361,6 +414,17 @@ export default function AddLead() {
                           <LuMail className="input-icon" />
                         </div>
                       </Field>
+                      
+                      <Field label={`Contact ${index + 1} Designation`}>
+                        <div className="input-shell">
+                          <input
+                            className="input add-lead-input"
+                            value={contact.designation || ""}
+                            onChange={(event) => handleContactChange(index, "designation", event.target.value)}
+                            placeholder="Designation"
+                          />
+                        </div>
+                      </Field>
                     </div>
                   </article>
                 ))}
@@ -393,6 +457,49 @@ export default function AddLead() {
                       </option>
                     ))}
                   </select>
+                </Field>
+                <Field label="Sourcing Date">
+                  <input
+                    type="date"
+                    className="input add-lead-input"
+                    name="sourcingDate"
+                    value={form.sourcingDate}
+                    onChange={handleChange}
+                  />
+                </Field>
+              </div>
+
+              <div className="lead-block-grid two-col lead-source-grid" style={{ marginTop: "16px" }}>
+                <Field label="Sub Status">
+                  <input
+                    className="input add-lead-input"
+                    name="subStatus"
+                    value={form.subStatus}
+                    onChange={handleChange}
+                    placeholder="Sub Status"
+                  />
+                </Field>
+
+                <Field label="Franchise Status">
+                  <input
+                    className="input add-lead-input"
+                    name="franchiseStatus"
+                    value={form.franchiseStatus}
+                    onChange={handleChange}
+                    placeholder="Franchise Status"
+                  />
+                </Field>
+              </div>
+
+              <div className="lead-block-grid two-col lead-source-grid" style={{ marginTop: "16px" }}>
+                <Field label="Next Follow-up">
+                  <input
+                    type="date"
+                    className="input add-lead-input"
+                    name="nextFollowUpAt"
+                    value={form.nextFollowUpAt}
+                    onChange={handleChange}
+                  />
                 </Field>
               </div>
             </section>
