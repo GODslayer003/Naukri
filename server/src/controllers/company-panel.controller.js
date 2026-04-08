@@ -7,6 +7,7 @@ const Company = require("../models/Company");
 const Job = require("../models/Job");
 const Application = require("../models/Application");
 const CandidateProfile = require("../models/CandidateProfile");
+const CandidateNotification = require("../models/CandidateNotification");
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -19,6 +20,32 @@ const toTrimmedString = (value) => (typeof value === "string" ? value.trim() : "
 const toSafeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const APPLICATION_STATUS_ENUM = [
+  "APPLIED",
+  "SCREENING",
+  "SHORTLISTED",
+  "INTERVIEW",
+  "OFFERED",
+  "HIRED",
+  "REJECTED",
+];
+
+const APPLICATION_STATUS_SET = new Set(APPLICATION_STATUS_ENUM);
+
+const normalizeApplicationStatus = (value) => {
+  const normalized = String(value || "").trim().toUpperCase();
+  return APPLICATION_STATUS_SET.has(normalized) ? normalized : "";
+};
+
+const toPositiveInteger = (value, fallback, min = 1, max = 100) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, parsed));
 };
 
 const isLikelyPdf = ({ fileName = "", url = "", contentType = "" } = {}) => {
@@ -107,6 +134,55 @@ const formatCompanyForClient = (company) => {
     },
     updatedAt: company.updatedAt || null,
     lastUpdated: formatRelativeTime(company.updatedAt),
+  };
+};
+
+const getCandidateIdFromApplication = (application) => {
+  if (!application) {
+    return "";
+  }
+
+  if (application.candidateId?._id) {
+    return String(application.candidateId._id);
+  }
+
+  if (application.candidateId) {
+    return String(application.candidateId);
+  }
+
+  return "";
+};
+
+const formatApplicationStatusLabel = (status = "") =>
+  String(status || "")
+    .toLowerCase()
+    .split("_")
+    .map((segment) => (segment ? `${segment[0].toUpperCase()}${segment.slice(1)}` : ""))
+    .join(" ");
+
+const formatCompanyApplication = (application, profileMap = new Map()) => {
+  const candidateId = getCandidateIdFromApplication(application);
+  const profile = profileMap.get(candidateId);
+
+  return {
+    id: String(application._id),
+    jobId: application.jobId?._id ? String(application.jobId._id) : String(application.jobId || ""),
+    jobTitle: application.jobId?.title || "Unknown job",
+    candidateId,
+    candidateName: application.candidateId?.name || "Candidate",
+    candidateEmail: application.candidateId?.email || "",
+    candidatePhone: profile?.phone || "",
+    candidateCurrentTitle: profile?.currentTitle || "",
+    candidateExperience: profile?.totalExperience || "",
+    candidateCity: profile?.currentCity || "",
+    candidateState: profile?.currentState || "",
+    status: normalizeApplicationStatus(application.status) || "APPLIED",
+    statusLabel: formatApplicationStatusLabel(application.status || "APPLIED"),
+    resumeUrl: application.resumeUrl || profile?.resume?.url || "",
+    resumeFileName: application.resumeFileName || profile?.resume?.fileName || "",
+    appliedAt: application.createdAt || null,
+    updatedAt: application.updatedAt || null,
+    lastUpdated: formatRelativeTime(application.updatedAt || application.createdAt),
   };
 };
 
@@ -216,30 +292,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
   }));
 
   const applicationRows = applications.map((application) => {
-    const candidateId = application.candidateId?._id
-      ? String(application.candidateId._id)
-      : String(application.candidateId || "");
-    const profile = profileMap.get(candidateId);
-
-    return {
-      id: String(application._id),
-      jobId: application.jobId?._id ? String(application.jobId._id) : String(application.jobId || ""),
-      jobTitle: application.jobId?.title || "Unknown job",
-      candidateId,
-      candidateName: application.candidateId?.name || "Candidate",
-      candidateEmail: application.candidateId?.email || "",
-      candidatePhone: profile?.phone || "",
-      candidateCurrentTitle: profile?.currentTitle || "",
-      candidateExperience: profile?.totalExperience || "",
-      candidateCity: profile?.currentCity || "",
-      candidateState: profile?.currentState || "",
-      status: application.status || "APPLIED",
-      resumeUrl: application.resumeUrl || profile?.resume?.url || "",
-      resumeFileName: application.resumeFileName || profile?.resume?.fileName || "",
-      appliedAt: application.createdAt || null,
-      updatedAt: application.updatedAt || null,
-      lastUpdated: formatRelativeTime(application.updatedAt || application.createdAt),
-    };
+    return formatCompanyApplication(application, profileMap);
   });
 
   const approvedJobs = jobs.filter((job) => job.approvalStatus === "APPROVED");
@@ -342,6 +395,189 @@ exports.createJob = asyncHandler(async (req, res) => {
       isActive: job.isActive,
       createdAt: job.createdAt,
     },
+  });
+});
+
+exports.getApplications = asyncHandler(async (req, res) => {
+  const { company } = await resolveClientUserAndCompany(req.user._id);
+
+  const page = toPositiveInteger(req.query.page, 1, 1, 100000);
+  const limit = toPositiveInteger(req.query.limit, 10, 1, 50);
+  const requestedStatus = normalizeApplicationStatus(req.query.status);
+  const statusFilter = String(req.query.status || "").trim().toUpperCase();
+
+  if (statusFilter && statusFilter !== "ALL" && !requestedStatus) {
+    throw createHttpError(
+      400,
+      `Invalid status filter. Allowed values: ALL, ${APPLICATION_STATUS_ENUM.join(", ")}`,
+    );
+  }
+
+  const query = {
+    companyId: company._id,
+  };
+
+  if (requestedStatus) {
+    query.status = requestedStatus;
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [applications, filteredCount, statusBreakdown] = await Promise.all([
+    Application.find(query)
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("jobId", "title")
+      .populate("candidateId", "name email"),
+    Application.countDocuments(query),
+    Application.aggregate([
+      {
+        $match: {
+          companyId: company._id,
+        },
+      },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+
+  const candidateIds = [
+    ...new Set(applications.map((application) => getCandidateIdFromApplication(application)).filter(Boolean)),
+  ];
+
+  const candidateProfiles = candidateIds.length
+    ? await CandidateProfile.find({ userId: { $in: candidateIds } }).select(
+        "userId phone currentTitle totalExperience currentCity currentState resume",
+      )
+    : [];
+
+  const profileMap = new Map(
+    candidateProfiles.map((profile) => [String(profile.userId), profile]),
+  );
+  const items = applications.map((application) => formatCompanyApplication(application, profileMap));
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / limit));
+  const pageValue = Math.min(page, totalPages);
+
+  const summaryByStatus = APPLICATION_STATUS_ENUM.reduce(
+    (accumulator, status) => ({
+      ...accumulator,
+      [status]: 0,
+    }),
+    {},
+  );
+
+  statusBreakdown.forEach((item) => {
+    const status = normalizeApplicationStatus(item?._id);
+    if (status) {
+      summaryByStatus[status] = Number(item.count || 0);
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      statuses: APPLICATION_STATUS_ENUM,
+      filters: {
+        status: requestedStatus || "ALL",
+      },
+      summary: {
+        total: APPLICATION_STATUS_ENUM.reduce(
+          (count, status) => count + Number(summaryByStatus[status] || 0),
+          0,
+        ),
+        byStatus: summaryByStatus,
+      },
+      pagination: {
+        page: pageValue,
+        limit,
+        totalItems: filteredCount,
+        totalPages,
+        hasPrevPage: pageValue > 1,
+        hasNextPage: pageValue < totalPages,
+      },
+      items,
+    },
+  });
+});
+
+exports.updateApplicationStatus = asyncHandler(async (req, res) => {
+  const { company } = await resolveClientUserAndCompany(req.user._id);
+
+  const applicationId = toTrimmedString(req.params.applicationId);
+  if (!applicationId) {
+    throw createHttpError(400, "Application id is required");
+  }
+
+  const requestedStatus = normalizeApplicationStatus(req.body.status);
+  if (!requestedStatus) {
+    throw createHttpError(
+      400,
+      `Invalid status value. Allowed statuses: ${APPLICATION_STATUS_ENUM.join(", ")}`,
+    );
+  }
+
+  const application = await Application.findOne({
+    _id: applicationId,
+    companyId: company._id,
+  })
+    .populate("jobId", "title")
+    .populate("candidateId", "name email");
+
+  if (!application) {
+    throw createHttpError(404, "Application not found");
+  }
+
+  const previousStatus = normalizeApplicationStatus(application.status) || "APPLIED";
+  const hasStatusChanged = previousStatus !== requestedStatus;
+
+  if (hasStatusChanged) {
+    application.status = requestedStatus;
+    await application.save();
+  }
+
+  const candidateId = getCandidateIdFromApplication(application);
+  if (candidateId && hasStatusChanged) {
+    await CandidateNotification.create({
+      candidateId,
+      companyId: company._id,
+      jobId: application.jobId?._id || application.jobId || null,
+      applicationId: application._id,
+      title: "Application status updated",
+      message: `${company.name || "The company"} marked your application for ${
+        application.jobId?.title || "the role"
+      } as ${formatApplicationStatusLabel(requestedStatus)}.`,
+      category: "APPLICATION",
+      actionUrl: "/candidate/applications",
+      metadata: {
+        source: "COMPANY_PANEL",
+        previousStatus,
+        currentStatus: requestedStatus,
+      },
+    });
+  }
+
+  const candidateProfiles = candidateId
+    ? await CandidateProfile.find({ userId: { $in: [candidateId] } }).select(
+        "userId phone currentTitle totalExperience currentCity currentState resume",
+      )
+    : [];
+  const profileMap = new Map(
+    candidateProfiles.map((profile) => [String(profile.userId), profile]),
+  );
+
+  res.status(200).json({
+    success: true,
+    message:
+      !hasStatusChanged
+        ? "Application status is already up to date."
+        : "Application status updated successfully.",
+    data: formatCompanyApplication(application, profileMap),
   });
 });
 

@@ -56,6 +56,16 @@ export async function fetchCompanyDashboard() {
   return data.data;
 }
 
+export async function fetchCompanyApplications(params = {}) {
+  const { data } = await http.get("/applications", { params });
+  return data.data;
+}
+
+export async function updateCompanyApplicationStatus(applicationId, status) {
+  const { data } = await http.patch(`/applications/${applicationId}/status`, { status });
+  return data;
+}
+
 export async function createCompanyJob(payload) {
   const { data } = await http.post("/jobs", payload);
   return data;

@@ -212,11 +212,6 @@ export default function Dashboard() {
       const blobUrl = window.URL.createObjectURL(resumeBlob);
       const openedWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
 
-      if (!openedWindow) {
-        window.URL.revokeObjectURL(blobUrl);
-        throw new Error("Popup blocked. Please allow popups and try again.");
-      }
-
       window.setTimeout(() => {
         window.URL.revokeObjectURL(blobUrl);
       }, 120000);

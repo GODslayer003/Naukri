@@ -4,6 +4,7 @@ import {
   LuBell,
   LuBuilding2,
   LuBriefcaseBusiness,
+  LuFileText,
   LuLayoutDashboard,
   LuLogOut,
   LuMenu,
@@ -14,6 +15,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import CreateJob from "./pages/CreateJob";
 import Profile from "./pages/Profile";
+import Applies from "./pages/Applies";
 
 const SESSION_KEY = "company_panel_session";
 
@@ -42,6 +44,7 @@ function RequireAuth({ children }) {
 const navItems = [
   { path: "/", label: "Dashboard", icon: LuLayoutDashboard },
   { path: "/create-job", label: "Create Job", icon: LuBriefcaseBusiness },
+  { path: "/applies", label: "Applies", icon: LuFileText },
   { path: "/profile", label: "Profile", icon: LuSettings },
 ];
 
@@ -52,6 +55,10 @@ const pageMeta = (pathname) => {
 
   if (pathname.startsWith("/profile")) {
     return { panelLabel: "Company Panel", title: "Profile" };
+  }
+
+  if (pathname.startsWith("/applies")) {
+    return { panelLabel: "Company Panel", title: "Applies" };
   }
 
   return { panelLabel: "Company Panel", title: "Dashboard" };
@@ -166,6 +173,7 @@ function PanelLayout() {
           <Routes>
             <Route index element={<Dashboard />} />
             <Route path="/create-job" element={<CreateJob onSessionRefresh={syncSession} />} />
+            <Route path="/applies" element={<Applies />} />
             <Route path="/profile" element={<Profile onSessionRefresh={syncSession} />} />
           </Routes>
         </main>
