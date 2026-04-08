@@ -58,6 +58,10 @@ const jobSchema = new mongoose.Schema(
       type: Number,
       default: 1,
     },
+    requiresPackageOverride: {
+      type: Boolean,
+      default: false,
+    },
 
     isActive: { type: Boolean, default: true },
   },

@@ -17,6 +17,7 @@ const landingRoute = require("./routes/landing.routes");
 const adminRoutes = require("./routes/admin.routes");
 const candidateRoutes = require("./routes/candidate.routes");
 const nshRoutes = require("./routes/national-sales-head.routes");
+const companyPanelRoutes = require("./routes/company-panel.routes");
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use(`${BASE_ROUTE}/landing`, landingRoute);
 app.use(`${BASE_ROUTE}/admin`, adminRoutes);
 app.use(`${BASE_ROUTE}/candidate`, candidateRoutes);
 app.use(`${BASE_ROUTE}/national-sales-head`, nshRoutes);
+app.use(`${BASE_ROUTE}/company-panel`, companyPanelRoutes);
 
 // Health Route
 app.get("/", (req, res) => {

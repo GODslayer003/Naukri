@@ -241,6 +241,7 @@ const formatJob = (job) => ({
   rejectionReason: job.rejectionReason || "",
   isActive: Boolean(job.isActive),
   createdBySource: job.createdBySource || "CRM",
+  requiresPackageOverride: Boolean(job.requiresPackageOverride),
   createdAt: job.createdAt,
   lastUpdated: formatRelativeTime(job.updatedAt),
 });
@@ -1065,7 +1066,10 @@ exports.updateJobApproval = asyncHandler(async (req, res) => {
       _id: { $ne: job._id },
     });
 
-    if (activeCount >= company.jobLimit) {
+    const isApprovedOverflowRequest =
+      job.createdBySource === "CLIENT" && job.requiresPackageOverride;
+
+    if (activeCount >= company.jobLimit && !isApprovedOverflowRequest) {
       throw createHttpError(400, "Job limit exceeded for this package");
     }
 

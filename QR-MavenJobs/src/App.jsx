@@ -400,7 +400,6 @@ export default function App() {
               >
                 <span className="role-chip">Candidate</span>
                 <h2>Apply for opportunities</h2>
-                <p>Share your personal details and continue with application tracking.</p>
               </button>
 
               <button
@@ -414,7 +413,6 @@ export default function App() {
               >
                 <span className="role-chip role-chip-muted">Client</span>
                 <h2>Hire with Maven Jobs</h2>
-                <p>Post openings by form or JD upload and track responses from your hiring workspace.</p>
               </button>
             </div>
           </>
