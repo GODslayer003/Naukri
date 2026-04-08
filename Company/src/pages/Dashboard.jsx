@@ -4,6 +4,7 @@ import {
   LuArrowRight,
   LuBellRing,
   LuBriefcaseBusiness,
+  LuExternalLink,
   LuFileText,
   LuMapPin,
   LuQrCode,
@@ -11,7 +12,12 @@ import {
   LuShieldCheck,
   LuUsers,
 } from "react-icons/lu";
-import { fetchCompanyDashboard } from "../api/companyApi";
+import {
+  fetchCompanyDashboard,
+  previewCompanyApplicationResume,
+} from "../api/companyApi";
+
+const APPLICATIONS_PER_PAGE = 5;
 
 const packageCards = [
   {
@@ -83,6 +89,9 @@ export default function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [resumeBusyId, setResumeBusyId] = useState("");
+  const [resumeError, setResumeError] = useState("");
+  const [applicationPage, setApplicationPage] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
@@ -156,7 +165,31 @@ export default function Dashboard() {
   );
 
   const recentJobs = useMemo(() => (dashboard?.jobs || []).slice(0, 6), [dashboard]);
-  const recentApplications = useMemo(() => (dashboard?.applications || []).slice(0, 8), [dashboard]);
+  const allApplications = useMemo(() => dashboard?.applications || [], [dashboard]);
+
+  const totalApplicationPages = useMemo(() => {
+    if (!allApplications.length) {
+      return 1;
+    }
+
+    return Math.ceil(allApplications.length / APPLICATIONS_PER_PAGE);
+  }, [allApplications.length]);
+
+  const pagedApplications = useMemo(() => {
+    const startIndex = (applicationPage - 1) * APPLICATIONS_PER_PAGE;
+    const endIndex = startIndex + APPLICATIONS_PER_PAGE;
+    return allApplications.slice(startIndex, endIndex);
+  }, [allApplications, applicationPage]);
+
+  useEffect(() => {
+    setApplicationPage((current) => {
+      if (!allApplications.length) {
+        return 1;
+      }
+
+      return Math.min(current, totalApplicationPages);
+    });
+  }, [allApplications.length, totalApplicationPages]);
 
   const utilization = useMemo(() => {
     const active = Number(company.activeJobCount || 0);
@@ -164,6 +197,39 @@ export default function Dashboard() {
     const safeLimit = limit > 0 ? limit : 1;
     return Math.min(100, Math.round((active / safeLimit) * 100));
   }, [company.activeJobCount, company.jobLimit]);
+
+  const handleOpenResume = async (application) => {
+    const applicationId = String(application?.id || "").trim();
+    if (!applicationId) {
+      return;
+    }
+
+    setResumeError("");
+    setResumeBusyId(applicationId);
+
+    try {
+      const resumeBlob = await previewCompanyApplicationResume(applicationId);
+      const blobUrl = window.URL.createObjectURL(resumeBlob);
+      const openedWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
+
+      if (!openedWindow) {
+        window.URL.revokeObjectURL(blobUrl);
+        throw new Error("Popup blocked. Please allow popups and try again.");
+      }
+
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 120000);
+    } catch (requestError) {
+      setResumeError(
+        requestError?.response?.data?.message ||
+          requestError?.message ||
+          "Unable to open resume preview.",
+      );
+    } finally {
+      setResumeBusyId("");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -245,6 +311,134 @@ export default function Dashboard() {
             <span>{metric.detail}</span>
           </article>
         ))}
+      </section>
+
+      <section className="company-panel-card">
+        <div className="company-section-head">
+          <p className="company-section-eyebrow">Application flow</p>
+          <h2 className="company-section-title">Candidate application directory</h2>
+          <p className="company-section-copy">
+            View recent candidate submissions with role mapping, status, contact details, and resume access.
+          </p>
+        </div>
+
+        {resumeError ? <div className="status-banner">{resumeError}</div> : null}
+
+        <div className="company-jobs-table-wrap">
+          <table className="company-jobs-table company-applications-table">
+            <thead>
+              <tr>
+                <th>Candidate</th>
+                <th>Applied role</th>
+                <th>Status</th>
+                <th>Contact</th>
+                <th>Applied on</th>
+                <th>Resume</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedApplications.length ? (
+                pagedApplications.map((application) => (
+                  <tr key={application.id}>
+                    <td>
+                      <p className="company-table-main">
+                        {application.candidateName || "Candidate"}
+                      </p>
+                      <p className="company-table-sub">
+                        {application.candidateCurrentTitle || "Role not set"}
+                      </p>
+                    </td>
+                    <td>
+                      <p className="company-table-main">
+                        <LuFileText size={14} /> {application.jobTitle || "Job not found"}
+                      </p>
+                    </td>
+                    <td>
+                      <span className={`company-application-chip ${getApplicationClass(application.status)}`}>
+                        {application.status || "APPLIED"}
+                      </span>
+                    </td>
+                    <td>
+                      <p className="company-table-sub">{application.candidateEmail || "-"}</p>
+                      <p className="company-table-sub">{application.candidatePhone || "-"}</p>
+                    </td>
+                    <td>{formatDate(application.appliedAt)}</td>
+                    <td>
+                      {application.resumeUrl || application.resumeFileName ? (
+                        <button
+                          type="button"
+                          className="company-resume-link"
+                          onClick={() => handleOpenResume(application)}
+                          disabled={resumeBusyId === application.id}
+                        >
+                          {resumeBusyId === application.id ? "Opening..." : "Open resume"}
+                          <LuExternalLink size={13} />
+                        </button>
+                      ) : (
+                        <span className="company-table-sub">Not uploaded</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="company-empty-cell">
+                    No applications received yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {allApplications.length ? (
+          <div className="company-pagination-row">
+            <p className="company-pagination-meta">
+              Showing{" "}
+              <strong>
+                {(applicationPage - 1) * APPLICATIONS_PER_PAGE + 1}
+                {"-"}
+                {Math.min(applicationPage * APPLICATIONS_PER_PAGE, allApplications.length)}
+              </strong>{" "}
+              of <strong>{allApplications.length}</strong> candidates
+            </p>
+
+            <div className="company-pagination-controls">
+              <button
+                type="button"
+                className="company-page-btn"
+                onClick={() => setApplicationPage((current) => Math.max(1, current - 1))}
+                disabled={applicationPage === 1}
+              >
+                Previous
+              </button>
+
+              {Array.from({ length: totalApplicationPages }, (_, index) => index + 1).map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  className={`company-page-btn ${applicationPage === pageNumber ? "active" : ""}`}
+                  onClick={() => setApplicationPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                className="company-page-btn"
+                onClick={() =>
+                  setApplicationPage((current) =>
+                    Math.min(totalApplicationPages, current + 1),
+                  )
+                }
+                disabled={applicationPage === totalApplicationPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="company-main-grid company-main-grid-modern">
@@ -372,65 +566,6 @@ export default function Dashboard() {
             )}
           </div>
         </article>
-      </section>
-
-      <section className="company-panel-card">
-        <div className="company-section-head">
-          <p className="company-section-eyebrow">Application flow</p>
-          <h2 className="company-section-title">Candidate application directory</h2>
-          <p className="company-section-copy">
-            View recent candidate submissions with role mapping, status, and contact details.
-          </p>
-        </div>
-
-        <div className="company-jobs-table-wrap">
-          <table className="company-jobs-table company-applications-table">
-            <thead>
-              <tr>
-                <th>Candidate</th>
-                <th>Applied role</th>
-                <th>Status</th>
-                <th>Contact</th>
-                <th>Applied on</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentApplications.length ? (
-                recentApplications.map((application) => (
-                  <tr key={application.id}>
-                    <td>
-                      <p className="company-table-main">
-                        {application.candidateName || "Candidate"}
-                      </p>
-                      <p className="company-table-sub">{application.candidateCurrentTitle || "Role not set"}</p>
-                    </td>
-                    <td>
-                      <p className="company-table-main">
-                        <LuFileText size={14} /> {application.jobTitle || "Job not found"}
-                      </p>
-                    </td>
-                    <td>
-                      <span className={`company-application-chip ${getApplicationClass(application.status)}`}>
-                        {application.status || "APPLIED"}
-                      </span>
-                    </td>
-                    <td>
-                      <p className="company-table-sub">{application.candidateEmail || "-"}</p>
-                      <p className="company-table-sub">{application.candidatePhone || "-"}</p>
-                    </td>
-                    <td>{formatDate(application.appliedAt)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="company-empty-cell">
-                    No applications received yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </section>
     </div>
   );

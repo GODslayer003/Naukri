@@ -658,11 +658,90 @@ a {
 }
 
 .company-applications-table {
-  min-width: 780px;
+  min-width: 920px;
 }
 
 .company-applications-table .company-table-main {
   font-size: 0.9rem;
+}
+
+.company-resume-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #d8e4f5;
+  background: #f8fbff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.company-resume-link:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.company-resume-link:disabled {
+  opacity: 0.66;
+  cursor: not-allowed;
+}
+
+.company-pagination-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.company-pagination-meta {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.company-pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.company-page-btn {
+  border: 1px solid #d8e4f5;
+  background: #f8fbff;
+  color: #1e3a68;
+  border-radius: 10px;
+  min-width: 34px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.company-page-btn:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.company-page-btn.active {
+  border-color: #163060;
+  background: #163060;
+  color: #ffffff;
+}
+
+.company-page-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .company-overview-table {

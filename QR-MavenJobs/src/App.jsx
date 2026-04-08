@@ -5,6 +5,7 @@ const MAX_UPLOAD_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_CLIENT_JD_FILES = 5;
 const PHONE_DIGITS_REQUIRED = 10;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PDF_MIME_TYPES = new Set(["application/pdf"]);
 
 const normalizeApiV1BaseUrl = (value = "") => {
   const rawValue = String(value || "").trim();
@@ -65,6 +66,16 @@ const toIndianPhoneDigits = (value = "") => {
   }
 
   return digitsOnly.slice(0, 10);
+};
+
+const isPdfFile = (file = null) => {
+  if (!file) {
+    return false;
+  }
+
+  const mimeType = String(file.type || "").toLowerCase();
+  const fileName = String(file.name || "").toLowerCase();
+  return PDF_MIME_TYPES.has(mimeType) || fileName.endsWith(".pdf");
 };
 
 const resolveQrTokenFromLocation = () => {
@@ -222,6 +233,10 @@ export default function App() {
 
     if (!resumeFile) {
       return "CV upload is mandatory.";
+    }
+
+    if (!isPdfFile(resumeFile)) {
+      return "Please upload CV in PDF format only.";
     }
 
     if (resumeFile.size > MAX_UPLOAD_FILE_SIZE) {
@@ -494,7 +509,7 @@ export default function App() {
                 </span>
                 <input
                   type="file"
-                  accept="*/*"
+                  accept=".pdf,application/pdf"
                   onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
                 />
               </label>

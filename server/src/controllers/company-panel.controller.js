@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
 const asyncHandler = require("../middleware/async.middleware");
 const User = require("../models/User");
 const Company = require("../models/Company");
@@ -18,6 +19,21 @@ const toTrimmedString = (value) => (typeof value === "string" ? value.trim() : "
 const toSafeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const isLikelyPdf = ({ fileName = "", url = "", contentType = "" } = {}) => {
+  const normalizedContentType = String(contentType || "").toLowerCase();
+  if (normalizedContentType.includes("pdf")) {
+    return true;
+  }
+
+  const normalizedFileName = String(fileName || "").toLowerCase();
+  if (normalizedFileName.endsWith(".pdf")) {
+    return true;
+  }
+
+  const normalizedUrl = String(url || "").toLowerCase();
+  return normalizedUrl.includes(".pdf");
 };
 
 const generateUserToken = (id) =>
@@ -427,4 +443,78 @@ exports.updateProfile = asyncHandler(async (req, res) => {
       company: formatCompanyForClient(company),
     },
   });
+});
+
+exports.previewApplicationResume = asyncHandler(async (req, res) => {
+  const { company } = await resolveClientUserAndCompany(req.user._id);
+  const applicationId = String(req.params.applicationId || "").trim();
+
+  if (!applicationId) {
+    throw createHttpError(400, "Application id is required");
+  }
+
+  const application = await Application.findOne({
+    _id: applicationId,
+    companyId: company._id,
+  }).select("candidateId resumeUrl resumeFileName");
+
+  if (!application) {
+    throw createHttpError(404, "Application not found");
+  }
+
+  let resumeUrl = String(application.resumeUrl || "").trim();
+  let resumeFileName = String(application.resumeFileName || "").trim();
+
+  if (!resumeUrl && application.candidateId) {
+    const candidateProfile = await CandidateProfile.findOne({
+      userId: application.candidateId,
+    }).select("resume");
+
+    if (candidateProfile?.resume?.url) {
+      resumeUrl = String(candidateProfile.resume.url || "").trim();
+      resumeFileName = String(candidateProfile.resume.fileName || "").trim();
+    }
+  }
+
+  if (!resumeUrl) {
+    throw createHttpError(404, "Resume not found for this application");
+  }
+
+  let upstream;
+  try {
+    upstream = await axios({
+      method: "get",
+      url: resumeUrl,
+      responseType: "stream",
+    });
+  } catch {
+    throw createHttpError(502, "Unable to fetch resume from storage");
+  }
+
+  const upstreamContentType = String(upstream.headers?.["content-type"] || "").trim();
+  if (
+    !isLikelyPdf({
+      fileName: resumeFileName,
+      url: resumeUrl,
+      contentType: upstreamContentType,
+    })
+  ) {
+    throw createHttpError(
+      415,
+      "Resume is not in PDF format. Please upload PDF resumes for preview support.",
+    );
+  }
+
+  const safeFileNameBase = String(resumeFileName || "candidate-resume")
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/_{2,}/g, "_");
+  const safeFileName = safeFileNameBase.toLowerCase().endsWith(".pdf")
+    ? safeFileNameBase
+    : `${safeFileNameBase}.pdf`;
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${safeFileName}"`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  upstream.data.pipe(res);
 });

@@ -71,3 +71,9 @@ export async function updateCompanyProfile(payload) {
   return data;
 }
 
+export async function previewCompanyApplicationResume(applicationId) {
+  const { data } = await http.get(`/applications/${applicationId}/resume/preview`, {
+    responseType: "blob",
+  });
+  return data;
+}

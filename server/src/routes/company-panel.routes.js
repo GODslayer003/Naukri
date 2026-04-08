@@ -12,6 +12,7 @@ router.use(role("CLIENT"));
 
 router.get("/dashboard", controller.getDashboard);
 router.post("/jobs", controller.createJob);
+router.get("/applications/:applicationId/resume/preview", controller.previewApplicationResume);
 router.get("/profile", controller.getProfile);
 router.patch("/profile", controller.updateProfile);
 

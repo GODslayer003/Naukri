@@ -21,6 +21,16 @@ const supportedResumeMimeTypes = new Set([
   "application/pdf"
 ]);
 
+const isPdfResumeUpload = (file = null) => {
+  if (!file) {
+    return false;
+  }
+
+  const mimeType = String(file.mimetype || "").toLowerCase();
+  const fileName = String(file.originalname || "").toLowerCase();
+  return supportedResumeMimeTypes.has(mimeType) || fileName.endsWith(".pdf");
+};
+
 const generateToken = (id) =>
   jwt.sign({ id, type: "CANDIDATE_PANEL" }, process.env.JWT_SECRET, {
     expiresIn: "7d",
@@ -224,15 +234,20 @@ const ensureCandidateProfile = async (user) => {
   return profile;
 };
 
-const resolveQrContext = async (token) => {
+const resolveQrContext = async (
+  token,
+  { expandToCompanyJobs = false, limit = 24 } = {},
+) => {
   const qrCode = await QRCode.findOne({ token, isActive: true }).populate("companyId");
 
   if (!qrCode || !qrCode.companyId) {
     throw createHttpError(404, "Invalid or expired QR code");
   }
 
+  const mappedJobId = qrCode.jobId ? String(qrCode.jobId) : "";
+
   const jobs = await Job.find(
-    qrCode.jobId
+    mappedJobId && !expandToCompanyJobs
       ? {
           _id: qrCode.jobId,
           companyId: qrCode.companyId._id,
@@ -246,7 +261,21 @@ const resolveQrContext = async (token) => {
         },
   )
     .sort({ updatedAt: -1 })
+    .limit(limit)
     .populate("companyId", "name");
+
+  if (mappedJobId && expandToCompanyJobs) {
+    jobs.sort((left, right) => {
+      const leftMapped = String(left._id) === mappedJobId;
+      const rightMapped = String(right._id) === mappedJobId;
+
+      if (leftMapped === rightMapped) {
+        return 0;
+      }
+
+      return leftMapped ? -1 : 1;
+    });
+  }
 
   return {
     qrCode,
@@ -274,7 +303,10 @@ const getRecommendedJobs = async (profile, candidateId) => {
 
   if (profile.lastScannedQrToken) {
     try {
-      const context = await resolveQrContext(profile.lastScannedQrToken);
+      const context = await resolveQrContext(profile.lastScannedQrToken, {
+        expandToCompanyJobs: true,
+        limit: 24,
+      });
       jobs = context.jobs;
       mappedCompany = context.company;
     } catch {
@@ -397,6 +429,10 @@ exports.register = asyncHandler(async (req, res) => {
 
   if (!req.file) {
     throw createHttpError(400, "CV upload is mandatory.");
+  }
+
+  if (!isPdfResumeUpload(req.file)) {
+    throw createHttpError(400, "Only PDF resume files are supported.");
   }
  
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -639,19 +675,38 @@ exports.getDashboard = asyncHandler(async (req, res) => {
 exports.getJobs = asyncHandler(async (req, res) => {
   const profile = await ensureCandidateProfile(req.user);
   const token = String(req.query.token || "").trim();
-  const search = String(req.query.search || "").trim();
+  const search = String(req.query.search || "").trim().toLowerCase();
 
   let jobs = [];
   let company = null;
 
   if (token) {
-    const qrContext = await resolveQrContext(token);
+    const qrContext = await resolveQrContext(token, {
+      expandToCompanyJobs: true,
+      limit: 48,
+    });
+
     jobs = qrContext.jobs;
     company = qrContext.company;
 
     if (profile.lastScannedQrToken !== token) {
       profile.lastScannedQrToken = token;
       await profile.save();
+    }
+
+    if (search) {
+      jobs = jobs.filter((job) =>
+        [
+          job.title,
+          job.department,
+          job.location,
+          job.experience,
+          job.companyId?.name,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(search),
+      );
     }
   } else {
     const query = {
