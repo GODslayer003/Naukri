@@ -59,9 +59,13 @@ async function requestTo(
   path,
   { method = "GET", body, auth = true } = {},
 ) {
-  const headers = {
-    "Content-Type": "application/json",
-  };
+  const isMultipartPayload = typeof FormData !== "undefined" && body instanceof FormData;
+
+  const headers = isMultipartPayload
+    ? {}
+    : {
+        "Content-Type": "application/json",
+      };
 
   if (auth) {
     const token = getStoredToken();
@@ -76,7 +80,7 @@ async function requestTo(
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? (isMultipartPayload ? body : JSON.stringify(body)) : undefined,
   });
 
   const payload = await parseJsonSafely(response);

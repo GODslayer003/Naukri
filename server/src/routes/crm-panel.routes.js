@@ -1,6 +1,7 @@
 const express = require("express");
 const crmPanelController = require("../controllers/crm-panel.controller");
 const { protectCrmPanel } = require("../middleware/crm-panel.middleware");
+const uploadQrLogo = require("../middleware/qr-logo-upload.middleware");
 
 const router = express.Router();
 
@@ -10,8 +11,8 @@ router.get("/auth/me", protectCrmPanel, crmPanelController.me);
 router.get("/dashboard", protectCrmPanel, crmPanelController.getDashboard);
 
 router.get("/clients", protectCrmPanel, crmPanelController.getClients);
-router.post("/clients", protectCrmPanel, crmPanelController.createClient);
-router.put("/clients/:id", protectCrmPanel, crmPanelController.updateClient);
+router.post("/clients", protectCrmPanel, uploadQrLogo, crmPanelController.createClient);
+router.put("/clients/:id", protectCrmPanel, uploadQrLogo, crmPanelController.updateClient);
 router.patch(
   "/clients/:id/credentials",
   protectCrmPanel,

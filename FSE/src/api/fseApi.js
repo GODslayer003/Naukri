@@ -43,17 +43,36 @@ const resolveModuleApiBaseUrl = (modulePath) => {
   return `${normalizedBaseUrl}${modulePath}`;
 };
 
+const resolveApiV1BaseUrl = () => {
+  const configuredBaseUrl = normalizeApiV1BaseUrl(import.meta.env.VITE_API_BASE_URL);
+  return configuredBaseUrl || "http://localhost:3000/api/v1";
+};
+
+const API_V1_BASE_URL = resolveApiV1BaseUrl();
+
 const http = axios.create({
   baseURL: resolveModuleApiBaseUrl("/fse"),
 });
 
-http.interceptors.request.use((config) => {
+const crmHttp = axios.create({
+  baseURL: `${API_V1_BASE_URL}/crm-panel`,
+});
+
+const coreHttp = axios.create({
+  baseURL: API_V1_BASE_URL,
+});
+
+const attachAuthHeader = (config) => {
   const token = getAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
+};
+
+http.interceptors.request.use(attachAuthHeader);
+crmHttp.interceptors.request.use(attachAuthHeader);
+coreHttp.interceptors.request.use(attachAuthHeader);
 
 export async function loginFSE(payload) {
   const { data } = await http.post("/auth/login", payload);
@@ -130,4 +149,48 @@ export async function uploadFseProfilePhoto(file) {
     },
   });
   return data.data;
+}
+
+export async function fetchFseClientAccounts() {
+  const { data } = await crmHttp.get("/clients");
+  return data.data;
+}
+
+export async function fetchFsePackages() {
+  const { data } = await crmHttp.get("/packages");
+  return data.data;
+}
+
+export async function createFseClientAccount(payload) {
+  const { data } = await crmHttp.post("/clients", payload);
+  return data;
+}
+
+export async function updateFseClientAccount(id, payload) {
+  const { data } = await crmHttp.put(`/clients/${id}`, payload);
+  return data.data;
+}
+
+export async function updateFseClientAccountCredentials(id, payload) {
+  const { data } = await crmHttp.patch(`/clients/${id}/credentials`, payload);
+  return data.data;
+}
+
+export async function fetchFseQRCodes() {
+  const { data } = await crmHttp.get("/qr-codes");
+  return data.data;
+}
+
+export async function shareFseQRCode(id, payload) {
+  const { data } = await crmHttp.patch(`/qr-codes/${id}/share`, payload);
+  return data.data;
+}
+
+export async function generateFseManagedQRCode(payload) {
+  const { data } = await coreHttp.post("/qr/generate", payload);
+  return data;
+}
+
+export function getFseQrPdfDownloadUrl(token) {
+  return `${API_V1_BASE_URL}/qr/download/${token}`;
 }

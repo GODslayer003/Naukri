@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   LuBell,
+  LuBuilding2,
   LuCircleUserRound,
   LuLayoutDashboard,
   LuList,
   LuLogOut,
   LuPlus,
+  LuQrCode,
   LuUser,
 } from "react-icons/lu";
 import logo from "./assets/maven-logo.svg";
@@ -15,6 +17,8 @@ import Dashboard from "./pages/Dashboard";
 import AddLead from "./pages/AddLead";
 import MyLeads from "./pages/MyLeads";
 import Profile from "./pages/Profile";
+import ClientAccounts from "./pages/ClientAccounts";
+import QRManagement from "./pages/QRManagement";
 
 const SESSION_KEY = "crm_panel_session";
 
@@ -93,6 +97,20 @@ export default function App() {
                     Add Lead
                   </NavLink>
                   <NavLink
+                    to="/client-accounts"
+                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
+                  >
+                    <LuBuilding2 />
+                    Client Accounts
+                  </NavLink>
+                  <NavLink
+                    to="/qr-management"
+                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
+                  >
+                    <LuQrCode />
+                    QR Management
+                  </NavLink>
+                  <NavLink
                     to="/my-leads"
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
@@ -166,6 +184,8 @@ export default function App() {
                 <Routes>
                   <Route index element={<Dashboard />} />
                   <Route path="/add-lead" element={<AddLead />} />
+                  <Route path="/client-accounts" element={<ClientAccounts />} />
+                  <Route path="/qr-management" element={<QRManagement />} />
                   <Route path="/my-leads" element={<MyLeads />} />
                   <Route path="/profile" element={<Profile />} />
                 </Routes>

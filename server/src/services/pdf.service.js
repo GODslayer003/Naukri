@@ -2,8 +2,22 @@ const PDFDocument = require("pdfkit");
 const axios = require("axios");
 
 async function fetchImage(url) {
-  const response = await axios.get(url, { responseType: "arraybuffer" });
+  const response = await axios.get(url, { responseType: "arraybuffer", timeout: 10000 });
   return Buffer.from(response.data);
+}
+
+async function fetchImageSafe(url, label) {
+  const safeUrl = typeof url === "string" ? url.trim() : "";
+  if (!safeUrl) {
+    return null;
+  }
+
+  try {
+    return await fetchImage(safeUrl);
+  } catch (error) {
+    console.warn(`Failed to fetch ${label}:`, error?.message || error);
+    return null;
+  }
 }
 
 /**
@@ -36,6 +50,28 @@ function sanitize(str) {
     .trim();
 }
 
+function drawMavenWordmark(doc, pageWidth, y) {
+  const badgeWidth = 198;
+  const badgeHeight = 40;
+  const badgeX = (pageWidth - badgeWidth) / 2;
+
+  doc
+    .roundedRect(badgeX, y, badgeWidth, badgeHeight, 12)
+    .fillAndStroke("#f3f8ff", "#d2e0f2");
+
+  doc.circle(badgeX + 18, y + badgeHeight / 2, 6).fill("#a7d933");
+
+  doc
+    .fillColor("#163060")
+    .font("Helvetica-Bold")
+    .fontSize(16)
+    .text("MAVEN JOBS", badgeX + 32, y + 12, {
+      width: badgeWidth - 40,
+      align: "left",
+      lineBreak: false,
+    });
+}
+
 exports.generateCompanyQRPDF = async ({ company, jobs = [], qrImageUrl }) => {
   void jobs;
 
@@ -54,71 +90,163 @@ exports.generateCompanyQRPDF = async ({ company, jobs = [], qrImageUrl }) => {
 
   const qrBuffer = await fetchImage(qrImageUrl);
 
+  const logoBuffer = await fetchImageSafe(company?.logoUrl, "company logo for QR PDF");
+
+  const mavenBrandLogoUrl =
+    process.env.MAVEN_BRAND_LOGO_URL || process.env.MAVEN_LOGO_URL || "";
+  const mavenBrandLogoBuffer = await fetchImageSafe(
+    mavenBrandLogoUrl,
+    "MavenJobs brand logo for QR PDF",
+  );
+
   const companyName = sanitize(company?.name) || "Client";
   const tagline = sanitize(company?.tagline);
+  const companyInitial = companyName.charAt(0).toUpperCase() || "C";
+
+  const COLORS = {
+    primary: "#163060",
+    secondary: "#2f5ca1",
+    accent: "#a7d933",
+    headingText: "#112a52",
+    bodyText: "#4a668f",
+    mutedText: "#6f86ab",
+    border: "#d7e3f3",
+    panel: "#f5f9ff",
+    panelSoft: "#fbfdff",
+  };
 
   doc.rect(0, 0, PAGE_W, PAGE_H).fill("#ffffff");
+  doc.rect(0, 0, PAGE_W, 12).fill(COLORS.primary);
+  doc.rect(PAGE_W * 0.66, 0, PAGE_W * 0.34, 12).fill(COLORS.accent);
 
-  const titleY = 88;
+  const companyLogoSize = 96;
+  const companyLogoX = (PAGE_W - companyLogoSize) / 2;
+  const companyLogoY = 54;
+
   doc
-    .fillColor("#0f2550")
+    .roundedRect(companyLogoX - 12, companyLogoY - 12, companyLogoSize + 24, companyLogoSize + 24, 16)
+    .fillAndStroke(COLORS.panel, COLORS.border);
+
+  let hasRenderedCompanyLogo = false;
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, companyLogoX, companyLogoY, {
+        fit: [companyLogoSize, companyLogoSize],
+        align: "center",
+        valign: "center",
+      });
+      hasRenderedCompanyLogo = true;
+    } catch (error) {
+      console.warn("Failed to render company logo in QR PDF:", error?.message || error);
+    }
+  }
+
+  if (!hasRenderedCompanyLogo) {
+    doc
+      .fillColor(COLORS.primary)
+      .font("Helvetica-Bold")
+      .fontSize(40)
+      .text(companyInitial, companyLogoX, companyLogoY + 26, {
+        width: companyLogoSize,
+        align: "center",
+      });
+  }
+
+  const companyNameFontSize = companyName.length > 30 ? 24 : 29;
+  doc
+    .fillColor(COLORS.headingText)
     .font("Helvetica-Bold")
-    .fontSize(30)
-    .text(companyName, MARGIN, titleY, { width: CONTENT_W, align: "center" });
+    .fontSize(companyNameFontSize)
+    .text(companyName, MARGIN, companyLogoY + companyLogoSize + 28, {
+      width: CONTENT_W,
+      align: "center",
+    });
+
+  let headerBottomY = doc.y;
 
   if (tagline) {
     doc
-      .fillColor("#4a5f82")
+      .fillColor(COLORS.bodyText)
       .font("Helvetica")
-      .fontSize(12.5)
-      .text(tagline, MARGIN, doc.y + 10, { width: CONTENT_W, align: "center" });
+      .fontSize(12)
+      .text(tagline, MARGIN, headerBottomY + 12, { width: CONTENT_W, align: "center" });
+    headerBottomY = doc.y;
   }
 
-  const dividerTop = 190;
+  const dividerTop = Math.max(232, headerBottomY + 22);
   doc
     .moveTo(MARGIN, dividerTop)
     .lineTo(PAGE_W - MARGIN, dividerTop)
     .lineWidth(1)
-    .stroke("#e5eaf4");
+    .stroke(COLORS.border);
 
-  const QR_SIZE = 250;
-  const qrX = (PAGE_W - QR_SIZE) / 2;
-  const qrY = (PAGE_H - QR_SIZE) / 2 - 10;
-  const cardPadding = 22;
+  const panelWidth = 344;
+  const panelHeight = 356;
+  const panelX = (PAGE_W - panelWidth) / 2;
+  const panelY = dividerTop + 28;
+
+  doc
+    .roundedRect(panelX, panelY, panelWidth, panelHeight, 24)
+    .fillAndStroke(COLORS.panelSoft, COLORS.border);
+
+  doc
+    .fillColor(COLORS.secondary)
+    .font("Helvetica-Bold")
+    .fontSize(11)
+    .text("SCAN TO OPEN MAVEN JOBS", panelX + 20, panelY + 16, {
+      width: panelWidth - 40,
+      align: "center",
+    });
+
+  const QR_SIZE = 248;
+  const qrX = panelX + (panelWidth - QR_SIZE) / 2;
+  const qrY = panelY + 56;
+  const qrCardPadding = 16;
 
   doc
     .roundedRect(
-      qrX - cardPadding,
-      qrY - cardPadding,
-      QR_SIZE + cardPadding * 2,
-      QR_SIZE + cardPadding * 2,
-      20,
-    )
-    .fill("#f8fafc");
-  doc
-    .roundedRect(
-      qrX - cardPadding,
-      qrY - cardPadding,
-      QR_SIZE + cardPadding * 2,
-      QR_SIZE + cardPadding * 2,
-      20,
+      qrX - qrCardPadding,
+      qrY - qrCardPadding,
+      QR_SIZE + qrCardPadding * 2,
+      QR_SIZE + qrCardPadding * 2,
+      18,
     )
     .lineWidth(1)
-    .stroke("#e2e8f0");
+    .stroke(COLORS.border);
+
   doc.image(qrBuffer, qrX, qrY, { width: QR_SIZE, height: QR_SIZE });
 
-  const footerDivider = PAGE_H - 120;
+  const footerDivider = PAGE_H - 138;
   doc
     .moveTo(MARGIN, footerDivider)
     .lineTo(PAGE_W - MARGIN, footerDivider)
     .lineWidth(1)
-    .stroke("#e5eaf4");
+    .stroke(COLORS.border);
+
+  const footerBrandY = PAGE_H - 112;
+
+  if (mavenBrandLogoBuffer) {
+    try {
+      const brandW = 190;
+      const brandH = 44;
+      doc.image(mavenBrandLogoBuffer, (PAGE_W - brandW) / 2, footerBrandY, {
+        fit: [brandW, brandH],
+        align: "center",
+        valign: "center",
+      });
+    } catch (error) {
+      console.warn("Failed to render MavenJobs brand logo in QR PDF:", error?.message || error);
+      drawMavenWordmark(doc, PAGE_W, footerBrandY + 4);
+    }
+  } else {
+    drawMavenWordmark(doc, PAGE_W, footerBrandY + 4);
+  }
 
   doc
-    .fillColor("#64748b")
+    .fillColor(COLORS.mutedText)
     .font("Helvetica")
-    .fontSize(11.5)
-    .text("Powered by Maven Jobs", MARGIN, PAGE_H - 90, {
+    .fontSize(10.5)
+    .text("Powered by Maven Jobs", MARGIN, PAGE_H - 58, {
       width: CONTENT_W,
       align: "center",
     });

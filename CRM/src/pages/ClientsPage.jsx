@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   LuBuilding2,
   LuBriefcaseBusiness,
@@ -87,6 +87,9 @@ export default function ClientsPage() {
   const [clientForm, setClientForm] = useState(defaultClientForm);
   const [credentialsForm, setCredentialsForm] = useState(defaultCredentialForm);
   const [isSaving, setIsSaving] = useState(false);
+  const [clientLogoFile, setClientLogoFile] = useState(null);
+  const [clientLogoPreviewUrl, setClientLogoPreviewUrl] = useState("");
+  const clientLogoObjectUrlRef = useRef("");
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
@@ -117,6 +120,77 @@ export default function ClientsPage() {
   useEffect(() => {
     loadPage();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (clientLogoObjectUrlRef.current) {
+        URL.revokeObjectURL(clientLogoObjectUrlRef.current);
+        clientLogoObjectUrlRef.current = "";
+      }
+    },
+    [],
+  );
+
+  const resetClientLogo = (nextPreviewUrl = "") => {
+    if (clientLogoObjectUrlRef.current) {
+      URL.revokeObjectURL(clientLogoObjectUrlRef.current);
+      clientLogoObjectUrlRef.current = "";
+    }
+
+    setClientLogoFile(null);
+    setClientLogoPreviewUrl(nextPreviewUrl);
+  };
+
+  const closeClientModal = () => {
+    setIsClientModalOpen(false);
+    resetClientLogo("");
+  };
+
+  const toClientFormData = (payload) => {
+    const formData = new FormData();
+
+    Object.entries(payload).forEach(([key, value]) => {
+      formData.append(key, value == null ? "" : String(value));
+    });
+
+    if (clientLogoFile) {
+      formData.append("logo", clientLogoFile);
+    }
+
+    return formData;
+  };
+
+  const handleClientLogoSelection = (event) => {
+    const selectedFile = event.target.files?.[0] || null;
+    event.target.value = "";
+    setActionError("");
+
+    if (!selectedFile) {
+      return;
+    }
+
+    const allowedMimeTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowedMimeTypes.includes(selectedFile.type)) {
+      setActionError("Please upload a valid logo image (JPG, PNG, or WEBP).");
+      return;
+    }
+
+    const maxSizeInBytes = 5 * 1024 * 1024;
+    if (selectedFile.size > maxSizeInBytes) {
+      setActionError("Logo size must be 5 MB or less.");
+      return;
+    }
+
+    if (clientLogoObjectUrlRef.current) {
+      URL.revokeObjectURL(clientLogoObjectUrlRef.current);
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(selectedFile);
+    clientLogoObjectUrlRef.current = nextPreviewUrl;
+
+    setClientLogoFile(selectedFile);
+    setClientLogoPreviewUrl(nextPreviewUrl);
+  };
 
   const metricCards = useMemo(() => {
     const activeClients = clients.filter((client) => client.status === "ACTIVE").length;
@@ -193,6 +267,7 @@ export default function ClientsPage() {
       ...defaultClientForm,
       packageType: packages[0]?.name || "STANDARD",
     });
+    resetClientLogo("");
     setActionError("");
     setSuccessNote("");
     setIsClientModalOpen(true);
@@ -216,6 +291,7 @@ export default function ClientsPage() {
       clientPassword: "",
       status: client.status || "ACTIVE",
     });
+    resetClientLogo(client.logoUrl || "");
     setActionError("");
     setSuccessNote("");
     setIsClientModalOpen(true);
@@ -240,10 +316,13 @@ export default function ClientsPage() {
     setSuccessNote("");
 
     try {
+      const payload = { ...clientForm };
+      const requestPayload = clientLogoFile ? toClientFormData(payload) : payload;
+
       if (editingClient) {
-        await updateClient(editingClient.id, clientForm);
+        await updateClient(editingClient.id, requestPayload);
       } else {
-        const response = await createClient(clientForm);
+        const response = await createClient(requestPayload);
         if (response.temporaryPassword) {
           setSuccessNote(
             `Client created successfully. Temporary password: ${response.temporaryPassword}`,
@@ -261,7 +340,7 @@ export default function ClientsPage() {
       }
 
       await loadPage();
-      setIsClientModalOpen(false);
+      closeClientModal();
     } catch (requestError) {
       setActionError(requestError.message || "Unable to save client account.");
     } finally {
@@ -441,7 +520,7 @@ export default function ClientsPage() {
 
       <ModalShell
         open={isClientModalOpen}
-        onClose={() => setIsClientModalOpen(false)}
+        onClose={closeClientModal}
         title={editingClient ? "Edit client account" : "Create client account"}
         description="Control company setup, package limits, and the primary client user from the CRM panel."
         width="max-w-4xl"
@@ -552,6 +631,38 @@ export default function ClientsPage() {
             />
           </div>
 
+          <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4">
+            <label className="block text-sm font-semibold text-slate-800" htmlFor="client-logo-upload">
+              Company logo (optional)
+            </label>
+            <input
+              id="client-logo-upload"
+              className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              onChange={handleClientLogoSelection}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              This logo will be used in generated QR PDFs for this client. Max size: 5 MB.
+            </p>
+            {clientLogoPreviewUrl ? (
+              <div className="mt-3 inline-grid justify-items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
+                <img
+                  src={clientLogoPreviewUrl}
+                  alt="Company logo preview"
+                  className="max-h-[68px] max-w-[210px] object-contain"
+                />
+                <button
+                  type="button"
+                  onClick={() => resetClientLogo("")}
+                  className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
+                >
+                  Remove logo
+                </button>
+              </div>
+            ) : null}
+          </div>
+
           {!editingClient ? (
             <div className="grid gap-5 rounded-[24px] border border-slate-200 bg-slate-50 p-5 md:grid-cols-3">
               <TextField
@@ -607,7 +718,7 @@ export default function ClientsPage() {
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => setIsClientModalOpen(false)}
+              onClick={closeClientModal}
               className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
             >
               Cancel

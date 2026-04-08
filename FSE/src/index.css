@@ -994,6 +994,36 @@ a {
   gap: 10px;
 }
 
+.my-leads-zone-time-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.my-leads-select-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.my-leads-select-input {
+  min-width: 156px;
+  height: 44px;
+  border: 1px solid #d6e1ef;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #f9fbfe;
+  color: #315078;
+  outline: none;
+}
+
+.my-leads-select-input:focus {
+  border-color: #a7d933;
+  box-shadow: 0 0 0 2px rgba(167, 217, 51, 0.24);
+}
+
 .my-leads-filter-label {
   display: inline-flex;
   align-items: center;
@@ -1118,6 +1148,306 @@ a {
   font-size: 0.8rem;
 }
 
+.client-accounts-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.client-primary-btn {
+  background: #163060;
+  color: #ffffff;
+  border-radius: 14px;
+  padding-inline: 18px;
+}
+
+.client-primary-btn:hover:not(:disabled) {
+  background: #1f437f;
+}
+
+.success-banner {
+  background: #ebfff4;
+  color: #0b7a46;
+  border: 1px solid #b6ebcf;
+}
+
+.client-accounts-table th:last-child,
+.client-accounts-table td:last-child {
+  text-align: right;
+}
+
+.client-company-stack,
+.client-geo-stack,
+.client-package-stack,
+.client-access-stack,
+.client-manager-stack {
+  display: grid;
+  gap: 4px;
+}
+
+.client-company-stack small,
+.client-geo-stack small,
+.client-package-stack small,
+.client-access-stack small,
+.client-manager-stack small {
+  color: #7b91b2;
+  font-size: 0.78rem;
+}
+
+.client-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  width: fit-content;
+  background: #eaf2ff;
+  border: 1px solid #c8d8f2;
+  color: #295283;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.client-action-stack {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.client-inline-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.client-inline-actions button {
+  border: 1px solid #d3deee;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #355985;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.client-inline-actions button:hover {
+  border-color: #bcd0eb;
+  background: #f3f8ff;
+}
+
+.client-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.client-status-pill.is-active {
+  background: #daf6e7;
+  color: #0f7f49;
+  border: 1px solid #b8e8ce;
+}
+
+.client-status-pill.is-inactive {
+  background: #ffe8eb;
+  color: #b22440;
+  border: 1px solid #f4c4cd;
+}
+
+.fse-modal-content {
+  max-width: 760px;
+}
+
+.fse-modal-medium {
+  max-width: 620px;
+}
+
+.fse-modal-large {
+  max-width: 920px;
+}
+
+.fse-modal-xl {
+  max-width: 1020px;
+}
+
+.fse-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.fse-form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.fse-form-field span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #274a76;
+}
+
+.fse-form-field-full {
+  grid-column: 1 / -1;
+}
+
+.fse-field-hint {
+  margin: 0;
+  font-size: 0.77rem;
+  color: #58739b;
+  line-height: 1.4;
+}
+
+.fse-logo-upload-input {
+  padding: 10px 12px;
+}
+
+.fse-logo-preview-wrap {
+  border: 1px solid #d9e3f2;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 10px 12px;
+  display: inline-grid;
+  justify-items: center;
+  gap: 8px;
+  justify-content: center;
+  width: fit-content;
+  min-width: 160px;
+}
+
+.fse-logo-preview {
+  max-height: 68px;
+  max-width: 210px;
+  object-fit: contain;
+}
+
+.fse-logo-clear-btn {
+  border: 1px solid #d3deee;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #355985;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.fse-logo-clear-btn:hover {
+  background: #f3f8ff;
+  border-color: #bcd0eb;
+}
+
+.fse-modal-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.fse-credentials-note {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid #d7e5fb;
+  background: #f4f8ff;
+  color: #355a88;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+
+.qr-records-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.qr-record-card {
+  border: 1px solid #d9e3f2;
+  border-radius: 16px;
+  background: #fbfdff;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.qr-record-meta {
+  display: grid;
+  gap: 6px;
+  color: #4d668c;
+}
+
+.qr-record-meta h3 {
+  margin: 0;
+  color: #223b5e;
+  font-size: 1.45rem;
+}
+
+.qr-record-meta p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.qr-record-meta small {
+  color: #7f93b1;
+  font-size: 0.8rem;
+}
+
+.qr-record-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.qr-record-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.qr-record-actions a,
+.qr-share-btn {
+  border: 1px solid #d3deee;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #2f4f79;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 9px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.qr-record-actions a:hover,
+.qr-share-btn:hover {
+  border-color: #bcd0eb;
+  background: #f3f8ff;
+}
+
+.qr-share-btn {
+  background: #163060;
+  border-color: #163060;
+  color: #ffffff;
+}
+
+.qr-share-btn:hover {
+  background: #1f437f;
+  border-color: #1f437f;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1223,6 +1553,21 @@ a {
     align-items: flex-start;
   }
 
+  .my-leads-zone-time-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .my-leads-select-field {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .my-leads-select-input {
+    flex: 1;
+    min-width: 0;
+  }
+
   .my-leads-filter-chips {
     flex-wrap: wrap;
   }
@@ -1244,6 +1589,23 @@ a {
   }
 
   .add-lead-actions .button-primary {
+    width: 100%;
+  }
+
+  .client-accounts-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .client-inline-actions {
+    justify-content: flex-end;
+  }
+
+  .fse-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .qr-record-actions {
     width: 100%;
   }
 

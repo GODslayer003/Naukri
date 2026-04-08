@@ -116,6 +116,7 @@ export default function App() {
     budget: "",
   });
   const [clientJdFiles, setClientJdFiles] = useState([]);
+  const [clientStep, setClientStep] = useState(1);
 
   const candidateRegisterUrl = useMemo(resolveCandidateRegisterUrl, []);
   const clientIntakeUrl = useMemo(resolveClientIntakeUrl, []);
@@ -167,7 +168,38 @@ export default function App() {
 
   const resetClientFlow = () => {
     resetClientDraft();
+    setClientStep(1);
     setView("role");
+  };
+
+  const validateClientStepOne = () => {
+    if (!clientForm.companyName.trim() || !clientForm.email.trim() || !clientForm.phone.trim()) {
+      return "Company name, email, and phone number are mandatory.";
+    }
+
+    if (!EMAIL_PATTERN.test(clientForm.email.trim())) {
+      return "Please enter a valid email address.";
+    }
+
+    if (!isValidPhoneNumber(clientForm.phone)) {
+      return "Phone number must contain exactly 10 digits.";
+    }
+
+    return "";
+  };
+
+  const handleClientNext = (event) => {
+    event.preventDefault();
+    setClientFeedback({ type: "", message: "" });
+
+    const validationMessage = validateClientStepOne();
+    if (validationMessage) {
+      setClientFeedback({ type: "error", message: validationMessage });
+      return;
+    }
+
+    setClientStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const validateCandidateForm = () => {
@@ -316,6 +348,7 @@ export default function App() {
       setClientCompanyName(clientForm.companyName.trim());
       setClientReferenceId(String(parsed.referenceId || "").trim());
       setView("client-thanks");
+      setShowDownloadModal(true);
     } catch (error) {
       setClientFeedback({
         type: "error",
@@ -375,6 +408,7 @@ export default function App() {
                 className="role-card"
                 onClick={() => {
                   setClientFeedback({ type: "", message: "" });
+                  setClientStep(1);
                   setView("client");
                 }}
               >
@@ -483,7 +517,9 @@ export default function App() {
           <>
             <h1 className="headline">Client / Employer Registration</h1>
             <p className="sub-copy">
-              Step 1: Company details. Step 2: Add role manually or upload JD files.
+              {clientStep === 1
+                ? "Step 1 of 2: Company details."
+                : "Step 2 of 2: Add role manually or upload JD files."}
             </p>
 
             {clientFeedback.message ? (
@@ -492,107 +528,133 @@ export default function App() {
               </div>
             ) : null}
 
-            <form className="candidate-form client-form" onSubmit={submitClient} noValidate>
-              <label className="form-field">
-                <span className="field-label">
-                  Company Name <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="text"
-                  value={clientForm.companyName}
-                  onChange={updateClientField("companyName")}
-                  placeholder="Company legal name"
-                />
-              </label>
+            <form
+              className="candidate-form client-form"
+              onSubmit={clientStep === 2 ? submitClient : handleClientNext}
+              noValidate
+            >
+              {clientStep === 1 ? (
+                <>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Company Name <span className="required-asterisk">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={clientForm.companyName}
+                      onChange={updateClientField("companyName")}
+                      placeholder="Company legal name"
+                    />
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">
-                  Company Email <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="email"
-                  value={clientForm.email}
-                  onChange={updateClientField("email")}
-                  placeholder="hr@company.com"
-                />
-              </label>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Company Email <span className="required-asterisk">*</span>
+                    </span>
+                    <input
+                      type="email"
+                      value={clientForm.email}
+                      onChange={updateClientField("email")}
+                      placeholder="hr@company.com"
+                    />
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">
-                  Phone Number <span className="required-asterisk">*</span>
-                </span>
-                <div className="phone-input-row">
-                  <span className="country-code-pill">+91</span>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]{10}"
-                    maxLength={10}
-                    value={clientForm.phone}
-                    onChange={(event) =>
-                      setClientForm((prev) => ({ ...prev, phone: toIndianPhoneDigits(event.target.value) }))
-                    }
-                    placeholder="9876543210"
-                  />
-                </div>
-              </label>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Phone Number <span className="required-asterisk">*</span>
+                    </span>
+                    <div className="phone-input-row">
+                      <span className="country-code-pill">+91</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]{10}"
+                        maxLength={10}
+                        value={clientForm.phone}
+                        onChange={(event) =>
+                          setClientForm((prev) => ({ ...prev, phone: toIndianPhoneDigits(event.target.value) }))
+                        }
+                        placeholder="9876543210"
+                      />
+                    </div>
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">Budget / CTC (optional)</span>
-                <input
-                  type="text"
-                  value={clientForm.budget}
-                  onChange={updateClientField("budget")}
-                  placeholder="e.g. 8-10 LPA"
-                />
-              </label>
+                  <label className="form-field">
+                    <span className="field-label">Budget / CTC (optional)</span>
+                    <input
+                      type="text"
+                      value={clientForm.budget}
+                      onChange={updateClientField("budget")}
+                      placeholder="e.g. 8-10 LPA"
+                    />
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">Role Title (option A: manual)</span>
-                <input
-                  type="text"
-                  value={clientForm.roleTitle}
-                  onChange={updateClientField("roleTitle")}
-                  placeholder="e.g. Territory Sales Manager"
-                />
-              </label>
-
-              <label className="form-field form-field-full">
-                <span className="field-label">Role Description (optional)</span>
-                <textarea
-                  value={clientForm.roleDescription}
-                  onChange={updateClientField("roleDescription")}
-                  placeholder="Describe responsibilities, skills, and hiring context."
-                />
-              </label>
-
-              <label className="form-field form-field-full">
-                <span className="field-label">Upload JD Files (option B)</span>
-                <input
-                  type="file"
-                  multiple
-                  onChange={(event) => setClientJdFiles(Array.from(event.target.files || []))}
-                />
-                <small className="field-hint">
-                  Upload up to {MAX_CLIENT_JD_FILES} files, max 8MB each. Add role title or at least one JD file.
-                </small>
-                {clientJdFiles.length ? (
-                  <div className="selected-files">
-                    {clientJdFiles.map((file) => (
-                      <span key={`${file.name}-${file.size}`}>{file.name}</span>
-                    ))}
+                  <div className="form-actions">
+                    <button type="button" className="button button-secondary" onClick={resetClientFlow}>
+                      Back
+                    </button>
+                    <button type="submit" className="button button-primary">
+                      Next
+                    </button>
                   </div>
-                ) : null}
-              </label>
+                </>
+              ) : (
+                <>
+                  <label className="form-field">
+                    <span className="field-label">Role Title (option A: manual)</span>
+                    <input
+                      type="text"
+                      value={clientForm.roleTitle}
+                      onChange={updateClientField("roleTitle")}
+                      placeholder="e.g. Territory Sales Manager"
+                    />
+                  </label>
 
-              <div className="form-actions">
-                <button type="button" className="button button-secondary" onClick={resetClientFlow}>
-                  Back
-                </button>
-                <button type="submit" className="button button-primary" disabled={isClientSubmitting}>
-                  {isClientSubmitting ? "Submitting..." : "Submit Role Posting"}
-                </button>
-              </div>
+                  <label className="form-field form-field-full">
+                    <span className="field-label">Role Description (optional)</span>
+                    <textarea
+                      value={clientForm.roleDescription}
+                      onChange={updateClientField("roleDescription")}
+                      placeholder="Describe responsibilities, skills, and hiring context."
+                    />
+                  </label>
+
+                  <label className="form-field form-field-full">
+                    <span className="field-label">Upload JD Files (option B)</span>
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(event) => setClientJdFiles(Array.from(event.target.files || []))}
+                    />
+                    <small className="field-hint">
+                      Upload up to {MAX_CLIENT_JD_FILES} files, max 8MB each. Add role title or at least one JD file.
+                    </small>
+                    {clientJdFiles.length ? (
+                      <div className="selected-files">
+                        {clientJdFiles.map((file) => (
+                          <span key={`${file.name}-${file.size}`}>{file.name}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </label>
+
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => {
+                        setClientStep(1);
+                        setClientFeedback({ type: "", message: "" });
+                      }}
+                    >
+                      Back
+                    </button>
+                    <button type="submit" className="button button-primary" disabled={isClientSubmitting}>
+                      {isClientSubmitting ? "Submitting..." : "Submit Role Posting"}
+                    </button>
+                  </div>
+                </>
+              )}
             </form>
           </>
         ) : null}
@@ -638,8 +700,16 @@ export default function App() {
               <button
                 type="button"
                 className="button button-primary"
+                onClick={() => setShowDownloadModal(true)}
+              >
+                Download MavenJobs App
+              </button>
+              <button
+                type="button"
+                className="button button-secondary"
                 onClick={() => {
                   resetClientDraft();
+                  setClientStep(1);
                   setView("client");
                 }}
               >

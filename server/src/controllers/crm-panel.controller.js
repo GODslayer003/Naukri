@@ -170,9 +170,32 @@ const formatCrmUser = (user) => ({
   accessStatus: user.accessStatus || "ACTIVE",
 });
 
+const isFseOperator = (user = {}) => String(user?.role || "").toUpperCase() === "FSE";
+
+const assertOwnedByRequesterForFse = (
+  ownerId,
+  user,
+  message = "You are not allowed to access this record.",
+) => {
+  if (!isFseOperator(user)) {
+    return;
+  }
+
+  if (!ownerId || String(ownerId) !== String(user?._id)) {
+    throw createHttpError(403, message);
+  }
+};
+
+const getCompanyVisibilityFilter = (user) =>
+  isFseOperator(user) ? { createdByCRM: user._id } : {};
+
+const getQrVisibilityFilter = (user) =>
+  isFseOperator(user) ? { createdByCRM: user._id } : {};
+
 const formatClient = (company, clientUser = null) => ({
   id: String(company._id),
   name: company.name,
+  logoUrl: company.logoUrl || "",
   industry: company.industry || "General",
   packageType: company.packageType || "STANDARD",
   jobLimit: company.jobLimit || 2,
@@ -185,6 +208,7 @@ const formatClient = (company, clientUser = null) => ({
   zone: company.location?.zone || "",
   accountManager: company.accountManager || "",
   configurationNotes: company.configurationNotes || "",
+  createdByCRM: company.createdByCRM ? String(company.createdByCRM) : "",
   clientUser: clientUser
     ? {
         id: String(clientUser._id),
@@ -235,12 +259,14 @@ const formatQRCodeRecord = (qrCode) => ({
   shareChannel: qrCode.shareChannel || "",
   sharedWithEmail: qrCode.sharedWithEmail || "",
   lastSharedAt: qrCode.lastSharedAt,
+  createdByCRM: qrCode.createdByCRM ? String(qrCode.createdByCRM) : "",
   createdAt: qrCode.createdAt,
 });
 
 const formatQRCodeCompany = (company) => ({
   id: String(company._id),
   name: company.name,
+  logoUrl: company.logoUrl || "",
   tagline: company.tagline || "",
   industry: company.industry || "",
   website: company.website || "",
@@ -353,6 +379,45 @@ const uploadPdfBuffer = async (pdfBuffer, { token, publicId } = {}) =>
 
     streamifier.createReadStream(pdfBuffer).pipe(uploadStream);
   });
+
+const uploadCompanyLogo = async (file, ownerId) =>
+  new Promise((resolve, reject) => {
+    const publicId = `logo_${String(ownerId || "crm")}_${crypto.randomUUID()}`;
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: "image",
+        folder: "company_logos",
+        public_id: publicId,
+        overwrite: true,
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve({
+          logoUrl: result?.secure_url || "",
+          logoPublicId: result?.public_id || "",
+        });
+      },
+    );
+
+    streamifier.createReadStream(file.buffer).pipe(uploadStream);
+  });
+
+const destroyCompanyLogo = async (publicId) => {
+  if (!publicId) {
+    return;
+  }
+
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+  } catch (error) {
+    console.warn("Logo cleanup failed:", error?.message || error);
+  }
+};
 
 const syncCompanyCapacity = async (companyId) => {
   const [company, activeJobCount] = await Promise.all([
@@ -603,7 +668,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
 });
 
 exports.getClients = asyncHandler(async (req, res) => {
-  const companies = await Company.find()
+  const companies = await Company.find(getCompanyVisibilityFilter(req.user))
     .sort({ updatedAt: -1 })
     .populate("clientUserId", "name email accessStatus");
 
@@ -652,54 +717,70 @@ exports.createClient = asyncHandler(async (req, res) => {
     throw createHttpError(409, "Client credentials already exist for this email");
   }
 
-  const company = await Company.create({
-    name: name.trim(),
-    industry: industry.trim(),
-    email: email.trim().toLowerCase(),
-    phone: phone.trim(),
-    location: {
-      city: city.trim(),
-      region: region.trim(),
-      zone: zone.trim(),
-    },
-    packageType: selectedPackage.name,
-    jobLimit: selectedPackage.jobLimit,
-    configurationNotes: configurationNotes.trim(),
-    accountManager: accountManager.trim(),
-    createdByCRM: req.user._id,
-    status: "ACTIVE",
-  });
-
-  const generatedPassword = clientPassword.trim() || createTemporaryPassword();
-  const clientUser = await createOrUpdateClientUser({
-    company,
-    name: clientName,
-    email: clientEmail,
-    password: generatedPassword,
-  });
-
-  company.clientUserId = clientUser._id;
-  await company.save();
-
-  let qrCode = null;
-  let qrGenerationError = "";
+  let uploadedLogo = null;
+  let company = null;
 
   try {
-    qrCode = await createQrKitForCompany({
-      companyId: company._id,
+    if (req.file) {
+      uploadedLogo = await uploadCompanyLogo(req.file, req.user?._id);
+    }
+
+    company = await Company.create({
+      name: name.trim(),
+      industry: industry.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
+      logoUrl: uploadedLogo?.logoUrl || "",
+      logoPublicId: uploadedLogo?.logoPublicId || "",
+      location: {
+        city: city.trim(),
+        region: region.trim(),
+        zone: zone.trim(),
+      },
+      packageType: selectedPackage.name,
+      jobLimit: selectedPackage.jobLimit,
+      configurationNotes: configurationNotes.trim(),
+      accountManager: accountManager.trim(),
       createdByCRM: req.user._id,
+      status: "ACTIVE",
+    });
+
+    const generatedPassword = clientPassword.trim() || createTemporaryPassword();
+    const clientUser = await createOrUpdateClientUser({
+      company,
+      name: clientName,
+      email: clientEmail,
+      password: generatedPassword,
+    });
+
+    company.clientUserId = clientUser._id;
+    await company.save();
+
+    let qrCode = null;
+    let qrGenerationError = "";
+
+    try {
+      qrCode = await createQrKitForCompany({
+        companyId: company._id,
+        createdByCRM: req.user._id,
+      });
+    } catch (error) {
+      qrGenerationError = error?.message || "Unable to generate QR kit.";
+    }
+
+    res.status(201).json({
+      success: true,
+      data: formatClient(company, clientUser),
+      temporaryPassword: generatedPassword,
+      qrCode: qrCode ? formatQRCodeRecord(qrCode) : null,
+      qrGenerationError,
     });
   } catch (error) {
-    qrGenerationError = error?.message || "Unable to generate QR kit.";
+    if (uploadedLogo?.logoPublicId && !company?._id) {
+      await destroyCompanyLogo(uploadedLogo.logoPublicId);
+    }
+    throw error;
   }
-
-  res.status(201).json({
-    success: true,
-    data: formatClient(company, clientUser),
-    temporaryPassword: generatedPassword,
-    qrCode: qrCode ? formatQRCodeRecord(qrCode) : null,
-    qrGenerationError,
-  });
 });
 
 exports.updateClient = asyncHandler(async (req, res) => {
@@ -712,8 +793,22 @@ exports.updateClient = asyncHandler(async (req, res) => {
     throw createHttpError(404, "Client company not found");
   }
 
+  assertOwnedByRequesterForFse(
+    company.createdByCRM,
+    req.user,
+    "You can only update client accounts created by you.",
+  );
+
   const packageName = (req.body.packageType || company.packageType || "STANDARD").toUpperCase();
   const selectedPackage = await Package.findOne({ name: packageName });
+  const previousLogoPublicId = company.logoPublicId || "";
+
+  let uploadedLogo = null;
+  let hasPersistedUpdate = false;
+
+  if (req.file) {
+    uploadedLogo = await uploadCompanyLogo(req.file, req.user?._id);
+  }
 
   company.name = req.body.name?.trim() || company.name;
   company.industry = req.body.industry?.trim() || company.industry;
@@ -732,7 +827,29 @@ exports.updateClient = asyncHandler(async (req, res) => {
     zone: req.body.zone?.trim() ?? company.location?.zone,
   };
 
-  await company.save();
+  if (uploadedLogo?.logoUrl) {
+    company.logoUrl = uploadedLogo.logoUrl;
+    company.logoPublicId = uploadedLogo.logoPublicId || "";
+  }
+
+  try {
+    await company.save();
+    hasPersistedUpdate = true;
+  } catch (error) {
+    if (uploadedLogo?.logoPublicId) {
+      await destroyCompanyLogo(uploadedLogo.logoPublicId);
+    }
+    throw error;
+  }
+
+  if (
+    hasPersistedUpdate &&
+    uploadedLogo?.logoPublicId &&
+    previousLogoPublicId &&
+    previousLogoPublicId !== uploadedLogo.logoPublicId
+  ) {
+    await destroyCompanyLogo(previousLogoPublicId);
+  }
 
   res.status(200).json({
     success: true,
@@ -746,6 +863,12 @@ exports.updateClientCredentials = asyncHandler(async (req, res) => {
   if (!company?.clientUserId) {
     throw createHttpError(404, "Client credentials not found");
   }
+
+  assertOwnedByRequesterForFse(
+    company.createdByCRM,
+    req.user,
+    "You can only update credentials for client accounts created by you.",
+  );
 
   const clientUser = await User.findById(company.clientUserId);
 
@@ -1021,7 +1144,7 @@ exports.upsertPackage = asyncHandler(async (req, res) => {
 });
 
 exports.getQRCodes = asyncHandler(async (req, res) => {
-  const qrCodes = await QRCode.find()
+  const qrCodes = await QRCode.find(getQrVisibilityFilter(req.user))
     .sort({ updatedAt: -1 })
     .populate("companyId", "name")
     .populate("jobId", "title");
@@ -1038,6 +1161,12 @@ exports.getQRCode = asyncHandler(async (req, res) => {
   if (!qrCode) {
     throw createHttpError(404, "QR code not found");
   }
+
+  assertOwnedByRequesterForFse(
+    qrCode.createdByCRM,
+    req.user,
+    "You can only view QR codes created by you.",
+  );
 
   if (!qrCode.companyId?._id) {
     throw createHttpError(404, "Company not found");
@@ -1058,6 +1187,12 @@ exports.updateQRCode = asyncHandler(async (req, res) => {
   if (!qrCode) {
     throw createHttpError(404, "QR code not found");
   }
+
+  assertOwnedByRequesterForFse(
+    qrCode.createdByCRM,
+    req.user,
+    "You can only update QR codes created by you.",
+  );
 
   const company =
     qrCode.companyId?._id ? qrCode.companyId : await Company.findById(qrCode.companyId);
@@ -1166,6 +1301,19 @@ exports.createQRCode = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Company is required");
   }
 
+  if (isFseOperator(req.user)) {
+    const company = await Company.findById(companyId).select("createdByCRM");
+    if (!company) {
+      throw createHttpError(404, "Company not found");
+    }
+
+    assertOwnedByRequesterForFse(
+      company.createdByCRM,
+      req.user,
+      "You can only generate QR codes for client accounts created by you.",
+    );
+  }
+
   const hydratedQr = await createQrKitForCompany({
     companyId,
     jobId: jobId || null,
@@ -1184,6 +1332,12 @@ exports.shareQRCode = asyncHandler(async (req, res) => {
   if (!qrCode) {
     throw createHttpError(404, "QR code not found");
   }
+
+  assertOwnedByRequesterForFse(
+    qrCode.createdByCRM,
+    req.user,
+    "You can only share QR records created by you.",
+  );
 
   qrCode.shareChannel = (req.body.channel || "MANUAL").toUpperCase();
   qrCode.sharedWithEmail = req.body.email?.trim().toLowerCase() || "";
