@@ -6,6 +6,7 @@ import {
   ModalShell,
   PageState,
   PanelCard,
+  SelectField,
   SectionHeading,
   TextAreaField,
   TextField,
@@ -14,10 +15,22 @@ import { getPackages, updatePackage } from "../services/crmApi";
 import { formatNumber, titleCase } from "../utils/formatters";
 
 export default function PackagesPage() {
+  const PACKAGE_ROLLOUT_OPTIONS = [
+    {
+      label: "Apply for everyone",
+      value: "APPLY_FOR_EVERYONE",
+    },
+    {
+      label: "Apply after current limit is exhausted",
+      value: "APPLY_AFTER_EXHAUSTION",
+    },
+  ];
+
   const [packages, setPackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [jobLimit, setJobLimit] = useState("");
   const [description, setDescription] = useState("");
+  const [rolloutMode, setRolloutMode] = useState("APPLY_FOR_EVERYONE");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState("");
@@ -70,6 +83,7 @@ export default function PackagesPage() {
     setSelectedPackage(pkg);
     setJobLimit(String(pkg.jobLimit || ""));
     setDescription(pkg.description || "");
+    setRolloutMode("APPLY_FOR_EVERYONE");
     setActionError("");
     setIsModalOpen(true);
   };
@@ -83,6 +97,7 @@ export default function PackagesPage() {
       await updatePackage(selectedPackage.name, {
         jobLimit: Number(jobLimit || 0),
         description,
+        rolloutMode,
       });
       await loadPackages();
       setIsModalOpen(false);
@@ -166,7 +181,7 @@ export default function PackagesPage() {
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={selectedPackage ? `Edit ${titleCase(selectedPackage.name)} package` : "Edit package"}
-        description="Adjust the default posting limit and package description. Existing client accounts on this package will inherit the updated limit."
+        description="Adjust default posting limits and choose how this package change should roll out across existing client accounts."
       >
         <form onSubmit={handleSubmit} className="space-y-5">
           <TextField
@@ -182,6 +197,18 @@ export default function PackagesPage() {
             onChange={(event) => setDescription(event.target.value)}
             required
           />
+          <SelectField
+            label="Rollout mode"
+            value={rolloutMode}
+            onChange={(event) => setRolloutMode(event.target.value)}
+            options={PACKAGE_ROLLOUT_OPTIONS}
+            required
+          />
+          <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+            {rolloutMode === "APPLY_FOR_EVERYONE"
+              ? "Apply for everyone: all existing clients on this package move to the updated job-posting limit immediately."
+              : "Apply after current limit is exhausted: existing clients keep their current limit until they fully consume it; then the new limit applies automatically."}
+          </p>
           <div className="flex justify-end gap-3">
             <button
               type="button"

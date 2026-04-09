@@ -49,6 +49,7 @@ const metricConfig = [
 ];
 
 export default function CrmDashboard() {
+  const dashboardVisibleRows = 5;
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -94,6 +95,11 @@ export default function CrmDashboard() {
       value: formatNumber(dashboard.summary[item.key]),
     }));
   }, [dashboard]);
+
+  const jobApprovals = dashboard?.jobApprovals || [];
+  const applicationFeed = dashboard?.applicationFeed || [];
+  const hasJobApprovalsOverflow = jobApprovals.length > dashboardVisibleRows;
+  const hasApplicationFeedOverflow = applicationFeed.length > dashboardVisibleRows;
 
   if (isLoading) {
     return <PageState title="Loading CRM dashboard..." />;
@@ -268,9 +274,15 @@ export default function CrmDashboard() {
             description="Review approvals, intervene quickly, and maintain package compliance before roles go live."
           />
 
-          <div className="mt-6 space-y-3">
-            {dashboard.jobApprovals.length ? (
-              dashboard.jobApprovals.map((job) => (
+          <div
+            className={`mt-6 space-y-3 ${
+              hasJobApprovalsOverflow
+                ? "crm-scroll-panel max-h-[33rem] overflow-y-auto pr-2"
+                : ""
+            }`}
+          >
+            {jobApprovals.length ? (
+              jobApprovals.map((job) => (
                 <div
                   key={job.id}
                   className="rounded-[20px] border border-slate-200 p-4 transition hover:border-lime-300 hover:bg-lime-50/30"
@@ -310,9 +322,15 @@ export default function CrmDashboard() {
             description="CRM can view end-to-end application movement across all client job pipelines."
           />
 
-          <div className="mt-6 space-y-3">
-            {dashboard.applicationFeed.length ? (
-              dashboard.applicationFeed.map((application) => (
+          <div
+            className={`mt-6 space-y-3 ${
+              hasApplicationFeedOverflow
+                ? "crm-scroll-panel max-h-[33rem] overflow-y-auto pr-2"
+                : ""
+            }`}
+          >
+            {applicationFeed.length ? (
+              applicationFeed.map((application) => (
                 <div
                   key={application.id}
                   className="rounded-[20px] border border-slate-200 p-4 transition hover:border-lime-300 hover:bg-lime-50/30"

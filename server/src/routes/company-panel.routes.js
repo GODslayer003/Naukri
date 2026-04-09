@@ -12,6 +12,8 @@ router.use(role("CLIENT"));
 
 router.get("/dashboard", controller.getDashboard);
 router.post("/jobs", controller.createJob);
+router.get("/package-change-requests", controller.getPackageChangeRequests);
+router.post("/package-change-requests", controller.createPackageChangeRequest);
 router.get("/applications", controller.getApplications);
 router.patch("/applications/:applicationId/status", controller.updateApplicationStatus);
 router.get("/applications/:applicationId/resume/preview", controller.previewApplicationResume);

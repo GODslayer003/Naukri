@@ -61,6 +61,16 @@ export async function fetchCompanyApplications(params = {}) {
   return data.data;
 }
 
+export async function fetchCompanyPackageChangeRequests(params = {}) {
+  const { data } = await http.get("/package-change-requests", { params });
+  return data.data;
+}
+
+export async function createCompanyPackageChangeRequest(payload) {
+  const { data } = await http.post("/package-change-requests", payload);
+  return data;
+}
+
 export async function updateCompanyApplicationStatus(applicationId, status) {
   const { data } = await http.patch(`/applications/${applicationId}/status`, { status });
   return data;

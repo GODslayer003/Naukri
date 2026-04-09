@@ -166,6 +166,22 @@ export function updateJobApproval(id, payload) {
   });
 }
 
+export function getPackageChangeRequests(params = {}) {
+  const query = new URLSearchParams();
+  if (params.status) {
+    query.set("status", params.status);
+  }
+  const queryString = query.toString();
+  return request(`/package-change-requests${queryString ? `?${queryString}` : ""}`);
+}
+
+export function updatePackageChangeRequest(id, payload) {
+  return request(`/package-change-requests/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export function getPackages() {
   return request("/packages");
 }

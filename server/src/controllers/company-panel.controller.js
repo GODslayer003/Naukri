@@ -8,6 +8,18 @@ const Job = require("../models/Job");
 const Application = require("../models/Application");
 const CandidateProfile = require("../models/CandidateProfile");
 const CandidateNotification = require("../models/CandidateNotification");
+const PackageChangeRequest = require("../models/PackageChangeRequest");
+const {
+  loadPackageCatalog,
+  applyCompanyPackageSnapshot,
+  normalizePackageName,
+  resolveCompanyJobLimit,
+} = require("../services/package-limit.service");
+const {
+  buildPackageChangeEffectiveAt,
+  formatPackageChangeRequest,
+  applyDueApprovedPackageChangesForCompany,
+} = require("../services/package-change-request.service");
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -33,6 +45,7 @@ const APPLICATION_STATUS_ENUM = [
 ];
 
 const APPLICATION_STATUS_SET = new Set(APPLICATION_STATUS_ENUM);
+const PACKAGE_TYPES = ["STANDARD", "PREMIUM", "ELITE"];
 
 const normalizeApplicationStatus = (value) => {
   const normalized = String(value || "").trim().toUpperCase();
@@ -105,9 +118,11 @@ const resolveClientUserAndCompany = async (userId) => {
   return { user, company };
 };
 
-const formatCompanyForClient = (company) => {
+const formatCompanyForClient = (company, options = {}) => {
+  const resolvedJobLimit = Number(
+    options?.jobLimit !== undefined ? options.jobLimit : company.jobLimit || 0,
+  );
   const activeJobCount = Number(company.activeJobCount || 0);
-  const jobLimit = Number(company.jobLimit || 0);
 
   return {
     id: String(company._id),
@@ -116,9 +131,9 @@ const formatCompanyForClient = (company) => {
     industry: company.industry || "",
     status: company.status || "ACTIVE",
     packageType: company.packageType || "STANDARD",
-    jobLimit,
+    jobLimit: resolvedJobLimit,
     activeJobCount,
-    remainingSlots: Math.max(jobLimit - activeJobCount, 0),
+    remainingSlots: Math.max(resolvedJobLimit - activeJobCount, 0),
     email: company.email || "",
     phone: company.phone || "",
     website: company.website || "",
@@ -186,6 +201,30 @@ const formatCompanyApplication = (application, profileMap = new Map()) => {
   };
 };
 
+const formatPackageChangeRequestForCompany = (request, company) =>
+  formatPackageChangeRequest(request, {
+    companyName: company?.name || "",
+    requestedByName: company?.name || "Client",
+  });
+
+const syncCompanyPackageContext = async (company) => {
+  const { packageCatalog, packageLimitMap } = await loadPackageCatalog();
+
+  const appliedResult = await applyDueApprovedPackageChangesForCompany(company, packageLimitMap);
+  const packageSnapshot = applyCompanyPackageSnapshot(company, packageLimitMap);
+
+  if (appliedResult.updated || packageSnapshot.dirty) {
+    await company.save();
+  }
+
+  return {
+    packageCatalog,
+    packageLimitMap,
+    packageSnapshot,
+    appliedPackageChange: appliedResult?.lastAppliedRequest || null,
+  };
+};
+
 exports.login = asyncHandler(async (req, res) => {
   const username = toTrimmedString(req.body.username);
   const email = toTrimmedString(req.body.email).toLowerCase();
@@ -222,6 +261,8 @@ exports.login = asyncHandler(async (req, res) => {
     throw createHttpError(403, "Company profile is inactive");
   }
 
+  const { packageSnapshot } = await syncCompanyPackageContext(company);
+
   res.status(200).json({
     success: true,
     token: generateUserToken(user._id),
@@ -233,19 +274,34 @@ exports.login = asyncHandler(async (req, res) => {
       companyId: String(company._id),
       companyName: company.name || "",
     },
-    company: formatCompanyForClient(company),
+    company: formatCompanyForClient(company, { jobLimit: packageSnapshot.jobLimit }),
   });
 });
 
 exports.getDashboard = asyncHandler(async (req, res) => {
   const { company } = await resolveClientUserAndCompany(req.user._id);
+  const { packageCatalog, packageSnapshot, appliedPackageChange } = await syncCompanyPackageContext(company);
 
-  const [jobs, applications] = await Promise.all([
+  const [jobs, applications, activePackageRequest, recentPackageRequests] = await Promise.all([
     Job.find({ companyId: company._id }).sort({ updatedAt: -1 }),
     Application.find({ companyId: company._id })
       .sort({ updatedAt: -1 })
       .populate("jobId", "title")
       .populate("candidateId", "name email"),
+    PackageChangeRequest.findOne({
+      companyId: company._id,
+      $or: [{ status: "PENDING" }, { status: "APPROVED", appliedAt: null }],
+    })
+      .sort({ createdAt: -1 })
+      .select(
+        "currentPackageType requestedPackageType currentJobLimit requestedJobLimit status isUpgrade reason decisionNote effectiveAt appliedAt reviewedAt createdAt updatedAt",
+      ),
+    PackageChangeRequest.find({ companyId: company._id })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .select(
+        "currentPackageType requestedPackageType currentJobLimit requestedJobLimit status isUpgrade reason decisionNote effectiveAt appliedAt reviewedAt createdAt updatedAt",
+      ),
   ]);
 
   const candidateIds = [
@@ -299,14 +355,35 @@ exports.getDashboard = asyncHandler(async (req, res) => {
   const pendingJobs = jobs.filter((job) => job.approvalStatus === "PENDING");
   const rejectedJobs = jobs.filter((job) => job.approvalStatus === "REJECTED");
 
-  company.activeJobCount = approvedJobs.filter((job) => job.isActive).length;
+  const nextActiveJobCount = approvedJobs.filter((job) => job.isActive).length;
+  const shouldPersist =
+    packageSnapshot.dirty ||
+    Number(company.activeJobCount || 0) !== nextActiveJobCount ||
+    Number(company.openRoles || 0) !== nextActiveJobCount;
+
+  company.activeJobCount = nextActiveJobCount;
   company.openRoles = company.activeJobCount;
-  await company.save();
+  if (shouldPersist) {
+    await company.save();
+  }
 
   res.status(200).json({
     success: true,
     data: {
-      company: formatCompanyForClient(company),
+      company: formatCompanyForClient(company, { jobLimit: packageSnapshot.jobLimit }),
+      packageCatalog,
+      packageChange: {
+        activeRequest: activePackageRequest
+          ? formatPackageChangeRequestForCompany(activePackageRequest, company)
+          : null,
+        recentRequests: recentPackageRequests.map((item) =>
+          formatPackageChangeRequestForCompany(item, company),
+        ),
+        lastAppliedRequest: appliedPackageChange
+          ? formatPackageChangeRequestForCompany(appliedPackageChange, company)
+          : null,
+        canRequestNewChange: !activePackageRequest,
+      },
       tracking: {
         totalJobs: jobs.length,
         activeApprovedJobs: approvedJobs.filter((job) => job.isActive).length,
@@ -324,6 +401,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
 
 exports.createJob = asyncHandler(async (req, res) => {
   const { user, company } = await resolveClientUserAndCompany(req.user._id);
+  const { packageSnapshot } = await syncCompanyPackageContext(company);
 
   if (company.status === "INACTIVE") {
     throw createHttpError(403, "Company profile is inactive");
@@ -339,7 +417,7 @@ exports.createJob = asyncHandler(async (req, res) => {
     isActive: true,
     approvalStatus: "APPROVED",
   });
-  const hasAvailablePackageSlot = activeApprovedCount < Number(company.jobLimit || 0);
+  const hasAvailablePackageSlot = activeApprovedCount < Number(packageSnapshot.jobLimit || 0);
 
   const rawSkills = Array.isArray(req.body.skills)
     ? req.body.skills
@@ -378,9 +456,17 @@ exports.createJob = asyncHandler(async (req, res) => {
     isActive: hasAvailablePackageSlot,
   });
 
-  company.activeJobCount = hasAvailablePackageSlot ? activeApprovedCount + 1 : activeApprovedCount;
+  const nextActiveCount = hasAvailablePackageSlot ? activeApprovedCount + 1 : activeApprovedCount;
+  const shouldPersist =
+    packageSnapshot.dirty ||
+    Number(company.activeJobCount || 0) !== nextActiveCount ||
+    Number(company.openRoles || 0) !== nextActiveCount;
+
+  company.activeJobCount = nextActiveCount;
   company.openRoles = company.activeJobCount;
-  await company.save();
+  if (shouldPersist) {
+    await company.save();
+  }
 
   res.status(201).json({
     success: true,
@@ -395,6 +481,119 @@ exports.createJob = asyncHandler(async (req, res) => {
       isActive: job.isActive,
       createdAt: job.createdAt,
     },
+  });
+});
+
+exports.getPackageChangeRequests = asyncHandler(async (req, res) => {
+  const { company } = await resolveClientUserAndCompany(req.user._id);
+  await syncCompanyPackageContext(company);
+
+  const statusFilter = String(req.query.status || "").trim().toUpperCase();
+  if (statusFilter && !["ALL", "PENDING", "APPROVED", "REJECTED", "CANCELLED"].includes(statusFilter)) {
+    throw createHttpError(400, "Invalid status filter for package change requests");
+  }
+
+  const query = { companyId: company._id };
+  if (statusFilter && statusFilter !== "ALL") {
+    query.status = statusFilter;
+  }
+
+  const requests = await PackageChangeRequest.find(query)
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .select(
+      "currentPackageType requestedPackageType currentJobLimit requestedJobLimit status isUpgrade reason decisionNote effectiveAt appliedAt reviewedAt createdAt updatedAt",
+    );
+
+  const activeRequest = requests.find(
+    (item) =>
+      item.status === "PENDING" ||
+      (item.status === "APPROVED" && !item.appliedAt),
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      activeRequest: activeRequest
+        ? formatPackageChangeRequestForCompany(activeRequest, company)
+        : null,
+      items: requests.map((item) => formatPackageChangeRequestForCompany(item, company)),
+    },
+  });
+});
+
+exports.createPackageChangeRequest = asyncHandler(async (req, res) => {
+  const { user, company } = await resolveClientUserAndCompany(req.user._id);
+  const { packageCatalog, packageLimitMap, packageSnapshot } = await syncCompanyPackageContext(company);
+
+  const requestedPackageType = normalizePackageName(req.body.packageType, "");
+  const reason = toTrimmedString(req.body.reason);
+
+  if (!requestedPackageType || !PACKAGE_TYPES.includes(requestedPackageType)) {
+    throw createHttpError(400, "Select a valid target package");
+  }
+
+  if (requestedPackageType === packageSnapshot.packageType) {
+    throw createHttpError(400, "You are already on this package");
+  }
+
+  const requestedJobLimit = Number(packageLimitMap.get(requestedPackageType) || 0);
+  if (!requestedJobLimit) {
+    throw createHttpError(404, "Requested package is not configured");
+  }
+
+  const pendingRequest = await PackageChangeRequest.findOne({
+    companyId: company._id,
+    status: "PENDING",
+  }).select("_id");
+
+  if (pendingRequest) {
+    throw createHttpError(409, "A package change request is already pending CRM review");
+  }
+
+  const currentPackageType = normalizePackageName(company.packageType, "STANDARD");
+  const currentJobLimit = Number(
+    resolveCompanyJobLimit(
+      { packageType: currentPackageType, jobLimit: packageSnapshot.jobLimit },
+      packageLimitMap,
+    ),
+  );
+  const isUpgrade = requestedJobLimit > currentJobLimit;
+  const effectiveAt = buildPackageChangeEffectiveAt({
+    isUpgrade,
+    requestedEffectiveAt: req.body.effectiveAt,
+  });
+
+  const createdRequest = await PackageChangeRequest.create({
+    companyId: company._id,
+    requestedBy: user._id,
+    currentPackageType,
+    requestedPackageType,
+    currentJobLimit,
+    requestedJobLimit,
+    reason,
+    status: "PENDING",
+    isUpgrade,
+    effectiveAt,
+    metadata: {
+      source: "COMPANY_PANEL",
+      packageCatalogVersion: packageCatalog.map((item) => ({
+        name: item.name,
+        jobLimit: item.jobLimit,
+      })),
+    },
+  });
+
+  const hydratedRequest = await PackageChangeRequest.findById(createdRequest._id).select(
+    "currentPackageType requestedPackageType currentJobLimit requestedJobLimit status isUpgrade reason decisionNote effectiveAt appliedAt reviewedAt createdAt updatedAt",
+  );
+
+  res.status(201).json({
+    success: true,
+    message: isUpgrade
+      ? "Upgrade request submitted to CRM for approval."
+      : "Downgrade request submitted. CRM will review and schedule the change for the next billing window.",
+    data: formatPackageChangeRequestForCompany(hydratedRequest, company),
   });
 });
 
@@ -583,6 +782,7 @@ exports.updateApplicationStatus = asyncHandler(async (req, res) => {
 
 exports.getProfile = asyncHandler(async (req, res) => {
   const { user, company } = await resolveClientUserAndCompany(req.user._id);
+  const { packageSnapshot } = await syncCompanyPackageContext(company);
 
   res.status(200).json({
     success: true,
@@ -592,7 +792,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
         username: user.name || "",
         email: user.email || "",
       },
-      company: formatCompanyForClient(company),
+      company: formatCompanyForClient(company, { jobLimit: packageSnapshot.jobLimit }),
     },
   });
 });
@@ -667,6 +867,8 @@ exports.updateProfile = asyncHandler(async (req, res) => {
 
   await Promise.all([user.save(), company.save()]);
 
+  const { packageSnapshot } = await syncCompanyPackageContext(company);
+
   res.status(200).json({
     success: true,
     message: "Profile updated successfully",
@@ -676,7 +878,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
         username: user.name || "",
         email: user.email || "",
       },
-      company: formatCompanyForClient(company),
+      company: formatCompanyForClient(company, { jobLimit: packageSnapshot.jobLimit }),
     },
   });
 });

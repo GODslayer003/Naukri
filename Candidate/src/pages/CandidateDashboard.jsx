@@ -85,6 +85,9 @@ export default function CandidateDashboard() {
     recentApplications = [],
     notifications = [],
   } = state.data;
+  const visiblePipelineItems = 4;
+  const latestNotifications = notifications.slice(0, 1);
+  const hasPipelineOverflow = recentApplications.length > visiblePipelineItems;
 
   const hasMappedContext = Boolean(mappedCompany);
   const mappedLocation = mappedCompany
@@ -278,7 +281,13 @@ export default function CandidateDashboard() {
               description="Your latest submitted roles and status movement."
             />
 
-            <div className="mt-5 space-y-3">
+            <div
+              className={`mt-5 space-y-3 ${
+                hasPipelineOverflow
+                  ? "dashboard-scroll-panel max-h-[30rem] overflow-y-auto pr-2"
+                  : ""
+              }`}
+            >
               {recentApplications.length ? (
                 recentApplications.map((application) => (
                   <div
@@ -316,8 +325,8 @@ export default function CandidateDashboard() {
             />
 
             <div className="mt-5 space-y-3">
-              {notifications.length ? (
-                notifications.map((notification) => (
+              {latestNotifications.length ? (
+                latestNotifications.map((notification) => (
                   <div
                     key={notification.id}
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"

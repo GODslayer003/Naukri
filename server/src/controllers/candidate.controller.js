@@ -39,6 +39,9 @@ const generateToken = (id) =>
 const generateTemporaryPassword = () =>
   `Mvn!${crypto.randomBytes(8).toString("hex")}`;
 
+const DASHBOARD_PIPELINE_LIMIT = 24;
+const DASHBOARD_ALERTS_LIMIT = 1;
+
 const normalizeIndianPhoneNumber = (value = "") => {
   const digits = String(value || "").replace(/\D/g, "");
 
@@ -635,10 +638,12 @@ exports.getDashboard = asyncHandler(async (req, res) => {
   const [applications, notifications, recommended, applicationStats, companyIds] = await Promise.all([
     Application.find({ candidateId: req.user._id })
       .sort({ updatedAt: -1 })
-      .limit(6)
+      .limit(DASHBOARD_PIPELINE_LIMIT)
       .populate("companyId", "name")
       .populate("jobId", "title"),
-    CandidateNotification.find({ candidateId: req.user._id }).sort({ createdAt: -1 }).limit(6),
+    CandidateNotification.find({ candidateId: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(DASHBOARD_ALERTS_LIMIT),
     getRecommendedJobs(profile, req.user._id),
     Application.find({ candidateId: req.user._id }).select("status"),
     Application.distinct("companyId", { candidateId: req.user._id }),

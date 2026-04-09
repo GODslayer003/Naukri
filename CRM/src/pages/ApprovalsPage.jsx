@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { LuCircleX, LuClipboardCheck, LuSearch, LuShieldCheck } from "react-icons/lu";
+import {
+  LuCircleX,
+  LuClipboardCheck,
+  LuRepeat2,
+  LuSearch,
+  LuShieldCheck,
+} from "react-icons/lu";
 import {
   Badge,
   EmptyState,
@@ -11,18 +17,27 @@ import {
   TextAreaField,
   ToolbarInput,
 } from "../components/Ui";
-import { getJobApprovals, updateJobApproval } from "../services/crmApi";
+import {
+  getJobApprovals,
+  getPackageChangeRequests,
+  updateJobApproval,
+  updatePackageChangeRequest,
+} from "../services/crmApi";
 import { formatDateTime, formatNumber, titleCase } from "../utils/formatters";
 
 export default function ApprovalsPage() {
   const [jobs, setJobs] = useState([]);
+  const [packageRequests, setPackageRequests] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedPackageRequest, setSelectedPackageRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [packageRejectionReason, setPackageRejectionReason] = useState("");
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [isPackageRejectModalOpen, setIsPackageRejectModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const filteredJobs = useMemo(() => {
@@ -34,34 +49,48 @@ export default function ApprovalsPage() {
     );
   }, [jobs, searchQuery]);
 
+  const filteredPackageRequests = useMemo(() => {
+    return packageRequests.filter((request) =>
+      [
+        request.companyName,
+        request.currentPackageType,
+        request.requestedPackageType,
+        request.reason,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(searchQuery.trim().toLowerCase()),
+    );
+  }, [packageRequests, searchQuery]);
+
   const metrics = useMemo(() => {
-    const pending = jobs.filter((job) => job.approvalStatus === "PENDING").length;
-    const rejected = jobs.filter((job) => job.approvalStatus === "REJECTED").length;
+    const pendingJobs = jobs.filter((job) => job.approvalStatus === "PENDING").length;
+    const pendingPackage = packageRequests.filter((request) => request.status === "PENDING").length;
 
     return [
       {
         label: "Approval queue",
-        value: formatNumber(jobs.length),
-        detail: "All client-originated jobs needing CRM intervention.",
+        value: formatNumber(pendingJobs + pendingPackage),
+        detail: "Combined queue across jobs and package change requests.",
         icon: LuShieldCheck,
         tone: "blue",
       },
       {
         label: "Pending jobs",
-        value: formatNumber(pending),
-        detail: "Fresh openings waiting for a CRM decision.",
+        value: formatNumber(pendingJobs),
+        detail: "Client-submitted openings waiting for CRM decision.",
         icon: LuClipboardCheck,
         tone: "amber",
       },
       {
-        label: "Rejected jobs",
-        value: formatNumber(rejected),
-        detail: "Requests already returned to the client with feedback.",
-        icon: LuCircleX,
-        tone: "rose",
+        label: "Package changes",
+        value: formatNumber(pendingPackage),
+        detail: "Upgrade or downgrade requests waiting for CRM review.",
+        icon: LuRepeat2,
+        tone: "lime",
       },
     ];
-  }, [jobs]);
+  }, [jobs, packageRequests]);
 
   useEffect(() => {
     loadApprovals();
@@ -72,8 +101,12 @@ export default function ApprovalsPage() {
     setPageError("");
 
     try {
-      const response = await getJobApprovals();
-      setJobs(response.data);
+      const [jobResponse, packageResponse] = await Promise.all([
+        getJobApprovals(),
+        getPackageChangeRequests({ status: "PENDING" }),
+      ]);
+      setJobs(jobResponse.data || []);
+      setPackageRequests(packageResponse.data || []);
     } catch (requestError) {
       setPageError(requestError.message || "Unable to load approval queue.");
     } finally {
@@ -81,7 +114,7 @@ export default function ApprovalsPage() {
     }
   }
 
-  const handleApprove = async (job) => {
+  const handleApproveJob = async (job) => {
     setActionError("");
     setIsSaving(true);
 
@@ -95,7 +128,7 @@ export default function ApprovalsPage() {
     }
   };
 
-  const handleReject = async (event) => {
+  const handleRejectJob = async (event) => {
     event.preventDefault();
     setActionError("");
     setIsSaving(true);
@@ -111,6 +144,41 @@ export default function ApprovalsPage() {
       setSelectedJob(null);
     } catch (requestError) {
       setActionError(requestError.message || "Unable to reject job.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleApprovePackageRequest = async (request) => {
+    setActionError("");
+    setIsSaving(true);
+
+    try {
+      await updatePackageChangeRequest(request.id, { decision: "APPROVE" });
+      await loadApprovals();
+    } catch (requestError) {
+      setActionError(requestError.message || "Unable to approve package change request.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRejectPackageRequest = async (event) => {
+    event.preventDefault();
+    setActionError("");
+    setIsSaving(true);
+
+    try {
+      await updatePackageChangeRequest(selectedPackageRequest.id, {
+        decision: "REJECT",
+        decisionNote: packageRejectionReason,
+      });
+      await loadApprovals();
+      setIsPackageRejectModalOpen(false);
+      setPackageRejectionReason("");
+      setSelectedPackageRequest(null);
+    } catch (requestError) {
+      setActionError(requestError.message || "Unable to reject package change request.");
     } finally {
       setIsSaving(false);
     }
@@ -135,8 +203,8 @@ export default function ApprovalsPage() {
       <PanelCard>
         <SectionHeading
           eyebrow="Approval authority"
-          title="Approve or reject job openings created by clients"
-          description="Review queue items, validate package compliance, and return precise feedback where the client submission needs changes."
+          title="Review job and package requests from client companies"
+          description="CRM can approve or reject client job submissions and package change requests from one operational queue."
         />
 
         {actionError ? (
@@ -154,7 +222,8 @@ export default function ApprovalsPage() {
           />
         </div>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-8 space-y-5">
+          <h3 className="text-lg font-bold text-slate-900">Job approvals</h3>
           {filteredJobs.length ? (
             filteredJobs.map((job) => (
               <div
@@ -183,14 +252,12 @@ export default function ApprovalsPage() {
                         {job.rejectionReason}
                       </div>
                     ) : null}
-                    <p className="text-xs text-slate-400">
-                      Updated {formatDateTime(job.createdAt)}
-                    </p>
+                    <p className="text-xs text-slate-400">Updated {formatDateTime(job.createdAt)}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
-                      onClick={() => handleApprove(job)}
+                      onClick={() => handleApproveJob(job)}
                       disabled={isSaving}
                       className="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
                     >
@@ -217,6 +284,71 @@ export default function ApprovalsPage() {
             />
           )}
         </div>
+
+        <div className="mt-10 space-y-5">
+          <h3 className="text-lg font-bold text-slate-900">Package change requests</h3>
+          {filteredPackageRequests.length ? (
+            filteredPackageRequests.map((request) => (
+              <div
+                key={request.id}
+                className="rounded-[24px] border border-slate-200 p-5 transition hover:border-lime-300 hover:bg-lime-50/30"
+              >
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="text-lg font-bold text-slate-900">{request.companyName}</h3>
+                      <Badge tone={request.isUpgrade ? "emerald" : "amber"}>
+                        {request.isUpgrade ? "Upgrade" : "Downgrade"}
+                      </Badge>
+                      <Badge tone="blue">
+                        {titleCase(request.currentPackageType)} {"->"} {titleCase(request.requestedPackageType)}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      {request.currentJobLimit} {"->"} {request.requestedJobLimit} posts capacity
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Effective: {formatDateTime(request.effectiveAt)}
+                    </p>
+                    {request.reason ? (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                        {request.reason}
+                      </div>
+                    ) : null}
+                    <p className="text-xs text-slate-400">
+                      Requested {formatDateTime(request.createdAt)}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => handleApprovePackageRequest(request)}
+                      disabled={isSaving}
+                      className="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedPackageRequest(request);
+                        setPackageRejectionReason(request.decisionNote || "");
+                        setIsPackageRejectModalOpen(true);
+                      }}
+                      className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              title="No package change requests pending"
+              description="Company upgrade or downgrade requests will appear here once submitted."
+            />
+          )}
+        </div>
       </PanelCard>
 
       <ModalShell
@@ -229,7 +361,7 @@ export default function ApprovalsPage() {
             : ""
         }
       >
-        <form onSubmit={handleReject} className="space-y-5">
+        <form onSubmit={handleRejectJob} className="space-y-5">
           <TextAreaField
             label="Rejection reason"
             value={rejectionReason}
@@ -241,6 +373,43 @@ export default function ApprovalsPage() {
             <button
               type="button"
               onClick={() => setIsRejectModalOpen(false)}
+              className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSaving ? "Submitting..." : "Confirm rejection"}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
+
+      <ModalShell
+        open={isPackageRejectModalOpen}
+        onClose={() => setIsPackageRejectModalOpen(false)}
+        title="Reject package change request"
+        description={
+          selectedPackageRequest
+            ? `Provide a clear reason for rejecting ${selectedPackageRequest.companyName}'s package change request.`
+            : ""
+        }
+      >
+        <form onSubmit={handleRejectPackageRequest} className="space-y-5">
+          <TextAreaField
+            label="Decision note"
+            value={packageRejectionReason}
+            onChange={(event) => setPackageRejectionReason(event.target.value)}
+            placeholder="Mention commercial policy, billing constraints, or account pre-conditions."
+            required
+          />
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsPackageRejectModalOpen(false)}
               className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
             >
               Cancel

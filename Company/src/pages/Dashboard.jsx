@@ -8,29 +8,34 @@ import {
   LuFileText,
   LuMapPin,
   LuQrCode,
+  LuRepeat2,
   LuShieldAlert,
   LuShieldCheck,
   LuUsers,
 } from "react-icons/lu";
 import {
+  createCompanyPackageChangeRequest,
   fetchCompanyDashboard,
   previewCompanyApplicationResume,
 } from "../api/companyApi";
 
 const APPLICATIONS_PER_PAGE = 5;
 
-const packageCards = [
+const fallbackPackageCards = [
   {
+    key: "STANDARD",
     name: "Standard",
     posts: 5,
     description: "Starter package for focused hiring and foundational growth.",
   },
   {
+    key: "PREMIUM",
     name: "Premium",
     posts: 10,
     description: "Balanced plan for companies managing active and recurring openings.",
   },
   {
+    key: "ELITE",
     name: "Elite",
     posts: 20,
     description: "High-capacity package for scale hiring across teams and locations.",
@@ -85,6 +90,22 @@ const getApprovalTone = (value = "") => {
   return "is-warning";
 };
 
+const formatPackageRequestStatus = (value = "") => {
+  const normalized = String(value || "").toUpperCase();
+  if (normalized === "APPROVED") {
+    return "is-success";
+  }
+  if (normalized === "REJECTED" || normalized === "CANCELLED") {
+    return "is-danger";
+  }
+  return "is-warning";
+};
+
+const toTitleCase = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,6 +113,12 @@ export default function Dashboard() {
   const [resumeBusyId, setResumeBusyId] = useState("");
   const [resumeError, setResumeError] = useState("");
   const [applicationPage, setApplicationPage] = useState(1);
+  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [packageTarget, setPackageTarget] = useState("");
+  const [packageReason, setPackageReason] = useState("");
+  const [packageActionError, setPackageActionError] = useState("");
+  const [packageActionNote, setPackageActionNote] = useState("");
+  const [isSubmittingPackageRequest, setIsSubmittingPackageRequest] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -124,6 +151,27 @@ export default function Dashboard() {
 
   const company = dashboard?.company || {};
   const tracking = dashboard?.tracking || {};
+  const packageChange = dashboard?.packageChange || {};
+  const activePackageRequest = packageChange?.activeRequest || null;
+  const packageCatalog = Array.isArray(dashboard?.packageCatalog) ? dashboard.packageCatalog : [];
+  const packageCatalogForRequests = packageCatalog.length
+    ? packageCatalog
+    : fallbackPackageCards.map((item) => ({
+        name: item.key,
+        jobLimit: item.posts,
+      }));
+
+  const availablePackageTargets = useMemo(() => {
+    const currentPackage = String(company.packageType || "").toUpperCase();
+    return packageCatalogForRequests
+      .filter((item) => String(item?.name || "").toUpperCase() !== currentPackage)
+      .map((item) => ({
+        value: String(item.name || "").toUpperCase(),
+        label: `${String(item.name || "")
+          .toLowerCase()
+          .replace(/\b\w/g, (char) => char.toUpperCase())} (${Number(item.jobLimit || 0)} posts)`,
+      }));
+  }, [company.packageType, packageCatalogForRequests]);
 
   const metrics = useMemo(
     () => [
@@ -164,6 +212,23 @@ export default function Dashboard() {
     [dashboard],
   );
 
+  const packageCards = useMemo(() => {
+    const catalog = Array.isArray(dashboard?.packageCatalog) ? dashboard.packageCatalog : [];
+    if (!catalog.length) {
+      return fallbackPackageCards;
+    }
+
+    return catalog.map((pkg) => {
+      const packageKey = String(pkg?.name || "STANDARD").toUpperCase();
+      return {
+        key: packageKey,
+        name: toTitleCase(packageKey),
+        posts: Number(pkg?.jobLimit || 0),
+        description: String(pkg?.description || "").trim() || "Configured posting package.",
+      };
+    });
+  }, [dashboard?.packageCatalog]);
+
   const recentJobs = useMemo(() => (dashboard?.jobs || []).slice(0, 6), [dashboard]);
   const allApplications = useMemo(() => dashboard?.applications || [], [dashboard]);
 
@@ -190,6 +255,20 @@ export default function Dashboard() {
       return Math.min(current, totalApplicationPages);
     });
   }, [allApplications.length, totalApplicationPages]);
+
+  useEffect(() => {
+    if (!availablePackageTargets.length) {
+      setPackageTarget("");
+      return;
+    }
+
+    setPackageTarget((current) => {
+      if (current && availablePackageTargets.some((item) => item.value === current)) {
+        return current;
+      }
+      return availablePackageTargets[0].value;
+    });
+  }, [availablePackageTargets]);
 
   const utilization = useMemo(() => {
     const active = Number(company.activeJobCount || 0);
@@ -223,6 +302,39 @@ export default function Dashboard() {
       );
     } finally {
       setResumeBusyId("");
+    }
+  };
+
+  const handleSubmitPackageChangeRequest = async (event) => {
+    event.preventDefault();
+    if (!packageTarget) {
+      setPackageActionError("Please select a target package.");
+      return;
+    }
+
+    setPackageActionError("");
+    setPackageActionNote("");
+    setIsSubmittingPackageRequest(true);
+
+    try {
+      const response = await createCompanyPackageChangeRequest({
+        packageType: packageTarget,
+        reason: packageReason,
+      });
+      setPackageActionNote(response?.message || "Package change request submitted.");
+      setPackageReason("");
+      setIsPackageModalOpen(false);
+
+      const refreshed = await fetchCompanyDashboard();
+      setDashboard(refreshed);
+    } catch (requestError) {
+      setPackageActionError(
+        requestError?.response?.data?.message ||
+          requestError?.message ||
+          "Unable to submit package change request.",
+      );
+    } finally {
+      setIsSubmittingPackageRequest(false);
     }
   };
 
@@ -290,8 +402,24 @@ export default function Dashboard() {
             Create New Job
             <LuArrowRight size={16} />
           </Link>
+          <button
+            type="button"
+            className="company-hero-secondary-action"
+            onClick={() => {
+              setPackageActionError("");
+              setPackageActionNote("");
+              setIsPackageModalOpen(true);
+            }}
+            disabled={Boolean(activePackageRequest) || !availablePackageTargets.length}
+          >
+            <LuRepeat2 size={15} />
+            {activePackageRequest ? "Request in review" : "Request Package Change"}
+          </button>
         </div>
       </section>
+
+      {packageActionNote ? <div className="status-banner success-banner">{packageActionNote}</div> : null}
+      {packageActionError ? <div className="status-banner">{packageActionError}</div> : null}
 
       <section className="company-metric-grid">
         {metrics.map((metric) => (
@@ -306,6 +434,48 @@ export default function Dashboard() {
             <span>{metric.detail}</span>
           </article>
         ))}
+      </section>
+
+      <section className="company-panel-card company-package-request-card">
+        <div className="company-section-head">
+          <p className="company-section-eyebrow">Package governance</p>
+          <h2 className="company-section-title">Package change workflow</h2>
+          <p className="company-section-copy">
+            Upgrades are applied immediately after CRM approval, while downgrades are scheduled for the next billing
+            window to protect active job continuity.
+          </p>
+        </div>
+
+        {activePackageRequest ? (
+          <div className="company-request-row">
+            <div>
+              <p className="company-table-main">
+                {activePackageRequest.currentPackageType} {"->"} {activePackageRequest.requestedPackageType}
+              </p>
+              <p className="company-table-sub">
+                {activePackageRequest.currentJobLimit} {"->"} {activePackageRequest.requestedJobLimit} postings
+              </p>
+              <p className="company-table-sub">
+                Requested on {formatDate(activePackageRequest.createdAt)} | Effective{" "}
+                {formatDate(activePackageRequest.effectiveAt)}
+              </p>
+              {activePackageRequest.reason ? (
+                <p className="company-table-sub">Reason: {activePackageRequest.reason}</p>
+              ) : null}
+            </div>
+            <span
+              className={`company-status-badge ${formatPackageRequestStatus(
+                activePackageRequest.status,
+              )}`}
+            >
+              {activePackageRequest.status}
+            </span>
+          </div>
+        ) : (
+          <p className="company-empty-copy">
+            No active package-change request. You can submit a new request from the command card above.
+          </p>
+        )}
       </section>
 
       <section className="company-panel-card">
@@ -450,7 +620,7 @@ export default function Dashboard() {
             {packageCards.map((item) => {
               const isActive =
                 String(company.packageType || "").toUpperCase() ===
-                item.name.toUpperCase();
+                item.key;
 
               return (
                 <div
@@ -562,6 +732,81 @@ export default function Dashboard() {
           </div>
         </article>
       </section>
+
+      {isPackageModalOpen ? (
+        <div className="company-modal-backdrop">
+          <div className="company-modal-card">
+            <div className="company-modal-head">
+              <div>
+                <p className="company-section-eyebrow">Client request</p>
+                <h3>Request package change</h3>
+              </div>
+              <button
+                type="button"
+                className="company-secondary-btn"
+                onClick={() => setIsPackageModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <form className="company-form-grid" onSubmit={handleSubmitPackageChangeRequest}>
+              <label className="company-field">
+                <span>Current package</span>
+                <input value={`${company.packageType || "STANDARD"} (${Number(company.jobLimit || 0)} posts)`} disabled />
+              </label>
+
+              <label className="company-field">
+                <span>Target package *</span>
+                <select
+                  required
+                  value={packageTarget}
+                  onChange={(event) => setPackageTarget(event.target.value)}
+                >
+                  {availablePackageTargets.length ? (
+                    availablePackageTargets.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No package option available</option>
+                  )}
+                </select>
+              </label>
+
+              <label className="company-field">
+                <span>Business reason</span>
+                <textarea
+                  rows={4}
+                  maxLength={1200}
+                  value={packageReason}
+                  onChange={(event) => setPackageReason(event.target.value)}
+                  placeholder="Mention hiring volume, campaign growth, seasonality, or expected job count changes."
+                />
+              </label>
+
+              <div className="company-form-actions">
+                <button
+                  type="button"
+                  className="company-secondary-btn"
+                  onClick={() => setIsPackageModalOpen(false)}
+                  disabled={isSubmittingPackageRequest}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="company-primary-btn"
+                  disabled={isSubmittingPackageRequest || !availablePackageTargets.length}
+                >
+                  {isSubmittingPackageRequest ? "Submitting..." : "Submit request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

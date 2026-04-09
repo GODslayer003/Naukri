@@ -29,6 +29,16 @@ router.patch(
   protectCrmPanel,
   crmPanelController.updateJobApproval,
 );
+router.get(
+  "/package-change-requests",
+  protectCrmPanel,
+  crmPanelController.getPackageChangeRequests,
+);
+router.patch(
+  "/package-change-requests/:id",
+  protectCrmPanel,
+  crmPanelController.updatePackageChangeRequest,
+);
 
 router.get("/packages", protectCrmPanel, crmPanelController.getPackages);
 router.put("/packages/:name", protectCrmPanel, crmPanelController.upsertPackage);

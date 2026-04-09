@@ -62,6 +62,10 @@ const companySchema = new mongoose.Schema(
       type: Number,
       default: 2,
     },
+    grandfatheredJobLimit: {
+      type: Number,
+      default: 0,
+    },
     activeJobCount: { type: Number, default: 0 },
     configurationNotes: { type: String, default: "" },
     accountManager: { type: String, default: "" },

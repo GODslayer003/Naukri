@@ -1,5 +1,9 @@
 const Job = require("../models/Job");
 const Company = require("../models/Company");
+const {
+  loadPackageCatalog,
+  applyCompanyPackageSnapshot,
+} = require("../services/package-limit.service");
 
 // Create job (CLIENT or CRM)
 exports.createJob = async (req, res) => {
@@ -14,8 +18,18 @@ exports.createJob = async (req, res) => {
   }
 
   const company = await Company.findById(companyId);
+  if (!company) {
+    return res.status(404).json({ message: "Company not found" });
+  }
 
-  if (company.activeJobCount >= company.jobLimit) {
+  const { packageLimitMap } = await loadPackageCatalog();
+  const packageSnapshot = applyCompanyPackageSnapshot(company, packageLimitMap);
+
+  if (packageSnapshot.dirty) {
+    await company.save();
+  }
+
+  if (company.activeJobCount >= packageSnapshot.jobLimit) {
     return res.status(400).json({
       message: "Job limit exceeded for this package",
     });
@@ -50,6 +64,21 @@ exports.approveJob = async (req, res) => {
   await job.save();
 
   const company = await Company.findById(job.companyId);
+  if (!company) {
+    return res.status(404).json({ message: "Company not found" });
+  }
+
+  const { packageLimitMap } = await loadPackageCatalog();
+  const packageSnapshot = applyCompanyPackageSnapshot(company, packageLimitMap);
+
+  if (packageSnapshot.dirty) {
+    await company.save();
+  }
+
+  if (company.activeJobCount >= packageSnapshot.jobLimit) {
+    return res.status(400).json({ message: "Job limit exceeded for this package" });
+  }
+
   company.activeJobCount += 1;
   await company.save();
 

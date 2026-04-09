@@ -50,3 +50,21 @@ a {
 * {
   scrollbar-width: none;
 }
+
+.dashboard-scroll-panel {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.65) transparent;
+}
+
+.dashboard-scroll-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dashboard-scroll-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-scroll-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.65);
+}

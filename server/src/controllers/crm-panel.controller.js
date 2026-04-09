@@ -14,26 +14,29 @@ const Application = require("../models/Application");
 const CandidateProfile = require("../models/CandidateProfile");
 const CrmCampaign = require("../models/CrmCampaign");
 const CandidateNotification = require("../models/CandidateNotification");
+const PackageChangeRequest = require("../models/PackageChangeRequest");
 const cloudinary = require("../config/cloudinary");
 const { generateCompanyQRPDF } = require("../services/pdf.service");
+const {
+  DEFAULT_PACKAGE_CATALOG,
+  loadPackageCatalog,
+  applyCompanyPackageSnapshot,
+  resolveCompanyJobLimit,
+  normalizePackageName,
+} = require("../services/package-limit.service");
+const {
+  buildPackageChangeEffectiveAt,
+  formatPackageChangeRequest,
+  applyDueApprovedPackageChangesForCompany,
+  normalizeRequestStatus,
+} = require("../services/package-change-request.service");
 
-const defaultPackages = [
-  {
-    name: "STANDARD",
-    jobLimit: 2,
-    description: "Default free package with 2 configurable job posts.",
-  },
-  {
-    name: "PREMIUM",
-    jobLimit: 5,
-    description: "Expanded plan with 5 configurable job posts.",
-  },
-  {
-    name: "ELITE",
-    jobLimit: 10,
-    description: "High-volume plan with 10 configurable job posts.",
-  },
-];
+const defaultPackages = DEFAULT_PACKAGE_CATALOG;
+const CRM_DASHBOARD_FEED_LIMIT = 24;
+const PACKAGE_ROLLOUT_MODES = {
+  APPLY_FOR_EVERYONE: "APPLY_FOR_EVERYONE",
+  APPLY_AFTER_EXHAUSTION: "APPLY_AFTER_EXHAUSTION",
+};
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -192,13 +195,18 @@ const getCompanyVisibilityFilter = (user) =>
 const getQrVisibilityFilter = (user) =>
   isFseOperator(user) ? { createdByCRM: user._id } : {};
 
-const formatClient = (company, clientUser = null) => ({
+const formatClient = (company, clientUser = null, options = {}) => {
+  const effectiveJobLimit = Number(
+    options?.jobLimit !== undefined ? options.jobLimit : company.jobLimit || 0,
+  );
+
+  return {
   id: String(company._id),
   name: company.name,
   logoUrl: company.logoUrl || "",
   industry: company.industry || "General",
   packageType: company.packageType || "STANDARD",
-  jobLimit: company.jobLimit || 2,
+  jobLimit: effectiveJobLimit,
   activeJobCount: company.activeJobCount || 0,
   status: company.status,
   email: company.email,
@@ -219,7 +227,29 @@ const formatClient = (company, clientUser = null) => ({
     : null,
   updatedAt: company.updatedAt,
   lastUpdated: formatRelativeTime(company.updatedAt),
-});
+  };
+};
+
+const formatPackageChangeRequestForCrm = (request) =>
+  formatPackageChangeRequest(request, {
+    companyName: request?.companyId?.name || "",
+    requestedByName: request?.requestedBy?.name || "",
+    reviewedByName: request?.reviewedBy?.fullName || "",
+  });
+
+const syncLivePackageContextForCompany = async (company, packageLimitMap = new Map()) => {
+  const appliedResult = await applyDueApprovedPackageChangesForCompany(company, packageLimitMap);
+  const snapshot = applyCompanyPackageSnapshot(company, packageLimitMap);
+
+  if (appliedResult.updated || snapshot.dirty) {
+    await company.save();
+  }
+
+  return {
+    snapshot,
+    appliedPackageChange: appliedResult.lastAppliedRequest || null,
+  };
+};
 
 const formatJob = (job) => ({
   id: String(job._id),
@@ -570,29 +600,50 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     companies,
     jobs,
     applications,
-    packages,
+    packageContext,
     qrCodes,
     campaigns,
   ] = await Promise.all([
     Company.find().sort({ updatedAt: -1 }).limit(6),
-    Job.find().sort({ updatedAt: -1 }).limit(6).populate("companyId", "name"),
+    Job.find({ createdBySource: "CLIENT", approvalStatus: "PENDING" })
+      .sort({ updatedAt: -1 })
+      .limit(CRM_DASHBOARD_FEED_LIMIT)
+      .populate("companyId", "name"),
     Application.find()
       .sort({ updatedAt: -1 })
-      .limit(6)
+      .limit(CRM_DASHBOARD_FEED_LIMIT)
       .populate("companyId", "name")
       .populate("jobId", "title"),
-    Package.find().sort({ jobLimit: 1 }),
+    loadPackageCatalog(),
     QRCode.find().sort({ updatedAt: -1 }).limit(6).populate("companyId", "name").populate("jobId", "title"),
     CrmCampaign.find().sort({ createdAt: -1 }).limit(6),
   ]);
 
-  const [companyCount, jobCount, candidateCount, applicationCount, pendingApprovals] =
+  const { packageCatalog, packageLimitMap } = packageContext;
+  const companySnapshots = await Promise.all(
+    companies.map(async (company) => {
+      const { snapshot } = await syncLivePackageContextForCompany(company, packageLimitMap);
+      return {
+        company,
+        jobLimit: snapshot.jobLimit,
+      };
+    }),
+  );
+
+  const [companyCount, jobCount, candidateCount, applicationCount, pendingJobApprovals, pendingPackageChanges, packageChangeRequests] =
     await Promise.all([
       Company.countDocuments(),
       Job.countDocuments(),
       User.countDocuments({ role: "CANDIDATE" }),
       Application.countDocuments(),
       Job.countDocuments({ approvalStatus: "PENDING" }),
+      PackageChangeRequest.countDocuments({ status: "PENDING" }),
+      PackageChangeRequest.find({ status: "PENDING" })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate("companyId", "name packageType")
+        .populate("requestedBy", "name")
+        .populate("reviewedBy", "fullName"),
     ]);
 
   const activeQrCompanyIds = await QRCode.distinct("companyId", { isActive: true });
@@ -630,24 +681,27 @@ exports.getDashboard = asyncHandler(async (req, res) => {
         totalJobs: jobCount,
         totalCandidates: candidateCount,
         totalApplications: applicationCount,
-        pendingApprovals,
+        pendingApprovals: pendingJobApprovals + pendingPackageChanges,
+        pendingJobApprovals,
+        pendingPackageChanges,
         qrCodes: qrAssets,
         qrCodeRecords,
         campaigns: campaignCount,
       },
-      packageCards: packages.map((pkg) => ({
+      packageCards: packageCatalog.map((pkg) => ({
         name: pkg.name,
         jobLimit: pkg.jobLimit,
         description: pkg.description,
       })),
-      clientOverview: companies.map((company) => ({
-        name: company.name,
-        packageType: company.packageType,
-        activeJobCount: company.activeJobCount || 0,
-        jobLimit: company.jobLimit || 0,
-        status: company.status,
+      clientOverview: companySnapshots.map((item) => ({
+        name: item.company.name,
+        packageType: item.company.packageType,
+        activeJobCount: item.company.activeJobCount || 0,
+        jobLimit: item.jobLimit || 0,
+        status: item.company.status,
       })),
       jobApprovals: jobs.map(formatJob),
+      packageChangeApprovals: packageChangeRequests.map(formatPackageChangeRequestForCrm),
       applicationFeed: applications.map((application) =>
         formatApplication(
           application,
@@ -672,10 +726,23 @@ exports.getClients = asyncHandler(async (req, res) => {
   const companies = await Company.find(getCompanyVisibilityFilter(req.user))
     .sort({ updatedAt: -1 })
     .populate("clientUserId", "name email accessStatus");
+  const { packageLimitMap } = await loadPackageCatalog();
+  const syncedCompanies = await Promise.all(
+    companies.map(async (company) => {
+      const { snapshot } = await syncLivePackageContextForCompany(company, packageLimitMap);
+
+      return {
+        company,
+        jobLimit: snapshot.jobLimit,
+      };
+    }),
+  );
 
   res.status(200).json({
     success: true,
-    data: companies.map((company) => formatClient(company, company.clientUserId)),
+    data: syncedCompanies.map((item) =>
+      formatClient(item.company, item.company.clientUserId, { jobLimit: item.jobLimit }),
+    ),
   });
 });
 
@@ -802,6 +869,7 @@ exports.updateClient = asyncHandler(async (req, res) => {
 
   const packageName = (req.body.packageType || company.packageType || "STANDARD").toUpperCase();
   const selectedPackage = await Package.findOne({ name: packageName });
+  const { packageLimitMap } = await loadPackageCatalog();
   const previousLogoPublicId = company.logoPublicId || "";
 
   let uploadedLogo = null;
@@ -817,7 +885,7 @@ exports.updateClient = asyncHandler(async (req, res) => {
   company.phone = req.body.phone?.trim() || company.phone;
   company.status = normalizeClientStatus(req.body.status || company.status);
   company.packageType = selectedPackage?.name || company.packageType;
-  company.jobLimit = Number(req.body.jobLimit || selectedPackage?.jobLimit || company.jobLimit || 2);
+  company.jobLimit = Number(selectedPackage?.jobLimit || resolveCompanyJobLimit(company, packageLimitMap));
   company.configurationNotes =
     req.body.configurationNotes?.trim() ?? company.configurationNotes;
   company.accountManager = req.body.accountManager?.trim() ?? company.accountManager;
@@ -929,6 +997,11 @@ exports.createJob = asyncHandler(async (req, res) => {
   if (!company) {
     throw createHttpError(404, "Company not found");
   }
+  const { packageLimitMap } = await loadPackageCatalog();
+  const { snapshot: packageSnapshot } = await syncLivePackageContextForCompany(
+    company,
+    packageLimitMap,
+  );
 
   if (!createAsClient) {
     const activeCount = await Job.countDocuments({
@@ -937,7 +1010,7 @@ exports.createJob = asyncHandler(async (req, res) => {
       approvalStatus: "APPROVED",
     });
 
-    if (activeCount >= company.jobLimit) {
+    if (activeCount >= packageSnapshot.jobLimit) {
       throw createHttpError(400, "Job limit exceeded for this package");
     }
   }
@@ -987,6 +1060,11 @@ exports.updateJob = asyncHandler(async (req, res) => {
   if (!company) {
     throw createHttpError(404, "Company not found");
   }
+  const { packageLimitMap } = await loadPackageCatalog();
+  const { snapshot: packageSnapshot } = await syncLivePackageContextForCompany(
+    company,
+    packageLimitMap,
+  );
 
   job.title = req.body.title?.trim() ?? job.title;
   job.summary = req.body.summary?.trim() ?? job.summary;
@@ -1012,7 +1090,7 @@ exports.updateJob = asyncHandler(async (req, res) => {
       _id: { $ne: job._id },
     });
 
-    if (activeCount >= company.jobLimit) {
+    if (activeCount >= packageSnapshot.jobLimit) {
       throw createHttpError(400, "Job limit exceeded for this package");
     }
   }
@@ -1051,6 +1129,11 @@ exports.updateJobApproval = asyncHandler(async (req, res) => {
   if (!company) {
     throw createHttpError(404, "Company not found");
   }
+  const { packageLimitMap } = await loadPackageCatalog();
+  const { snapshot: packageSnapshot } = await syncLivePackageContextForCompany(
+    company,
+    packageLimitMap,
+  );
 
   const decision = (req.body.decision || "").toUpperCase();
 
@@ -1069,7 +1152,7 @@ exports.updateJobApproval = asyncHandler(async (req, res) => {
     const isApprovedOverflowRequest =
       job.createdBySource === "CLIENT" && job.requiresPackageOverride;
 
-    if (activeCount >= company.jobLimit && !isApprovedOverflowRequest) {
+    if (activeCount >= packageSnapshot.jobLimit && !isApprovedOverflowRequest) {
       throw createHttpError(400, "Job limit exceeded for this package");
     }
 
@@ -1094,6 +1177,146 @@ exports.updateJobApproval = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getPackageChangeRequests = asyncHandler(async (req, res) => {
+  const statusFilter = String(req.query.status || "PENDING").trim().toUpperCase();
+  const normalizedStatus = normalizeRequestStatus(statusFilter);
+
+  if (statusFilter !== "ALL" && !normalizedStatus) {
+    throw createHttpError(400, "Invalid status filter for package change requests");
+  }
+
+  const companyFilter = getCompanyVisibilityFilter(req.user);
+  const visibleCompanyIds = await Company.find(companyFilter).distinct("_id");
+  const query = {
+    companyId: { $in: visibleCompanyIds },
+  };
+
+  if (statusFilter !== "ALL") {
+    query.status = normalizedStatus;
+  }
+
+  const requests = await PackageChangeRequest.find(query)
+    .sort({ createdAt: -1 })
+    .populate("companyId", "name packageType jobLimit createdByCRM")
+    .populate("requestedBy", "name email")
+    .populate("reviewedBy", "fullName email");
+
+  res.status(200).json({
+    success: true,
+    data: requests.map(formatPackageChangeRequestForCrm),
+  });
+});
+
+exports.updatePackageChangeRequest = asyncHandler(async (req, res) => {
+  const requestId = String(req.params.id || "").trim();
+  if (!requestId) {
+    throw createHttpError(400, "Package change request id is required");
+  }
+
+  const decision = String(req.body.decision || "").trim().toUpperCase();
+  if (!["APPROVE", "REJECT"].includes(decision)) {
+    throw createHttpError(400, "Decision must be APPROVE or REJECT");
+  }
+
+  const packageChangeRequest = await PackageChangeRequest.findById(requestId)
+    .populate("companyId")
+    .populate("requestedBy", "name email")
+    .populate("reviewedBy", "fullName email");
+
+  if (!packageChangeRequest || !packageChangeRequest.companyId) {
+    throw createHttpError(404, "Package change request not found");
+  }
+
+  assertOwnedByRequesterForFse(
+    packageChangeRequest.companyId?.createdByCRM,
+    req.user,
+    "You can only review package requests for client accounts created by you.",
+  );
+
+  if (packageChangeRequest.status !== "PENDING") {
+    throw createHttpError(400, "This package change request is already resolved");
+  }
+
+  const company = await Company.findById(packageChangeRequest.companyId._id);
+  if (!company) {
+    throw createHttpError(404, "Company not found");
+  }
+
+  const decisionNote = String(req.body.decisionNote || req.body.rejectionReason || "")
+    .trim()
+    .slice(0, 1200);
+
+  if (decision === "REJECT" && !decisionNote) {
+    throw createHttpError(400, "A rejection note is required");
+  }
+
+  const { packageLimitMap } = await loadPackageCatalog();
+  const { snapshot } = await syncLivePackageContextForCompany(company, packageLimitMap);
+  const targetPackageType = normalizePackageName(
+    packageChangeRequest.requestedPackageType,
+    company.packageType || "STANDARD",
+  );
+  const targetJobLimit = Number(
+    resolveCompanyJobLimit(
+      { packageType: targetPackageType, jobLimit: packageChangeRequest.requestedJobLimit },
+      packageLimitMap,
+    ),
+  );
+  const isUpgrade = targetJobLimit > Number(snapshot.jobLimit || 0);
+
+  packageChangeRequest.reviewedBy = req.user._id;
+  packageChangeRequest.reviewedAt = new Date();
+  packageChangeRequest.decisionNote = decisionNote;
+  packageChangeRequest.isUpgrade = isUpgrade;
+  packageChangeRequest.currentPackageType = normalizePackageName(
+    packageChangeRequest.currentPackageType,
+    company.packageType || "STANDARD",
+  );
+  packageChangeRequest.currentJobLimit = Number(snapshot.jobLimit || packageChangeRequest.currentJobLimit || 0);
+  packageChangeRequest.requestedPackageType = targetPackageType;
+  packageChangeRequest.requestedJobLimit = targetJobLimit;
+
+  if (decision === "REJECT") {
+    packageChangeRequest.status = "REJECTED";
+    await packageChangeRequest.save();
+  } else {
+    const effectiveAt = buildPackageChangeEffectiveAt({
+      isUpgrade,
+      requestedEffectiveAt: req.body.effectiveAt || packageChangeRequest.effectiveAt,
+    });
+    const shouldApplyNow = isUpgrade || effectiveAt.getTime() <= Date.now();
+
+    packageChangeRequest.status = "APPROVED";
+    packageChangeRequest.effectiveAt = effectiveAt;
+    packageChangeRequest.appliedAt = shouldApplyNow ? new Date() : null;
+
+    if (shouldApplyNow) {
+      company.packageType = targetPackageType;
+      company.jobLimit = targetJobLimit;
+      company.grandfatheredJobLimit = 0;
+      await company.save();
+    }
+
+    await packageChangeRequest.save();
+  }
+
+  const refreshed = await PackageChangeRequest.findById(packageChangeRequest._id)
+    .populate("companyId", "name packageType jobLimit createdByCRM")
+    .populate("requestedBy", "name email")
+    .populate("reviewedBy", "fullName email");
+
+  res.status(200).json({
+    success: true,
+    message:
+      decision === "APPROVE"
+        ? refreshed?.appliedAt
+          ? "Package change approved and applied."
+          : "Package change approved and scheduled."
+        : "Package change request rejected.",
+    data: formatPackageChangeRequestForCrm(refreshed),
+  });
+});
+
 exports.getPackages = asyncHandler(async (req, res) => {
   await ensureCrmSetup();
 
@@ -1111,18 +1334,33 @@ exports.getPackages = asyncHandler(async (req, res) => {
 });
 
 exports.upsertPackage = asyncHandler(async (req, res) => {
-  console.log("Upserting package - Params:", req.params, "Body:", req.body);
   const name = (req.params.name || req.body.name || "").toUpperCase();
+  const rolloutMode = String(req.body.rolloutMode || PACKAGE_ROLLOUT_MODES.APPLY_FOR_EVERYONE)
+    .trim()
+    .toUpperCase();
 
   if (!["STANDARD", "PREMIUM", "ELITE"].includes(name)) {
     throw createHttpError(400, "Invalid package name");
   }
+  if (!Object.values(PACKAGE_ROLLOUT_MODES).includes(rolloutMode)) {
+    throw createHttpError(
+      400,
+      "rolloutMode must be APPLY_FOR_EVERYONE or APPLY_AFTER_EXHAUSTION",
+    );
+  }
+
+  const nextJobLimit = Number(req.body.jobLimit);
+  if (!Number.isFinite(nextJobLimit) || nextJobLimit <= 0) {
+    throw createHttpError(400, "jobLimit must be a positive number");
+  }
+
+  const previousPackage = await Package.findOne({ name }).select("jobLimit");
 
   const updatedPackage = await Package.findOneAndUpdate(
     { name },
     {
       name,
-      jobLimit: Number(req.body.jobLimit || 0),
+      jobLimit: nextJobLimit,
       description: req.body.description?.trim() || "",
     },
     { new: true, upsert: true, runValidators: true },
@@ -1131,18 +1369,32 @@ exports.upsertPackage = asyncHandler(async (req, res) => {
   const impactedCompanies = await Company.find({ packageType: name });
   await Promise.all(
     impactedCompanies.map((company) => {
-      company.jobLimit = updatedPackage.jobLimit;
+      const previousLimit = Number(
+        company.jobLimit || previousPackage?.jobLimit || updatedPackage.jobLimit || 0,
+      );
+      const activeJobCount = Number(company.activeJobCount || 0);
+      const shouldApplyImmediately =
+        rolloutMode === PACKAGE_ROLLOUT_MODES.APPLY_FOR_EVERYONE ||
+        activeJobCount >= previousLimit;
+
+      company.jobLimit = shouldApplyImmediately ? updatedPackage.jobLimit : previousLimit;
+      company.grandfatheredJobLimit = shouldApplyImmediately ? 0 : previousLimit;
       return company.save();
     }),
   );
 
   res.status(200).json({
     success: true,
+    message:
+      rolloutMode === PACKAGE_ROLLOUT_MODES.APPLY_FOR_EVERYONE
+        ? "Package updated and applied for all existing clients."
+        : "Package updated. Existing clients stay on current limits until their slots are exhausted.",
     data: {
       id: String(updatedPackage._id),
       name: updatedPackage.name,
       jobLimit: updatedPackage.jobLimit,
       description: updatedPackage.description,
+      rolloutMode,
     },
   });
 });
