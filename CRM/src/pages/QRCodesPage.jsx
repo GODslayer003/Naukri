@@ -41,21 +41,18 @@ export default function QRCodesPage() {
       {
         label: "Generated QR kits",
         value: formatNumber(qrCodes.length),
-        detail: "Branded QR assets generated and managed by CRM.",
         icon: LuQrCode,
         tone: "blue",
       },
       {
         label: "Shared kits",
         value: formatNumber(shared),
-        detail: "Assets already distributed to client teams.",
         icon: LuSend,
         tone: "lime",
       },
       {
         label: "Scans tracked",
         value: formatNumber(scans),
-        detail: "Total landing-page scans across active QR journeys.",
         icon: LuQrCode,
         tone: "amber",
       },

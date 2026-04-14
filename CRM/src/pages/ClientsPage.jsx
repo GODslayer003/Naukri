@@ -207,35 +207,30 @@ export default function ClientsPage() {
       {
         label: "Managed clients",
         value: formatNumber(clients.length),
-        detail: "Company accounts controlled directly by CRM.",
         icon: LuBuilding2,
         tone: "blue",
       },
       {
         label: "Active accounts",
         value: formatNumber(activeClients),
-        detail: "Live clients currently open for recruitment operations.",
         icon: LuUsers,
         tone: "lime",
       },
       {
         label: "Configured slots",
         value: formatNumber(totalSlots),
-        detail: "Job posting capacity allocated through CRM package plans.",
         icon: LuSettings2,
         tone: "amber",
       },
       {
         label: "Live jobs",
         value: formatNumber(liveJobs),
-        detail: "Active roles already consuming the current client package limits.",
         icon: LuBuilding2,
         tone: "emerald",
       },
       {
         label: "Over limit",
         value: formatNumber(overLimitClients),
-        detail: "Clients whose active jobs exceed their configured package limit.",
         icon: LuBriefcaseBusiness,
         tone: "rose",
       },
@@ -384,9 +379,7 @@ export default function ClientsPage() {
 
       <PanelCard>
         <SectionHeading
-          eyebrow="Client control"
           title="Manage and configure all client/company accounts"
-          description="CRM controls company onboarding, package limits, geographic configuration, and client access credentials from one operational surface."
           action={
             <button
               onClick={openCreateClient}

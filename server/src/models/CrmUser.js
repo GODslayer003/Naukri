@@ -36,6 +36,11 @@ const crmUserSchema = new mongoose.Schema(
       enum: ["LEAD_GENERATOR", "STATE_MANAGER", "ZONAL_MANAGER", "FSE", "APPROVER", "ADMIN", "NATIONAL_SALES_HEAD"],
       required: true,
     },
+    designations: {
+      type: [String],
+      enum: ["LEAD_GENERATOR", "STATE_MANAGER", "ZONAL_MANAGER", "FSE", "APPROVER", "ADMIN", "NATIONAL_SALES_HEAD"],
+      default: [],
+    },
     territory: {
       type: String, // useful for Lead Generator (Zone)
     },

@@ -171,7 +171,7 @@ export async function fetchManagedMembers(params = {}) {
 
 export async function createManagedMember(payload) {
   const { data } = await http.post("/team-members", payload);
-  return data.data;
+  return data;
 }
 
 export async function fetchManagedMemberDetail(memberId) {
@@ -179,7 +179,14 @@ export async function fetchManagedMemberDetail(memberId) {
   return data.data;
 }
 
-export async function deleteManagedMember(memberId) {
-  const { data } = await http.delete(`/team-members/${memberId}`);
+export async function updateManagedMember(memberId, payload) {
+  const { data } = await http.patch(`/team-members/${memberId}`, payload);
+  return data.data;
+}
+
+export async function deleteManagedMember(memberId, role) {
+  const normalizedRole = String(role || "").trim().toUpperCase();
+  const params = normalizedRole ? { role: normalizedRole } : undefined;
+  const { data } = await http.delete(`/team-members/${memberId}`, { params });
   return data;
 }

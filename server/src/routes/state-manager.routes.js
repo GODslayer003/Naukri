@@ -23,6 +23,7 @@ router.get("/fses", controller.getFSEs);
 router.post("/team-members", controller.createManagedMember);
 router.get("/team-members", controller.getManagedMembers);
 router.get("/team-members/:id", controller.getManagedMemberById);
+router.patch("/team-members/:id", controller.updateManagedMember);
 router.delete("/team-members/:id", controller.deleteManagedMember);
 router.patch("/leads/:id/assign", controller.assignLead);
 router.patch("/leads/:id/status", controller.updateLeadStatus);

@@ -32,6 +32,34 @@ const resolveCandidateRegisterUrl = () => {
   return "http://localhost:3000/api/v1/candidate/auth/register";
 };
 
+const resolveCandidateProfileUrl = () => {
+  const normalizedApiV1 = normalizeApiV1BaseUrl(import.meta.env.VITE_API_BASE_URL);
+  if (normalizedApiV1) {
+    return `${normalizedApiV1}/candidate/profile`;
+  }
+
+  const candidateModuleBaseUrl = String(import.meta.env.VITE_CANDIDATE_API_URL || "").trim();
+  if (candidateModuleBaseUrl) {
+    return `${candidateModuleBaseUrl.replace(/\/+$/, "")}/profile`;
+  }
+
+  return "http://localhost:3000/api/v1/candidate/profile";
+};
+
+const resolveCandidateResumeUrl = () => {
+  const normalizedApiV1 = normalizeApiV1BaseUrl(import.meta.env.VITE_API_BASE_URL);
+  if (normalizedApiV1) {
+    return `${normalizedApiV1}/candidate/profile/resume`;
+  }
+
+  const candidateModuleBaseUrl = String(import.meta.env.VITE_CANDIDATE_API_URL || "").trim();
+  if (candidateModuleBaseUrl) {
+    return `${candidateModuleBaseUrl.replace(/\/+$/, "")}/profile/resume`;
+  }
+
+  return "http://localhost:3000/api/v1/candidate/profile/resume";
+};
+
 const resolveClientIntakeUrl = () => {
   const normalizedApiV1 = normalizeApiV1BaseUrl(import.meta.env.VITE_API_BASE_URL);
   if (normalizedApiV1) {
@@ -112,8 +140,12 @@ export default function App() {
     preferredPosition: "",
     email: "",
     phone: "",
+    preferredLocation: "",
+    expectedSalary: "",
   });
   const [resumeFile, setResumeFile] = useState(null);
+  const [candidateStep, setCandidateStep] = useState(1);
+  const [candidateAuthToken, setCandidateAuthToken] = useState("");
 
   const [clientFeedback, setClientFeedback] = useState({ type: "", message: "" });
   const [clientReferenceId, setClientReferenceId] = useState("");
@@ -130,6 +162,8 @@ export default function App() {
   const [clientStep, setClientStep] = useState(1);
 
   const candidateRegisterUrl = useMemo(resolveCandidateRegisterUrl, []);
+  const candidateProfileUrl = useMemo(resolveCandidateProfileUrl, []);
+  const candidateResumeUrl = useMemo(resolveCandidateResumeUrl, []);
   const clientIntakeUrl = useMemo(resolveClientIntakeUrl, []);
   const appDownloadUrl =
     String(import.meta.env.VITE_CANDIDATE_APP_URL || "").trim() || "https://play.google.com/store/apps";
@@ -149,12 +183,15 @@ export default function App() {
       preferredPosition: "",
       email: "",
       phone: "",
+      preferredLocation: "",
+      expectedSalary: "",
     });
     setResumeFile(null);
     setCandidateName("");
     setCandidateReferenceId("");
     setShowDownloadModal(false);
     setCandidateFeedback({ type: "", message: "" });
+    setCandidateAuthToken("");
   };
 
   const resetClientDraft = () => {
@@ -174,6 +211,7 @@ export default function App() {
 
   const resetCandidateFlow = () => {
     resetCandidateDraft();
+    setCandidateStep(1);
     setView("role");
   };
 
@@ -213,7 +251,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const validateCandidateForm = () => {
+  const validateCandidateStepOne = () => {
     if (
       !candidateForm.name.trim() ||
       !candidateForm.preferredPosition.trim() ||
@@ -231,18 +269,66 @@ export default function App() {
       return "Please enter a valid email address.";
     }
 
-    if (!resumeFile) {
-      return "CV upload is mandatory.";
+    return "";
+  };
+
+  const handleCandidateNext = async (event) => {
+    event.preventDefault();
+    setCandidateFeedback({ type: "", message: "" });
+
+    const validationMessage = validateCandidateStepOne();
+    if (validationMessage) {
+      setCandidateFeedback({ type: "error", message: validationMessage });
+      return;
     }
 
-    if (!isPdfFile(resumeFile)) {
-      return "Please upload CV in PDF format only.";
+    const payload = new FormData();
+    payload.append("name", candidateForm.name.trim());
+    payload.append("designation", candidateForm.preferredPosition.trim());
+    payload.append("phone", `+91${toIndianPhoneDigits(candidateForm.phone)}`);
+    payload.append("email", candidateForm.email.trim());
+    if (qrToken) {
+      payload.append("qrToken", qrToken);
     }
 
-    if (resumeFile.size > MAX_UPLOAD_FILE_SIZE) {
-      return "CV size must be 8MB or less.";
-    }
+    setIsCandidateSubmitting(true);
 
+    try {
+      const response = await fetch(candidateRegisterUrl, {
+        method: "POST",
+        body: payload,
+      });
+      const parsed = await parseResponseSafely(response);
+
+      if (!response.ok) {
+        throw new Error(parsed.message || "Unable to submit candidate registration.");
+      }
+
+      setCandidateAuthToken(parsed.token || "");
+      setCandidateName(candidateForm.name.trim());
+      setCandidateReferenceId(String(parsed.referenceId || "").trim());
+      
+      setCandidateStep(2);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      setCandidateFeedback({
+        type: "error",
+        message: error.message || "Unable to submit candidate registration.",
+      });
+    } finally {
+      setIsCandidateSubmitting(false);
+    }
+  };
+
+  const validateCandidateForm = () => {
+    if (resumeFile) {
+      if (!isPdfFile(resumeFile)) {
+        return "Please upload CV in PDF format only.";
+      }
+      if (resumeFile.size > MAX_UPLOAD_FILE_SIZE) {
+        return "CV size must be 8MB or less.";
+      }
+    }
     return "";
   };
 
@@ -285,37 +371,53 @@ export default function App() {
       return;
     }
 
-    const payload = new FormData();
-    payload.append("name", candidateForm.name.trim());
-    payload.append("designation", candidateForm.preferredPosition.trim());
-    payload.append("phone", `+91${toIndianPhoneDigits(candidateForm.phone)}`);
-    payload.append("email", candidateForm.email.trim());
-    if (qrToken) {
-      payload.append("qrToken", qrToken);
-    }
-    payload.append("resume", resumeFile);
-
     setIsCandidateSubmitting(true);
 
     try {
-      const response = await fetch(candidateRegisterUrl, {
-        method: "POST",
-        body: payload,
-      });
-      const parsed = await parseResponseSafely(response);
+      if (candidateForm.expectedSalary.trim() || candidateForm.preferredLocation.trim()) {
+        const profilePayload = {};
+        if (candidateForm.expectedSalary.trim()) profilePayload.expectedSalary = candidateForm.expectedSalary.trim();
+        if (candidateForm.preferredLocation.trim()) profilePayload.preferredLocations = [candidateForm.preferredLocation.trim()];
 
-      if (!response.ok) {
-        throw new Error(parsed.message || "Unable to submit candidate registration.");
+        const response = await fetch(candidateProfileUrl, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${candidateAuthToken}`,
+          },
+          body: JSON.stringify(profilePayload),
+        });
+        
+        if (!response.ok) {
+          const parsed = await parseResponseSafely(response);
+          throw new Error(parsed.message || "Failed to update profile information.");
+        }
       }
 
-      setCandidateName(candidateForm.name.trim());
-      setCandidateReferenceId(String(parsed.referenceId || "").trim());
+      if (resumeFile) {
+        const resumePayload = new FormData();
+        resumePayload.append("resume", resumeFile);
+
+        const response = await fetch(candidateResumeUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${candidateAuthToken}`,
+          },
+          body: resumePayload,
+        });
+
+        if (!response.ok) {
+          const parsed = await parseResponseSafely(response);
+          throw new Error(parsed.message || "Failed to upload resume.");
+        }
+      }
+
       setView("thanks");
       setShowDownloadModal(true);
     } catch (error) {
       setCandidateFeedback({
         type: "error",
-        message: error.message || "Unable to submit candidate registration.",
+        message: error.message || "Unable to submit application.",
       });
     } finally {
       setIsCandidateSubmitting(false);
@@ -394,22 +496,17 @@ export default function App() {
       <section className="landing-card">
         <header className="landing-head">
           <img src={logo} alt="Maven Jobs" className="brand-logo" />
-          <p className="brand-copy">QR Smart Hiring Entry</p>
         </header>
 
         {view === "role" ? (
           <>
-            <h1 className="headline">SELECT YOUR ROLE</h1>
-            <p className="sub-copy">
-              Choose how you want to continue in the Maven Jobs hiring flow.
-            </p>
-
             <div className="role-grid">
               <button
                 type="button"
                 className="role-card"
                 onClick={() => {
                   setCandidateFeedback({ type: "", message: "" });
+                  setCandidateStep(1);
                   setView("candidate");
                 }}
               >
@@ -435,10 +532,7 @@ export default function App() {
 
         {view === "candidate" ? (
           <>
-            <h1 className="headline">Candidate Registration</h1>
-            <p className="sub-copy">
-              Step 1: Personal details. Step 2: Upload CV (mandatory).
-            </p>
+            <h1 className="headline">JOB APPLY HERE</h1>
 
             {candidateFeedback.message ? (
               <div className={`feedback ${candidateFeedback.type === "error" ? "feedback-error" : "feedback-info"}`}>
@@ -446,82 +540,115 @@ export default function App() {
               </div>
             ) : null}
 
-            <form className="candidate-form" onSubmit={submitCandidate} noValidate>
-              <label className="form-field">
-                <span className="field-label">
-                  Full Name <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="text"
-                  value={candidateForm.name}
-                  onChange={updateCandidateField("name")}
-                  placeholder="Your full name"
-                />
-              </label>
+            <form
+              className="candidate-form"
+              onSubmit={candidateStep === 2 ? submitCandidate : handleCandidateNext}
+              noValidate
+            >
+              {candidateStep === 1 ? (
+                <>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Full Name <span className="required-asterisk">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={candidateForm.name}
+                      onChange={updateCandidateField("name")}
+                      placeholder="Your full name"
+                    />
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">
-                  Preferred Position <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="text"
-                  value={candidateForm.preferredPosition}
-                  onChange={updateCandidateField("preferredPosition")}
-                  placeholder="e.g. Software Engineer"
-                />
-              </label>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Preferred Position <span className="required-asterisk">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={candidateForm.preferredPosition}
+                      onChange={updateCandidateField("preferredPosition")}
+                      placeholder="e.g. Software Engineer"
+                    />
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">
-                  Email <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="email"
-                  value={candidateForm.email}
-                  onChange={updateCandidateField("email")}
-                  placeholder="you@example.com"
-                />
-              </label>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Email <span className="required-asterisk">*</span>
+                    </span>
+                    <input
+                      type="email"
+                      value={candidateForm.email}
+                      onChange={updateCandidateField("email")}
+                      placeholder="you@example.com"
+                    />
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">
-                  Phone Number <span className="required-asterisk">*</span>
-                </span>
-                <div className="phone-input-row">
-                  <span className="country-code-pill">+91</span>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]{10}"
-                    maxLength={10}
-                    value={candidateForm.phone}
-                    onChange={(event) =>
-                      setCandidateForm((prev) => ({ ...prev, phone: toIndianPhoneDigits(event.target.value) }))
-                    }
-                    placeholder="9876543210"
-                  />
-                </div>
-              </label>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Phone Number <span className="required-asterisk">*</span>
+                    </span>
+                    <div className="phone-input-row">
+                      <span className="country-code-pill">+91</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]{10}"
+                        maxLength={10}
+                        value={candidateForm.phone}
+                        onChange={(event) =>
+                          setCandidateForm((prev) => ({ ...prev, phone: toIndianPhoneDigits(event.target.value) }))
+                        }
+                        placeholder="9876543210"
+                      />
+                    </div>
+                  </label>
 
-              <label className="form-field">
-                <span className="field-label">
-                  Upload CV <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
-                />
-              </label>
+                  <div className="form-actions">
+                    <button type="submit" className="button button-primary" disabled={isCandidateSubmitting}>
+                      {isCandidateSubmitting ? "Submitting..." : "Next"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label className="form-field">
+                    <span className="field-label">
+                      Upload CV (optional)
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
+                    />
+                  </label>
 
-              <div className="form-actions">
-                <button type="button" className="button button-secondary" onClick={resetCandidateFlow}>
-                  Back
-                </button>
-                <button type="submit" className="button button-primary" disabled={isCandidateSubmitting}>
-                  {isCandidateSubmitting ? "Submitting..." : "Submit Application"}
-                </button>
-              </div>
+                  <label className="form-field">
+                    <span className="field-label">Preferred Location (optional)</span>
+                    <input
+                      type="text"
+                      value={candidateForm.preferredLocation}
+                      onChange={updateCandidateField("preferredLocation")}
+                      placeholder="e.g. Bangalore, Remote"
+                    />
+                  </label>
+
+                  <label className="form-field">
+                    <span className="field-label">Expected Salary (optional)</span>
+                    <input
+                      type="text"
+                      value={candidateForm.expectedSalary}
+                      onChange={updateCandidateField("expectedSalary")}
+                      placeholder="e.g. 10 LPA"
+                    />
+                  </label>
+
+                  <div className="form-actions">
+                    <button type="submit" className="button button-primary" disabled={isCandidateSubmitting}>
+                      {isCandidateSubmitting ? "Submitting..." : "Submit Application"}
+                    </button>
+                  </div>
+                </>
+              )}
             </form>
           </>
         ) : null}

@@ -35,6 +35,24 @@ const getUserState = (user = {}) => {
   return normalizeIndianStateInput(user.state) || "";
 };
 
+const hasDesignation = (user = {}, role = "") => {
+  const targetRole = String(role || "").trim().toUpperCase();
+  if (!targetRole) {
+    return false;
+  }
+
+  const primaryRole = String(user.role || "").trim().toUpperCase();
+  if (primaryRole === targetRole) {
+    return true;
+  }
+
+  if (!Array.isArray(user.designations)) {
+    return false;
+  }
+
+  return user.designations.some((item) => String(item || "").trim().toUpperCase() === targetRole);
+};
+
 const normalizeFullName = (value = "") => {
   const normalized = String(value || "")
     .trim()
@@ -301,7 +319,7 @@ exports.login = asyncHandler(async (req, res) => {
   const normalizedEmail = String(email).trim().toLowerCase();
   const user = await CrmUser.findOne({ email: normalizedEmail }).select("+password");
 
-  if (!user || user.role !== "FSE") {
+  if (!user || !hasDesignation(user, "FSE")) {
     throw createHttpError(401, "Invalid email, zone, or password");
   }
 
@@ -327,7 +345,7 @@ exports.login = asyncHandler(async (req, res) => {
       email: user.email,
       zone: normalizedZone,
       state: getUserState(user),
-      role: user.role,
+      role: "FSE",
       profileImage: user.profileImageUrl || "",
     },
   });
@@ -390,7 +408,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
       id: String(user._id),
       fullName: user.fullName,
       email: user.email,
-      role: user.role,
+      role: "FSE",
       zone: getUserZone(user),
       state: getUserState(user),
       profileImage: user.profileImageUrl || "",
@@ -688,7 +706,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
       id: String(req.user._id),
       fullName: req.user.fullName,
       email: req.user.email,
-      role: req.user.role,
+      role: "FSE",
       zone: getUserZone(req.user),
       state: getUserState(req.user),
       phone: req.user.phone || "",
@@ -722,7 +740,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
       id: String(user._id),
       fullName: user.fullName,
       email: user.email,
-      role: user.role,
+      role: "FSE",
       zone: getUserZone(user),
       state: getUserState(user),
       phone: user.phone || "",

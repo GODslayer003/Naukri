@@ -16,7 +16,7 @@ export default function CrmSidebar({ isOpen, closeSidebar }) {
       />
 
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen w-72 flex-col bg-[#163060] text-white shadow-2xl transition-transform duration-300 md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-40 flex h-screen w-72 flex-col bg-[#163060] text-white shadow-2xl transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

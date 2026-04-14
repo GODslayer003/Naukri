@@ -85,6 +85,24 @@ const normalizeFullName = (value = "") => {
 const getUserZone = (user = {}) =>
   normalizeZoneInput(user.territory) || inferZoneFromTerritory(user.territory);
 
+const hasDesignation = (user = {}, role = "") => {
+  const targetRole = String(role || "").trim().toUpperCase();
+  if (!targetRole) {
+    return false;
+  }
+
+  const primaryRole = String(user.role || "").trim().toUpperCase();
+  if (primaryRole === targetRole) {
+    return true;
+  }
+
+  if (!Array.isArray(user.designations)) {
+    return false;
+  }
+
+  return user.designations.some((item) => String(item || "").trim().toUpperCase() === targetRole);
+};
+
 const buildTerritoryFilter = (zone = "") => {
   const regex = buildZoneRegex(zone);
   if (!regex) {
@@ -1239,7 +1257,7 @@ exports.login = asyncHandler(async (req, res) => {
     throw createHttpError(401, "Invalid credentials or zone");
   }
 
-  if (user.role !== "LEAD_GENERATOR") {
+  if (!hasDesignation(user, "LEAD_GENERATOR")) {
     throw createHttpError(403, "Access denied. Only Lead Generators can log in here.");
   }
 
@@ -1266,7 +1284,7 @@ exports.login = asyncHandler(async (req, res) => {
       email: user.email,
       zone: normalizedZone,
       state: normalizeIndianStateInput(user.state) || "",
-      role: user.role,
+      role: "LEAD_GENERATOR",
       profileImage: user.profileImageUrl || "",
     },
   });
@@ -1313,7 +1331,7 @@ exports.getProfile = asyncHandler(async (req, res) => {
       id: String(req.user._id),
       fullName: req.user.fullName,
       email: req.user.email,
-      role: req.user.role,
+      role: "LEAD_GENERATOR",
       zone,
       state,
       phone: req.user.phone || "",
@@ -1349,7 +1367,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
       id: String(user._id),
       fullName: user.fullName,
       email: user.email,
-      role: user.role,
+      role: "LEAD_GENERATOR",
       zone,
       state,
       phone: user.phone || "",
@@ -1388,7 +1406,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
       id: String(user._id),
       fullName: user.fullName,
       email: user.email,
-      role: user.role,
+      role: "LEAD_GENERATOR",
       zone,
       state,
       profileImage: user.profileImageUrl || "",

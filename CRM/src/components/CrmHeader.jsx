@@ -18,7 +18,7 @@ export default function CrmHeader({ toggleSidebar }) {
       <div className="flex items-center gap-4">
         <button
           onClick={toggleSidebar}
-          className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition-all duration-200 hover:border-lime-300 hover:bg-lime-50 md:hidden"
+          className="rounded-2xl border border-slate-200 p-2.5 text-slate-700 transition-all duration-200 hover:border-lime-300 hover:bg-lime-50"
         >
           <LuMenu size={20} />
         </button>

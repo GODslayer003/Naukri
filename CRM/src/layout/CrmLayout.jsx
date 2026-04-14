@@ -17,7 +17,7 @@ export default function CrmLayout() {
     <div className="min-h-screen bg-transparent text-slate-900">
       <CrmSidebar isOpen={isSidebarOpen} closeSidebar={() => setIsSidebarOpen(false)} />
 
-      <div className="md:pl-72">
+      <div className={`transition-all duration-300 ${isSidebarOpen ? "md:pl-72" : ""}`}>
         <CrmHeader toggleSidebar={() => setIsSidebarOpen((prev) => !prev)} />
         <main className="px-4 py-6 md:px-8">
           <Outlet />

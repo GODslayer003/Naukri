@@ -101,17 +101,29 @@ export default function Dashboard() {
   const {
     pendingValidation,
     activeFses,
+    activeLeadGenerators,
     totalAssigned,
     conversionRate,
     conversionGrowth,
     teamOverview,
     recentActivity,
+    rolePerformance,
   } = dashboard || {};
 
   const allTeamOverview = Array.isArray(teamOverview) ? teamOverview : [];
   const previewTeamOverview = allTeamOverview.slice(0, 3);
   const allNotifications = Array.isArray(recentActivity) ? recentActivity : [];
   const previewNotifications = allNotifications.slice(0, 3);
+  const fseSummary = rolePerformance?.fse?.summary || {};
+  const leadGeneratorSummary = rolePerformance?.leadGenerator?.summary || {};
+  const fsePerformers = Array.isArray(rolePerformance?.fse?.members)
+    ? rolePerformance.fse.members
+    : [];
+  const leadGeneratorPerformers = Array.isArray(rolePerformance?.leadGenerator?.members)
+    ? rolePerformance.leadGenerator.members
+    : [];
+  const previewFsePerformers = fsePerformers.slice(0, 5);
+  const previewLeadGeneratorPerformers = leadGeneratorPerformers.slice(0, 5);
   const currentUser = getSessionUser();
   const managerName = currentUser?.fullName || currentUser?.email || "State Manager";
   const managerZone = currentUser?.zone || "Assigned";
@@ -193,6 +205,19 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Active Lead Generators Card */}
+        <div style={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "24px", position: "relative", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span style={{ color: "#64748b", fontSize: "0.8rem", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Active Lead Generators</span>
+            <div style={{ backgroundColor: "#334155", color: "#fff", width: "40px", height: "40px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <LuUsers size={24} />
+            </div>
+          </div>
+          <div style={{ marginTop: "16px" }}>
+            <span style={{ fontSize: "2.5rem", fontWeight: "700", color: "#0f172a", lineHeight: "1" }}>{activeLeadGenerators || 0}</span>
+          </div>
+        </div>
+
         {/* Total Assigned Card */}
         <div style={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "24px", position: "relative", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -228,7 +253,7 @@ export default function Dashboard() {
         {/* Team Overview Section */}
         <div style={{ backgroundColor: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: "700", color: "#1e3a8a", margin: 0 }}>Team Overview</h2>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: "700", color: "#1e3a8a", margin: 0 }}>FSE Team Overview</h2>
             <button
               type="button"
               onClick={() => setIsTeamModalOpen(true)}
@@ -334,6 +359,146 @@ export default function Dashboard() {
           </div>
         </div>
 
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+          gap: "24px",
+          marginTop: "24px",
+        }}
+      >
+        <section
+          style={{
+            backgroundColor: "#fff",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "24px", borderBottom: "1px solid #f1f5f9" }}>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: "700", color: "#1e3a8a", margin: 0 }}>
+              FSE performance
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: "0.9rem", color: "#64748b" }}>
+              Track assignment load and conversion output across your FSE team.
+            </p>
+            <div style={{ marginTop: "14px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              <span style={{ background: "#e0ecff", color: "#1e3a8a", borderRadius: "999px", padding: "6px 10px", fontSize: "0.75rem", fontWeight: 700 }}>
+                {fseSummary.totalMembers ?? 0} total
+              </span>
+              <span style={{ background: "#ecfdf5", color: "#047857", borderRadius: "999px", padding: "6px 10px", fontSize: "0.75rem", fontWeight: 700 }}>
+                {fseSummary.activePerformers ?? 0} active performers
+              </span>
+              <span style={{ background: "#f5f3ff", color: "#6d28d9", borderRadius: "999px", padding: "6px 10px", fontSize: "0.75rem", fontWeight: 700 }}>
+                Conversion: {fseSummary.conversionRate || "0%"}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <thead style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+                <tr>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>FSE</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Active</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Converted</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Assigned</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>CVR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewFsePerformers.length ? (
+                  previewFsePerformers.map((member, index) => (
+                    <tr key={`fse-performance-${member.id}`} style={{ borderBottom: index < previewFsePerformers.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                      <td style={{ padding: "14px 20px", color: "#1e293b", fontWeight: "600" }}>{member.name}</td>
+                      <td style={{ padding: "14px 20px", color: "#334155" }}>{member.activeLeads ?? 0}</td>
+                      <td style={{ padding: "14px 20px", color: "#334155" }}>{member.convertedLeads ?? 0}</td>
+                      <td style={{ padding: "14px 20px", color: "#334155" }}>{member.totalAssignedLeads ?? 0}</td>
+                      <td style={{ padding: "14px 20px", color: "#1e3a8a", fontWeight: "700" }}>{member.conversionRate || "0%"}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" style={{ padding: "20px", color: "#94a3b8", textAlign: "center" }}>
+                      No FSE performance records yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section
+          style={{
+            backgroundColor: "#fff",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "24px", borderBottom: "1px solid #f1f5f9" }}>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: "700", color: "#1e3a8a", margin: 0 }}>
+              Lead Generator performance
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: "0.9rem", color: "#64748b" }}>
+              Review lead production, forwarding velocity, and conversion contribution.
+            </p>
+            <div style={{ marginTop: "14px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              <span style={{ background: "#e0ecff", color: "#1e3a8a", borderRadius: "999px", padding: "6px 10px", fontSize: "0.75rem", fontWeight: 700 }}>
+                {leadGeneratorSummary.totalMembers ?? 0} total
+              </span>
+              <span style={{ background: "#fff7ed", color: "#c2410c", borderRadius: "999px", padding: "6px 10px", fontSize: "0.75rem", fontWeight: 700 }}>
+                {leadGeneratorSummary.totalGeneratedLeads ?? 0} generated
+              </span>
+              <span style={{ background: "#ecfdf5", color: "#047857", borderRadius: "999px", padding: "6px 10px", fontSize: "0.75rem", fontWeight: 700 }}>
+                Forwarded: {leadGeneratorSummary.forwardedLeads ?? 0}
+              </span>
+              <span style={{ background: "#f5f3ff", color: "#6d28d9", borderRadius: "999px", padding: "6px 10px", fontSize: "0.75rem", fontWeight: 700 }}>
+                Conversion: {leadGeneratorSummary.conversionRate || "0%"}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <thead style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+                <tr>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Lead Generator</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Generated</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Forwarded</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Converted</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>CVR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewLeadGeneratorPerformers.length ? (
+                  previewLeadGeneratorPerformers.map((member, index) => (
+                    <tr key={`lg-performance-${member.id}`} style={{ borderBottom: index < previewLeadGeneratorPerformers.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                      <td style={{ padding: "14px 20px", color: "#1e293b", fontWeight: "600" }}>{member.name}</td>
+                      <td style={{ padding: "14px 20px", color: "#334155" }}>{member.totalGeneratedLeads ?? 0}</td>
+                      <td style={{ padding: "14px 20px", color: "#334155" }}>{member.forwardedLeads ?? 0}</td>
+                      <td style={{ padding: "14px 20px", color: "#334155" }}>{member.convertedLeads ?? 0}</td>
+                      <td style={{ padding: "14px 20px", color: "#1e3a8a", fontWeight: "700" }}>{member.conversionRate || "0%"}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" style={{ padding: "20px", color: "#94a3b8", textAlign: "center" }}>
+                      No Lead Generator performance records yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       {isNotificationsModalOpen ? (

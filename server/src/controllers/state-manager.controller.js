@@ -46,6 +46,53 @@ const RESERVED_STATE_MANAGER_STATUSES = ["ACTIVE", "PENDING_INVITE"];
 const MANAGED_MEMBER_ROLES = ["LEAD_GENERATOR", "FSE"];
 const DEFAULT_TEAM_MEMBER_LIMIT = 10;
 const MAX_TEAM_MEMBER_LIMIT = 50;
+const TERMINAL_LEAD_STATUSES = ["CONVERTED", "LOST", "REJECTED"];
+const FORWARDED_PIPELINE_STATUSES = ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"];
+const GENERATOR_PENDING_STATUSES = ["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED"];
+
+const getMemberRoleSet = (user = {}) => {
+  const roleSet = new Set();
+  const primaryRole = String(user.role || "").trim().toUpperCase();
+  if (primaryRole) {
+    roleSet.add(primaryRole);
+  }
+
+  if (Array.isArray(user.designations)) {
+    user.designations.forEach((role) => {
+      const normalizedRole = String(role || "").trim().toUpperCase();
+      if (normalizedRole) {
+        roleSet.add(normalizedRole);
+      }
+    });
+  }
+
+  return roleSet;
+};
+
+const hasMemberRole = (user = {}, role = "") => {
+  const normalizedRole = String(role || "").trim().toUpperCase();
+  if (!normalizedRole) {
+    return false;
+  }
+  return getMemberRoleSet(user).has(normalizedRole);
+};
+
+const getMemberRoles = (user = {}) => Array.from(getMemberRoleSet(user));
+
+const buildManagedRoleQuery = (role = "") => {
+  const normalizedRole = String(role || "").trim().toUpperCase();
+  if (!normalizedRole) {
+    return { _id: null };
+  }
+
+  return {
+    $or: [{ role: normalizedRole }, { designations: normalizedRole }],
+  };
+};
+
+const buildAnyManagedRoleQuery = () => ({
+  $or: [{ role: { $in: MANAGED_MEMBER_ROLES } }, { designations: { $in: MANAGED_MEMBER_ROLES } }],
+});
 
 const buildStateReservationQuery = (zone = "", state = "", excludedUserId = null) => {
   const normalizedZone = normalizeZoneInput(zone);
@@ -471,7 +518,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
   }
 
   const zoneQuery = {
-    role: "LEAD_GENERATOR",
+    ...buildManagedRoleQuery("LEAD_GENERATOR"),
     ...buildTerritoryFilter(targetZone),
     state: managerState,
   };
@@ -561,7 +608,7 @@ exports.getFSEs = asyncHandler(async (req, res) => {
   }
 
   const fses = await CrmUser.find({
-    role: "FSE",
+    ...buildManagedRoleQuery("FSE"),
     ...buildTerritoryFilter(myZone),
     state: myState,
     isActive: true,
@@ -652,19 +699,109 @@ exports.createManagedMember = asyncHandler(async (req, res) => {
   const normalizedFullName = normalizeFullName(fullName);
   const normalizedEmail = normalizeEmail(email);
   const normalizedPhone = normalizePhone(phone);
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const existingUser = await CrmUser.findOne({ email: normalizedEmail }).select(
+    "_id fullName email phone role designations territory state isActive accessStatus createdAt updatedAt",
+  );
 
-  const existingUser = await CrmUser.findOne({ email: normalizedEmail }).select("_id");
   if (existingUser) {
-    throw createHttpError(409, "User with this email already exists.");
+    const existingZone = getUserZone(existingUser);
+    const existingState = getUserState(existingUser);
+    const existingRoles = getMemberRoles(existingUser);
+    const hasManagedDesignation = existingRoles.some((item) => MANAGED_MEMBER_ROLES.includes(item));
+
+    if (!hasManagedDesignation) {
+      throw createHttpError(409, "A non-team user already exists with this email.");
+    }
+
+    if (existingZone !== managerZone || existingState !== managerState) {
+      throw createHttpError(
+        409,
+        "This email is already mapped to a team user in a different state/zone.",
+      );
+    }
+
+    if (existingRoles.includes(role)) {
+      if (!existingUser.isActive || existingUser.accessStatus === "RESTRICTED") {
+        existingUser.fullName = normalizedFullName;
+        existingUser.phone = normalizedPhone;
+        existingUser.password = hashedPassword;
+        existingUser.territory = managerZone;
+        existingUser.state = managerState;
+        existingUser.accessStatus = "ACTIVE";
+        existingUser.isActive = true;
+        await existingUser.save();
+
+        return res.status(200).json({
+          success: true,
+          message: `${role === "FSE" ? "FSE" : "Lead Generator"} account reactivated successfully.`,
+          data: {
+            id: String(existingUser._id),
+            fullName: existingUser.fullName,
+            email: existingUser.email,
+            role,
+            primaryRole: existingUser.role,
+            designations: getMemberRoles(existingUser),
+            zone: getUserZone(existingUser),
+            state: existingUser.state || "",
+            phone: existingUser.phone || "",
+            accessStatus: existingUser.accessStatus,
+            isActive: Boolean(existingUser.isActive),
+            createdAt: existingUser.createdAt,
+            updatedAt: existingUser.updatedAt,
+          },
+        });
+      }
+
+      throw createHttpError(409, `${role === "FSE" ? "FSE" : "Lead Generator"} designation already exists for this account.`);
+    }
+
+    const nextRoleSet = new Set(existingRoles);
+    nextRoleSet.add(role);
+    const nextRoles = Array.from(nextRoleSet);
+
+    const nextPrimaryRole = nextRoles.includes(existingUser.role) ? existingUser.role : nextRoles[0];
+    const nextDesignations = nextRoles.filter((item) => item !== nextPrimaryRole);
+
+    existingUser.fullName = normalizedFullName;
+    existingUser.phone = normalizedPhone;
+    existingUser.password = hashedPassword;
+    existingUser.role = nextPrimaryRole;
+    existingUser.designations = nextDesignations;
+    existingUser.territory = managerZone;
+    existingUser.state = managerState;
+    existingUser.accessStatus = "ACTIVE";
+    existingUser.isActive = true;
+    await existingUser.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `${role === "FSE" ? "FSE" : "Lead Generator"} designation added to the existing account.`,
+      data: {
+        id: String(existingUser._id),
+        fullName: existingUser.fullName,
+        email: existingUser.email,
+        role,
+        primaryRole: existingUser.role,
+        designations: getMemberRoles(existingUser),
+        zone: getUserZone(existingUser),
+        state: existingUser.state || "",
+        phone: existingUser.phone || "",
+        accessStatus: existingUser.accessStatus,
+        isActive: Boolean(existingUser.isActive),
+        createdAt: existingUser.createdAt,
+        updatedAt: existingUser.updatedAt,
+      },
+    });
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
   const createdMember = await CrmUser.create({
     fullName: normalizedFullName,
     email: normalizedEmail,
     phone: normalizedPhone,
     password: hashedPassword,
     role,
+    designations: [],
     territory: managerZone,
     state: managerState,
     accessStatus: "ACTIVE",
@@ -678,7 +815,9 @@ exports.createManagedMember = asyncHandler(async (req, res) => {
       id: String(createdMember._id),
       fullName: createdMember.fullName,
       email: createdMember.email,
-      role: createdMember.role,
+      role,
+      primaryRole: createdMember.role,
+      designations: getMemberRoles(createdMember),
       zone: getUserZone(createdMember),
       state: createdMember.state || "",
       phone: createdMember.phone || "",
@@ -705,22 +844,19 @@ exports.getManagedMembers = asyncHandler(async (req, res) => {
     throw createHttpError(400, `role must be one of: ${MANAGED_MEMBER_ROLES.join(", ")}`);
   }
 
-  const baseFilter = {
-    role,
+  const query = {
     ...buildTerritoryFilter(managerZone),
     state: managerState,
     isActive: true,
     accessStatus: { $ne: "RESTRICTED" },
+    $and: [buildManagedRoleQuery(role)],
   };
 
-  const query = { ...baseFilter };
   if (search) {
     const searchRegex = { $regex: escapeRegExp(search), $options: "i" };
-    query.$or = [
-      { fullName: searchRegex },
-      { email: searchRegex },
-      { phone: searchRegex },
-    ];
+    query.$and.push({
+      $or: [{ fullName: searchRegex }, { email: searchRegex }, { phone: searchRegex }],
+    });
   }
 
   const [members, total] = await Promise.all([
@@ -728,7 +864,7 @@ exports.getManagedMembers = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select("_id fullName email role territory state phone isActive accessStatus profileImageUrl createdAt updatedAt"),
+      .select("_id fullName email role designations territory state phone isActive accessStatus profileImageUrl createdAt updatedAt"),
     CrmUser.countDocuments(query),
   ]);
 
@@ -777,7 +913,9 @@ exports.getManagedMembers = asyncHandler(async (req, res) => {
           id: String(member._id),
           fullName: member.fullName,
           email: member.email,
-          role: member.role,
+          role,
+          primaryRole: member.role,
+          designations: getMemberRoles(member),
           zone: getUserZone(member),
           state: member.state || "",
           phone: member.phone || "",
@@ -811,10 +949,10 @@ exports.getManagedMemberById = asyncHandler(async (req, res) => {
 
   const member = await CrmUser.findOne({
     _id: id,
-    role: { $in: MANAGED_MEMBER_ROLES },
+    ...buildAnyManagedRoleQuery(),
     ...buildTerritoryFilter(managerZone),
     state: managerState,
-  }).select("_id fullName email role territory state phone department scope isActive accessStatus profileImageUrl createdAt updatedAt");
+  }).select("_id fullName email role designations territory state phone department scope isActive accessStatus profileImageUrl createdAt updatedAt");
 
   if (!member) {
     throw createHttpError(404, "Team member not found in your state.");
@@ -851,6 +989,7 @@ exports.getManagedMemberById = asyncHandler(async (req, res) => {
       fullName: member.fullName,
       email: member.email,
       role: member.role,
+      designations: getMemberRoles(member),
       zone: getUserZone(member),
       state: member.state || "",
       phone: member.phone || "",
@@ -868,7 +1007,7 @@ exports.getManagedMemberById = asyncHandler(async (req, res) => {
   });
 });
 
-exports.deleteManagedMember = asyncHandler(async (req, res) => {
+exports.updateManagedMember = asyncHandler(async (req, res) => {
   const managerZone = getUserZone(req.user);
   const managerState = getUserState(req.user);
   const { id } = req.params;
@@ -879,20 +1018,160 @@ exports.deleteManagedMember = asyncHandler(async (req, res) => {
 
   const member = await CrmUser.findOne({
     _id: id,
-    role: { $in: MANAGED_MEMBER_ROLES },
+    ...buildAnyManagedRoleQuery(),
     ...buildTerritoryFilter(managerZone),
     state: managerState,
-  }).select("_id fullName email role");
+  }).select(
+    "_id fullName email phone role designations territory state password isActive accessStatus createdAt updatedAt",
+  );
 
   if (!member) {
     throw createHttpError(404, "Team member not found in your state.");
   }
 
-  member.isActive = false;
-  member.accessStatus = "RESTRICTED";
+  const hasFullName = req.body.fullName !== undefined;
+  const hasEmail = req.body.email !== undefined;
+  const hasPhone = req.body.phone !== undefined;
+  const hasPassword =
+    req.body.password !== undefined && String(req.body.password || "").trim().length > 0;
+  const hasConfirmPassword =
+    req.body.confirmPassword !== undefined &&
+    String(req.body.confirmPassword || "").trim().length > 0;
+
+  if (!hasFullName && !hasEmail && !hasPhone && !hasPassword && !hasConfirmPassword) {
+    throw createHttpError(400, "At least one editable field is required.");
+  }
+
+  if (hasFullName) {
+    member.fullName = normalizeFullName(req.body.fullName);
+  }
+
+  if (hasEmail) {
+    const normalizedEmail = normalizeEmail(req.body.email);
+    const conflictUser = await CrmUser.findOne({
+      email: normalizedEmail,
+      _id: { $ne: member._id },
+    }).select("_id");
+
+    if (conflictUser) {
+      throw createHttpError(409, "User with this email already exists.");
+    }
+
+    member.email = normalizedEmail;
+  }
+
+  if (hasPhone) {
+    member.phone = normalizePhone(req.body.phone);
+  }
+
+  if (hasPassword || hasConfirmPassword) {
+    const password = String(req.body.password || "");
+    const confirmPassword = String(req.body.confirmPassword || "");
+
+    if (!password || !confirmPassword) {
+      throw createHttpError(400, "Both password and confirmPassword are required to reset password.");
+    }
+
+    if (password !== confirmPassword) {
+      throw createHttpError(400, "Passwords do not match.");
+    }
+
+    if (password.length < 8) {
+      throw createHttpError(400, "Password must be at least 8 characters.");
+    }
+
+    member.password = await bcrypt.hash(password, 10);
+  }
+
+  member.territory = managerZone;
+  member.state = managerState;
   await member.save();
 
-  if (member.role === "FSE") {
+  res.status(200).json({
+    success: true,
+    message: "Team member updated successfully.",
+    data: {
+      id: String(member._id),
+      fullName: member.fullName,
+      email: member.email,
+      role: member.role,
+      designations: getMemberRoles(member),
+      zone: getUserZone(member),
+      state: member.state || "",
+      phone: member.phone || "",
+      accessStatus: member.accessStatus,
+      isActive: Boolean(member.isActive),
+      createdAt: member.createdAt,
+      updatedAt: member.updatedAt,
+    },
+  });
+});
+
+exports.deleteManagedMember = asyncHandler(async (req, res) => {
+  const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
+  const { id } = req.params;
+  const requestedRole = String(req.query.role || "").trim().toUpperCase();
+
+  if (!managerZone || !managerState) {
+    throw createHttpError(403, "State Manager zone/state is not configured.");
+  }
+
+  if (requestedRole && !MANAGED_MEMBER_ROLES.includes(requestedRole)) {
+    throw createHttpError(400, `role must be one of: ${MANAGED_MEMBER_ROLES.join(", ")}`);
+  }
+
+  const member = await CrmUser.findOne({
+    _id: id,
+    ...buildAnyManagedRoleQuery(),
+    ...buildTerritoryFilter(managerZone),
+    state: managerState,
+  }).select("_id fullName email role designations isActive accessStatus");
+
+  if (!member) {
+    throw createHttpError(404, "Team member not found in your state.");
+  }
+
+  const memberManagedRoles = getMemberRoles(member).filter((item) => MANAGED_MEMBER_ROLES.includes(item));
+  if (!memberManagedRoles.length) {
+    throw createHttpError(404, "Team member not found in your state.");
+  }
+
+  let roleToRemove = requestedRole;
+  if (!roleToRemove) {
+    if (memberManagedRoles.length > 1) {
+      throw createHttpError(
+        400,
+        "This account has multiple designations. Pass role=FSE or role=LEAD_GENERATOR to remove a specific one.",
+      );
+    }
+    [roleToRemove] = memberManagedRoles;
+  }
+
+  if (!memberManagedRoles.includes(roleToRemove)) {
+    throw createHttpError(
+      404,
+      `${roleToRemove === "FSE" ? "FSE" : "Lead Generator"} designation not found for this account.`,
+    );
+  }
+
+  let accountRestricted = false;
+  const remainingManagedRoles = memberManagedRoles.filter((item) => item !== roleToRemove);
+  if (remainingManagedRoles.length) {
+    const nextPrimaryRole = remainingManagedRoles.includes(member.role)
+      ? member.role
+      : remainingManagedRoles[0];
+    member.role = nextPrimaryRole;
+    member.designations = remainingManagedRoles.filter((item) => item !== nextPrimaryRole);
+  } else {
+    accountRestricted = true;
+    member.isActive = false;
+    member.accessStatus = "RESTRICTED";
+    member.designations = [];
+  }
+  await member.save();
+
+  if (roleToRemove === "FSE") {
     await Lead.updateMany(
       {
         assignedTo: member._id,
@@ -911,10 +1190,15 @@ exports.deleteManagedMember = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: `${member.role === "FSE" ? "FSE" : "Lead Generator"} deleted successfully.`,
+    message: accountRestricted
+      ? `${roleToRemove === "FSE" ? "FSE" : "Lead Generator"} account deleted successfully.`
+      : `${roleToRemove === "FSE" ? "FSE" : "Lead Generator"} designation removed successfully.`,
     data: {
       id: String(member._id),
-      role: member.role,
+      role: roleToRemove,
+      remainingDesignations: getMemberRoles(member).filter((item) => MANAGED_MEMBER_ROLES.includes(item)),
+      isActive: Boolean(member.isActive),
+      accessStatus: member.accessStatus,
       email: member.email,
     },
   });
@@ -946,7 +1230,7 @@ exports.assignLead = asyncHandler(async (req, res) => {
     throw createHttpError(404, "Lead not found");
   }
 
-  if (!fse || fse.role !== "FSE" || !fse.isActive || fse.accessStatus === "RESTRICTED") {
+  if (!fse || !hasMemberRole(fse, "FSE") || !fse.isActive || fse.accessStatus === "RESTRICTED") {
     throw createHttpError(404, "Active FSE not found");
   }
 
@@ -1005,100 +1289,264 @@ exports.getDashboard = asyncHandler(async (req, res) => {
 
   const [zoneLGUsers, zoneFSEUsers] = await Promise.all([
     CrmUser.find({
-      role: "LEAD_GENERATOR",
-      ...buildTerritoryFilter(myZone),
-      state: myState,
-    }).select("_id"),
-    CrmUser.find({
-      role: "FSE",
+      ...buildManagedRoleQuery("LEAD_GENERATOR"),
       ...buildTerritoryFilter(myZone),
       state: myState,
       isActive: true,
       accessStatus: { $ne: "RESTRICTED" },
     })
       .sort({ updatedAt: -1, createdAt: -1 })
-      .select("_id fullName territory profileImageUrl"),
+      .select("_id fullName email territory state profileImageUrl"),
+    CrmUser.find({
+      ...buildManagedRoleQuery("FSE"),
+      ...buildTerritoryFilter(myZone),
+      state: myState,
+      isActive: true,
+      accessStatus: { $ne: "RESTRICTED" },
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .select("_id fullName email territory state profileImageUrl"),
   ]);
 
   const generatorIds = zoneLGUsers.map((user) => user._id);
   const fseIds = zoneFSEUsers.map((user) => user._id);
 
-  const [leads, fseOpenLeadCounts, managedFseIds, recentAssigned] = await Promise.all([
-    Lead.find({
-      createdBy: { $in: generatorIds },
-      ...buildManagerOwnershipFilter(req.user._id),
-    }).sort({ updatedAt: -1 }),
-    fseIds.length
+  const [scopedLeads, fsePerformanceRows, generatorPerformanceRows, recentAssigned] = await Promise.all([
+    generatorIds.length
+      ? Lead.find({
+          createdBy: { $in: generatorIds },
+          state: myState,
+        }).sort({ updatedAt: -1 })
+      : Promise.resolve([]),
+    fseIds.length && generatorIds.length
       ? Lead.aggregate([
           {
             $match: {
-              assignedBy: req.user._id,
               assignedTo: { $in: fseIds },
-              status: { $nin: ["CONVERTED", "LOST", "REJECTED"] },
+              createdBy: { $in: generatorIds },
+              state: myState,
             },
           },
           {
             $group: {
               _id: "$assignedTo",
-              activeLeads: { $sum: 1 },
+              totalAssignedLeads: { $sum: 1 },
+              convertedLeads: {
+                $sum: {
+                  $cond: [{ $eq: ["$status", "CONVERTED"] }, 1, 0],
+                },
+              },
+              activeLeads: {
+                $sum: {
+                  $cond: [{ $in: ["$status", TERMINAL_LEAD_STATUSES] }, 0, 1],
+                },
+              },
+              lastUpdatedAt: { $max: "$updatedAt" },
             },
           },
         ])
       : Promise.resolve([]),
-    fseIds.length
-      ? Lead.distinct("assignedTo", {
-          assignedBy: req.user._id,
-          assignedTo: { $in: fseIds },
-        })
+    generatorIds.length
+      ? Lead.aggregate([
+          {
+            $match: {
+              createdBy: { $in: generatorIds },
+              state: myState,
+            },
+          },
+          {
+            $group: {
+              _id: "$createdBy",
+              totalGeneratedLeads: { $sum: 1 },
+              convertedLeads: {
+                $sum: {
+                  $cond: [{ $eq: ["$status", "CONVERTED"] }, 1, 0],
+                },
+              },
+              forwardedLeads: {
+                $sum: {
+                  $cond: [{ $in: ["$status", FORWARDED_PIPELINE_STATUSES] }, 1, 0],
+                },
+              },
+              pendingLeads: {
+                $sum: {
+                  $cond: [{ $in: ["$status", GENERATOR_PENDING_STATUSES] }, 1, 0],
+                },
+              },
+              lastCreatedAt: { $max: "$createdAt" },
+              lastUpdatedAt: { $max: "$updatedAt" },
+            },
+          },
+        ])
       : Promise.resolve([]),
-    Lead.find({
-      assignedBy: req.user._id,
-      assignedTo: { $in: fseIds },
-      status: { $in: ["ASSIGNED", "CONVERTED", "LOST", "REJECTED"] },
-    })
-      .populate("assignedTo", "fullName profileImageUrl")
-      .sort({ updatedAt: -1 })
-      .limit(50),
+    fseIds.length && generatorIds.length
+      ? Lead.find({
+          createdBy: { $in: generatorIds },
+          state: myState,
+          assignedTo: { $in: fseIds },
+          status: { $in: ["ASSIGNED", "CONVERTED", "LOST", "REJECTED", "FORWARDED"] },
+        })
+          .populate("assignedTo", "fullName profileImageUrl")
+          .sort({ updatedAt: -1 })
+          .limit(50)
+      : Promise.resolve([]),
   ]);
 
-  const pendingValidation = leads.filter((lead) => lead.status === "FORWARDED").length;
-  const totalAssigned = leads.filter((lead) => lead.status === "ASSIGNED").length;
-  const converted = leads.filter((lead) => lead.status === "CONVERTED").length;
-  const conversionRate = totalAssigned + converted > 0
-    ? Math.round((converted / (totalAssigned + converted)) * 100)
-    : 0;
-
-  const activeLeadMap = new Map(
-    fseOpenLeadCounts.map((item) => [String(item._id), Number(item.activeLeads || 0)]),
-  );
-
-  const managedFseIdSet = new Set(managedFseIds.map((id) => String(id)));
-  const scopedFSEUsers = zoneFSEUsers.filter((fse) => managedFseIdSet.has(String(fse._id)));
-
-  const teamOverview = scopedFSEUsers.map((fse) => {
-    const name = fse.fullName || "FSE";
-    const initials = name
+  const toInitials = (value = "", fallback = "N") => {
+    const initials = String(value || "")
       .split(" ")
       .filter(Boolean)
       .slice(0, 2)
       .map((part) => part.charAt(0).toUpperCase())
-      .join("") || "F";
+      .join("");
 
-    return {
-      id: String(fse._id),
-      initials,
-      name,
-      location: myState,
-      activeLeads: activeLeadMap.get(String(fse._id)) || 0,
-      status: "Active",
-      profileImage: fse.profileImageUrl || "",
-    };
-  });
+    return initials || fallback;
+  };
+
+  const toPercent = (numerator = 0, denominator = 0) => {
+    if (!denominator) {
+      return 0;
+    }
+
+    return Math.round((Number(numerator || 0) / Number(denominator || 0)) * 100);
+  };
+
+  const fsePerformanceMap = new Map(
+    fsePerformanceRows.map((item) => [String(item._id), item]),
+  );
+  const leadGeneratorPerformanceMap = new Map(
+    generatorPerformanceRows.map((item) => [String(item._id), item]),
+  );
+
+  const fseMembers = zoneFSEUsers
+    .map((fse) => {
+      const stats = fsePerformanceMap.get(String(fse._id)) || {};
+      const totalAssignedLeads = Number(stats.totalAssignedLeads || 0);
+      const convertedLeads = Number(stats.convertedLeads || 0);
+      const activeLeads = Number(stats.activeLeads || 0);
+
+      return {
+        id: String(fse._id),
+        initials: toInitials(fse.fullName, "F"),
+        name: fse.fullName || "FSE",
+        email: fse.email || "",
+        zone: getUserZone(fse) || myZone,
+        state: fse.state || myState,
+        activeLeads,
+        convertedLeads,
+        totalAssignedLeads,
+        conversionRate: `${toPercent(convertedLeads, totalAssignedLeads)}%`,
+        lastUpdatedAt: stats.lastUpdatedAt || null,
+        status: "Active",
+        profileImage: fse.profileImageUrl || "",
+      };
+    })
+    .sort((left, right) => {
+      if (right.convertedLeads !== left.convertedLeads) {
+        return right.convertedLeads - left.convertedLeads;
+      }
+
+      if (right.activeLeads !== left.activeLeads) {
+        return right.activeLeads - left.activeLeads;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+
+  const leadGeneratorMembers = zoneLGUsers
+    .map((leadGenerator) => {
+      const stats = leadGeneratorPerformanceMap.get(String(leadGenerator._id)) || {};
+      const totalGeneratedLeads = Number(stats.totalGeneratedLeads || 0);
+      const convertedLeads = Number(stats.convertedLeads || 0);
+      const forwardedLeads = Number(stats.forwardedLeads || 0);
+      const pendingLeads = Number(stats.pendingLeads || 0);
+
+      return {
+        id: String(leadGenerator._id),
+        initials: toInitials(leadGenerator.fullName, "LG"),
+        name: leadGenerator.fullName || "Lead Generator",
+        email: leadGenerator.email || "",
+        zone: getUserZone(leadGenerator) || myZone,
+        state: leadGenerator.state || myState,
+        totalGeneratedLeads,
+        forwardedLeads,
+        convertedLeads,
+        pendingLeads,
+        conversionRate: `${toPercent(convertedLeads, totalGeneratedLeads)}%`,
+        lastCreatedAt: stats.lastCreatedAt || null,
+        lastUpdatedAt: stats.lastUpdatedAt || null,
+        status: "Active",
+        profileImage: leadGenerator.profileImageUrl || "",
+      };
+    })
+    .sort((left, right) => {
+      if (right.totalGeneratedLeads !== left.totalGeneratedLeads) {
+        return right.totalGeneratedLeads - left.totalGeneratedLeads;
+      }
+
+      if (right.forwardedLeads !== left.forwardedLeads) {
+        return right.forwardedLeads - left.forwardedLeads;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+
+  const pendingValidation = scopedLeads.filter((lead) => lead.status === "FORWARDED").length;
+  const totalAssigned = scopedLeads.filter((lead) => lead.status === "ASSIGNED").length;
+  const converted = scopedLeads.filter((lead) => lead.status === "CONVERTED").length;
+  const conversionRate = totalAssigned + converted > 0
+    ? Math.round((converted / (totalAssigned + converted)) * 100)
+    : 0;
+
+  const totalFseActiveLeads = fseMembers.reduce(
+    (accumulator, item) => accumulator + Number(item.activeLeads || 0),
+    0,
+  );
+  const totalFseConvertedLeads = fseMembers.reduce(
+    (accumulator, item) => accumulator + Number(item.convertedLeads || 0),
+    0,
+  );
+  const totalFseAssignedLeads = fseMembers.reduce(
+    (accumulator, item) => accumulator + Number(item.totalAssignedLeads || 0),
+    0,
+  );
+  const activeFsePerformers = fseMembers.filter((item) => Number(item.totalAssignedLeads || 0) > 0).length;
+
+  const totalGeneratedByLeadGenerators = leadGeneratorMembers.reduce(
+    (accumulator, item) => accumulator + Number(item.totalGeneratedLeads || 0),
+    0,
+  );
+  const totalForwardedByLeadGenerators = leadGeneratorMembers.reduce(
+    (accumulator, item) => accumulator + Number(item.forwardedLeads || 0),
+    0,
+  );
+  const totalConvertedByLeadGenerators = leadGeneratorMembers.reduce(
+    (accumulator, item) => accumulator + Number(item.convertedLeads || 0),
+    0,
+  );
+  const activeLeadGeneratorPerformers = leadGeneratorMembers.filter(
+    (item) => Number(item.totalGeneratedLeads || 0) > 0,
+  ).length;
+
+  const teamOverview = fseMembers.map((item) => ({
+    id: item.id,
+    initials: item.initials,
+    name: item.name,
+    location: item.state || myState,
+    activeLeads: item.activeLeads,
+    status: item.status,
+    profileImage: item.profileImage,
+  }));
 
   const recentActivity = recentAssigned.map((lead) => ({
     id: String(lead._id),
-    type: lead.status === "CONVERTED" ? "success" : lead.status === "REJECTED" || lead.status === "LOST" ? "danger" : "primary",
-    text: `Lead ${lead.leadCode || "#"} ${lead.status.toLowerCase()} by ${lead.assignedTo?.fullName || "FSE"}`,
+    type:
+      lead.status === "CONVERTED"
+        ? "success"
+        : lead.status === "REJECTED" || lead.status === "LOST"
+          ? "danger"
+          : "primary",
+    text: `Lead ${lead.leadCode || "#"} ${String(lead.status || "").toLowerCase()} by ${lead.assignedTo?.fullName || "FSE"}`,
     time: new Date(lead.updatedAt).toLocaleString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -1111,13 +1559,38 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     success: true,
     data: {
       pendingValidation,
-      activeFses: scopedFSEUsers.length,
+      activeFses: fseMembers.length,
+      activeLeadGenerators: leadGeneratorMembers.length,
       totalAssigned,
       conversionRate: `${conversionRate}%`,
       conversionGrowth: "0%",
       teamOverview,
-      recentActivity
-    }
+      recentActivity,
+      rolePerformance: {
+        fse: {
+          summary: {
+            totalMembers: fseMembers.length,
+            activePerformers: activeFsePerformers,
+            totalAssignedLeads: totalFseAssignedLeads,
+            activeLeads: totalFseActiveLeads,
+            convertedLeads: totalFseConvertedLeads,
+            conversionRate: `${toPercent(totalFseConvertedLeads, totalFseAssignedLeads)}%`,
+          },
+          members: fseMembers,
+        },
+        leadGenerator: {
+          summary: {
+            totalMembers: leadGeneratorMembers.length,
+            activePerformers: activeLeadGeneratorPerformers,
+            totalGeneratedLeads: totalGeneratedByLeadGenerators,
+            forwardedLeads: totalForwardedByLeadGenerators,
+            convertedLeads: totalConvertedByLeadGenerators,
+            conversionRate: `${toPercent(totalConvertedByLeadGenerators, totalGeneratedByLeadGenerators)}%`,
+          },
+          members: leadGeneratorMembers,
+        },
+      },
+    },
   });
 });
 

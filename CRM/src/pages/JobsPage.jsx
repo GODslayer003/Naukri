@@ -88,28 +88,28 @@ export default function JobsPage() {
       {
         label: "Total jobs",
         value: formatNumber(jobs.length),
-        detail: "Complete CRM view of published and client-submitted openings.",
+
         icon: LuBriefcaseBusiness,
         tone: "blue",
       },
       {
         label: "Approved jobs",
         value: formatNumber(approved),
-        detail: "Roles already released to the platform and available for applications.",
+
         icon: LuClipboardCheck,
         tone: "emerald",
       },
       {
         label: "Pending review",
         value: formatNumber(pending),
-        detail: "Client-originated job requests still waiting for CRM review.",
+
         icon: LuClipboardCheck,
         tone: "amber",
       },
       {
         label: "Active listings",
         value: formatNumber(active),
-        detail: "Currently active job postings consuming live package capacity.",
+
         icon: LuMapPin,
         tone: "lime",
       },
@@ -245,7 +245,7 @@ export default function JobsPage() {
         <SectionHeading
           eyebrow="Job command"
           title="Create, edit, and manage job postings across all clients"
-          description="CRM can publish roles directly on behalf of clients or submit them into the approval queue as client-originated openings."
+
           action={
             <button
               onClick={openCreateModal}

@@ -1062,6 +1062,117 @@ a {
   border-bottom: 0;
 }
 
+.team-performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.team-performance-card {
+  border: 1px solid #cfd9e8;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.team-performance-card-header {
+  padding: 22px 22px 18px;
+}
+
+.team-performance-card-header h2 {
+  margin: 0;
+  color: #1a4a8f;
+  font-size: 2.1rem;
+  line-height: 1.05;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.team-performance-card-header p {
+  margin: 8px 0 0;
+  color: #61789f;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.team-performance-badges {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.team-performance-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.team-performance-badge.is-blue {
+  background: #e0ecff;
+  color: #1e3a8a;
+}
+
+.team-performance-badge.is-green {
+  background: #e5f8ef;
+  color: #0a7a46;
+}
+
+.team-performance-badge.is-purple {
+  background: #f3ebff;
+  color: #6525d4;
+}
+
+.team-performance-badge.is-orange {
+  background: #fff2e5;
+  color: #c25a08;
+}
+
+.team-performance-table-wrap {
+  overflow-x: auto;
+}
+
+.team-performance-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.team-performance-table thead th {
+  background: #f6f9fd;
+  color: #5f7699;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 14px 20px;
+  border-top: 1px solid #dfe7f2;
+  border-bottom: 1px solid #dfe7f2;
+}
+
+.team-performance-table tbody td {
+  padding: 14px 20px;
+  border-bottom: 1px solid #e6edf5;
+  color: #344e73;
+  font-size: 0.98rem;
+}
+
+.team-performance-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.team-performance-table tbody td:first-child {
+  font-weight: 700;
+  color: #223f67;
+}
+
+.team-performance-cvr {
+  color: #1e3a8a !important;
+  font-weight: 800;
+}
+
 .company-cell {
   display: inline-flex;
   align-items: center;
@@ -1229,6 +1340,19 @@ a {
 
   .my-leads-table thead th,
   .my-leads-table tbody td {
+    padding: 12px;
+  }
+
+  .team-performance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .team-performance-card-header h2 {
+    font-size: 1.8rem;
+  }
+
+  .team-performance-table thead th,
+  .team-performance-table tbody td {
     padding: 12px;
   }
 

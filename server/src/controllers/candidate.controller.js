@@ -430,11 +430,7 @@ exports.register = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Phone number must contain exactly 10 digits.");
   }
 
-  if (!req.file) {
-    throw createHttpError(400, "CV upload is mandatory.");
-  }
-
-  if (!isPdfResumeUpload(req.file)) {
+  if (req.file && !isPdfResumeUpload(req.file)) {
     throw createHttpError(400, "Only PDF resume files are supported.");
   }
  

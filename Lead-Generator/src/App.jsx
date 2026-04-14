@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   LuBell,
@@ -40,6 +40,9 @@ function RequireAuth({ children }) {
 export default function App() {
   const navigate = useNavigate();
   const [session, setSession] = useState(getStoredSession);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const accountMenuRef = useRef(null);
+
   useEffect(() => {
     const syncSession = () => setSession(getStoredSession());
     window.addEventListener("crm-session-updated", syncSession);
@@ -50,9 +53,22 @@ export default function App() {
     };
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!showAccountMenu) return;
+    const handler = (e) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+        setShowAccountMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAccountMenu]);
+
   const user = session?.user;
   const displayName = user?.fullName || user?.name || user?.email || "Lead Generator";
   const displayRole = user?.role || "Sales Team";
+  const displayEmail = user?.email || displayName;
   const profileImage = user?.profileImage || "";
 
   const handleLogout = () => {
@@ -156,6 +172,143 @@ export default function App() {
                     <button type="button" className="icon-btn" aria-label="Notifications">
                       <LuBell />
                     </button>
+
+                    {/* ── Settings / Account Menu ── */}
+                    <div ref={accountMenuRef} style={{ position: "relative" }}>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        id="settings-btn"
+                        aria-label="Account settings"
+                        aria-haspopup="menu"
+                        aria-expanded={showAccountMenu}
+                        onClick={() => setShowAccountMenu((v) => !v)}
+                        style={{
+                          background: showAccountMenu ? "#f1f5f9" : "",
+                          borderColor: showAccountMenu ? "#cbd5e1" : "",
+                          color: showAccountMenu ? "#1a4a8f" : "",
+                        }}
+                      >
+                        {/* Settings / Gear icon */}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      </button>
+
+                      {/* Account Menu Dropdown */}
+                      {showAccountMenu && (
+                        <>
+                          {/* Inject keyframe once */}
+                          <style>{`
+                            @keyframes acctMenuIn {
+                              from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+                              to   { opacity: 1; transform: translateY(0)  scale(1); }
+                            }
+                            .acct-item {
+                              display: flex; align-items: center; gap: 11px;
+                              width: 100%; padding: 10px 18px;
+                              background: none; border: none; text-align: left;
+                              font-family: inherit; font-size: 0.875rem;
+                              font-weight: 500; color: #334155;
+                              cursor: pointer; transition: background 0.13s;
+                              border-radius: 0;
+                            }
+                            .acct-item:hover { background: #f8fafc; }
+                            .acct-item-danger { color: #ef4444 !important; }
+                            .acct-item-danger:hover { background: #fff5f5 !important; }
+                            .acct-item-icon {
+                              display: flex; align-items: center; justify-content: center;
+                              width: 28px; height: 28px; border-radius: 8px;
+                              background: #f1f5f9; font-size: 0.95rem; flex-shrink: 0;
+                            }
+                          `}</style>
+
+                          <div
+                            role="menu"
+                            aria-labelledby="settings-btn"
+                            style={{
+                              position: "absolute",
+                              top: "calc(100% + 8px)",
+                              right: 0,
+                              minWidth: 248,
+                              background: "#ffffff",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "16px",
+                              boxShadow: "0 12px 40px rgba(15,23,42,0.13), 0 2px 8px rgba(15,23,42,0.06)",
+                              zIndex: 9999,
+                              overflow: "hidden",
+                              animation: "acctMenuIn 0.2s cubic-bezier(0.22,1,0.36,1) forwards",
+                            }}
+                          >
+                            {/* Signed-in header */}
+                            <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid #f1f5f9" }}>
+                              <p style={{ margin: "0 0 3px", fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "#94a3b8" }}>
+                                Signed in as
+                              </p>
+                              <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#0f172a", wordBreak: "break-all", lineHeight: 1.4 }}>
+                                {displayEmail}
+                              </p>
+                            </div>
+
+                            {/* Section label */}
+                            <div style={{ padding: "10px 18px 4px" }}>
+                              <p style={{ margin: 0, fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#94a3b8" }}>
+                                Account menu
+                              </p>
+                            </div>
+
+                            {/* Statement */}
+                            <button
+                              role="menuitem"
+                              className="acct-item"
+                              onClick={() => { setShowAccountMenu(false); navigate("/profile"); }}
+                            >
+                              <span className="acct-item-icon">📊</span>
+                              Statement
+                            </button>
+
+                            {/* Start Tour */}
+                            <button
+                              role="menuitem"
+                              className="acct-item"
+                              onClick={() => setShowAccountMenu(false)}
+                            >
+                              <span className="acct-item-icon">🗺️</span>
+                              Start Tour
+                            </button>
+
+                            {/* Change Password */}
+                            <button
+                              role="menuitem"
+                              className="acct-item"
+                              onClick={() => { setShowAccountMenu(false); navigate("/profile"); }}
+                            >
+                              <span className="acct-item-icon">🔑</span>
+                              Change Password
+                            </button>
+
+                            {/* Divider */}
+                            <div style={{ height: 1, background: "#f1f5f9", margin: "4px 0" }} />
+
+                            {/* Sign out */}
+                            <button
+                              role="menuitem"
+                              className="acct-item acct-item-danger"
+                              onClick={() => { setShowAccountMenu(false); handleLogout(); }}
+                            >
+                              <span className="acct-item-icon" style={{ background: "#fff5f5" }}>
+                                <LuLogOut size={14} style={{ color: "#ef4444" }} />
+                              </span>
+                              Sign out
+                            </button>
+
+                            <div style={{ height: 8 }} />
+                          </div>
+                        </>
+                      )}
+                    </div>
+
                     <div className="profile-chip">
                       <div className="profile-meta">
                         <strong>{displayName}</strong>

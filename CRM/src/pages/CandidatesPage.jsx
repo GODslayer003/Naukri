@@ -110,21 +110,18 @@ export default function CandidatesPage() {
       {
         label: "Candidate profiles",
         value: formatNumber(data.summary?.candidateProfiles || 0),
-        detail: "Total candidate records currently synced in the platform.",
         icon: LuUsers,
         tone: "blue",
       },
       {
         label: "Verified access",
         value: formatNumber(data.summary?.verifiedAccess || 0),
-        detail: "Candidate accounts active and available for recruitment workflows.",
         icon: LuUsers,
         tone: "emerald",
       },
       {
         label: "Pending invite",
         value: formatNumber(data.summary?.pendingInvite || 0),
-        detail: "Candidate accounts waiting for onboarding activation.",
         icon: LuShieldCheck,
         tone: "amber",
       },
@@ -312,11 +309,10 @@ export default function CandidatesPage() {
                 type="button"
                 onClick={() => handleDownloadResume(selectedCandidate.id)}
                 disabled={!selectedCandidate.resumeAvailable || isDownloadingResume}
-                className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold transition ${
-                  selectedCandidate.resumeAvailable
+                className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold transition ${selectedCandidate.resumeAvailable
                     ? "border-slate-200 bg-slate-50 text-slate-800 hover:border-slate-300 hover:bg-slate-100 disabled:opacity-60"
                     : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
-                }`}
+                  }`}
               >
                 <LuDownload size={16} />
                 {isDownloadingResume ? "Opening PDF..." : selectedCandidate.resumeAvailable ? "Download Resume" : "Resume not available"}

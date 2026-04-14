@@ -13,8 +13,15 @@ import {
   PageState,
   PanelCard,
   SectionHeading,
+  ModalShell,
 } from "../components/Ui";
-import { getDashboardData } from "../services/crmApi";
+import { 
+  getDashboardData, 
+  getClients, 
+  getJobs, 
+  getJobApprovals, 
+  getQRCodes 
+} from "../services/crmApi";
 import { formatDateTime, formatNumber, titleCase } from "../utils/formatters";
 
 const metricConfig = [
@@ -53,6 +60,44 @@ export default function CrmDashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedMetric, setSelectedMetric] = useState(null);
+  const [modalData, setModalData] = useState([]);
+  const [isModalLoading, setIsModalLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedMetric) {
+      setModalData([]);
+      return;
+    }
+
+    let isMounted = true;
+    (async () => {
+      setIsModalLoading(true);
+      try {
+        let reqFn;
+        if (selectedMetric.key === "totalClients") {
+          reqFn = getClients;
+        } else if (selectedMetric.key === "totalJobs") {
+          reqFn = getJobs;
+        } else if (selectedMetric.key === "pendingApprovals") {
+          reqFn = getJobApprovals;
+        } else if (selectedMetric.key === "qrCodes") {
+          reqFn = getQRCodes;
+        }
+        
+        if (reqFn) {
+           const res = await reqFn();
+           if (isMounted) setModalData(Array.isArray(res?.data) ? res.data : []);
+        }
+      } catch (err) {
+        console.error("Failed to load metric details", err);
+      } finally {
+        if (isMounted) setIsModalLoading(false);
+      }
+    })();
+
+    return () => { isMounted = false; };
+  }, [selectedMetric]);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,12 +154,160 @@ export default function CrmDashboard() {
     return <PageState title={error} error />;
   }
 
+  const renderModalContent = () => {
+    if (!selectedMetric || !dashboard) return null;
+
+    const key = selectedMetric.key;
+
+    if (key === "totalClients") {
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-4">Company Name</th>
+                <th className="px-5 py-4">Package</th>
+                <th className="px-5 py-4">Jobs Used</th>
+                <th className="px-5 py-4">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isModalLoading ? (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-500">Loading data...</td>
+                </tr>
+              ) : modalData.length ? (
+                modalData.map((client) => (
+                  <tr key={client.name || client.id} className="border-b border-slate-100 transition hover:bg-slate-50">
+                    <td className="px-5 py-4 text-sm font-medium text-slate-900">{client.name}</td>
+                    <td className="px-5 py-4 text-sm text-slate-500">{titleCase(client.packageType || "STANDARD")}</td>
+                    <td className="px-5 py-4 text-sm text-slate-500">{client.activeJobCount || 0} / {client.jobLimit || 0}</td>
+                    <td className="px-5 py-4">
+                      <Badge tone={client.status === "ACTIVE" ? "emerald" : "rose"}>
+                        {titleCase(client.status || "ACTIVE")}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-500">No client data available.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (key === "pendingApprovals" || key === "totalJobs") {
+      const dataSet = key === "pendingApprovals" 
+        ? modalData.filter(job => job.approvalStatus === "PENDING")
+        : modalData;
+
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-4">Job Role</th>
+                <th className="px-5 py-4">Company & Dept</th>
+                <th className="px-5 py-4">Details</th>
+                <th className="px-5 py-4">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isModalLoading ? (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-500">Loading data...</td>
+                </tr>
+              ) : dataSet.length ? (
+                dataSet.map((job) => (
+                  <tr key={job.id} className="border-b border-slate-100 transition hover:bg-slate-50">
+                    <td className="px-5 py-4 text-sm font-medium text-slate-900">{job.title}</td>
+                    <td className="px-5 py-4 text-sm text-slate-500">
+                      {job.companyName}<br/><span className="text-xs text-slate-400">{job.department || "General"}</span>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-slate-500">
+                      {job.workplaceType || "Flexible"} &bull; {job.location || "Pending"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <Badge tone={job.approvalStatus === "PENDING" ? "amber" : "emerald"}>
+                        {titleCase(job.approvalStatus || "ACTIVE")}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-500">No job data available.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (key === "qrCodes") {
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-4">Company</th>
+                <th className="px-5 py-4">Position</th>
+                <th className="px-5 py-4">Scans</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isModalLoading ? (
+                <tr>
+                  <td colSpan={3} className="px-5 py-8 text-center text-sm text-slate-500">Loading data...</td>
+                </tr>
+              ) : modalData.length ? (
+                modalData.map((item) => (
+                  <tr key={item.id} className="border-b border-slate-100 transition hover:bg-slate-50">
+                    <td className="px-5 py-4 text-sm font-medium text-slate-900">{item.companyName}</td>
+                    <td className="px-5 py-4 text-sm text-slate-500">{item.jobTitle || "Landing Page"}</td>
+                    <td className="px-5 py-4">
+                      <Badge tone="blue">{formatNumber(item.scans || 0)}</Badge>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-5 py-8 text-center text-sm text-slate-500">No QR data available.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center py-4 text-center">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#163060]/10 text-[#163060]">
+          {selectedMetric?.icon ? <selectedMetric.icon size={28} /> : null}
+        </div>
+        <p className="text-3xl font-bold text-slate-900">{selectedMetric?.value}</p>
+      </div>
+    );
+  };
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => {
-          const { key: metricKey, ...metricProps } = metric;
-          return <MetricCard key={metricKey || metric.label} {...metricProps} />;
+          const { key: metricKey, detail, ...metricProps } = metric;
+          return (
+            <MetricCard 
+              key={metricKey || metric.label} 
+              {...metricProps} 
+              onClick={() => setSelectedMetric(metric)}
+            />
+          );
         })}
       </section>
 
@@ -126,24 +319,7 @@ export default function CrmDashboard() {
             description="Track package commitments, live capacity, and company-level activity from one operational board."
           />
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            {dashboard.packageCards.map((pkg) => (
-              <div
-                key={pkg.name}
-                className="rounded-[24px] border border-slate-200 bg-slate-50 p-5 transition hover:border-lime-300 hover:bg-lime-50/40"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-bold text-slate-900">
-                    {titleCase(pkg.name)}
-                  </h3>
-                  <Badge tone="lime">{pkg.jobLimit} posts</Badge>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-slate-500">
-                  {pkg.description}
-                </p>
-              </div>
-            ))}
-          </div>
+
 
           <div className="mt-6 overflow-hidden rounded-[24px] border border-slate-200">
             <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.6fr] gap-3 bg-slate-50 px-5 py-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
@@ -360,6 +536,16 @@ export default function CrmDashboard() {
           </div>
         </PanelCard>
       </section>
+
+      <ModalShell
+        open={Boolean(selectedMetric)}
+        title={selectedMetric?.label || ""}
+        description={selectedMetric?.detail || ""}
+        onClose={() => setSelectedMetric(null)}
+        width="max-w-4xl"
+      >
+        {renderModalContent()}
+      </ModalShell>
     </div>
   );
 }

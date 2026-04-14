@@ -71,21 +71,18 @@ export default function ApprovalsPage() {
       {
         label: "Approval queue",
         value: formatNumber(pendingJobs + pendingPackage),
-        detail: "Combined queue across jobs and package change requests.",
         icon: LuShieldCheck,
         tone: "blue",
       },
       {
         label: "Pending jobs",
         value: formatNumber(pendingJobs),
-        detail: "Client-submitted openings waiting for CRM decision.",
         icon: LuClipboardCheck,
         tone: "amber",
       },
       {
         label: "Package changes",
         value: formatNumber(pendingPackage),
-        detail: "Upgrade or downgrade requests waiting for CRM review.",
         icon: LuRepeat2,
         tone: "lime",
       },
