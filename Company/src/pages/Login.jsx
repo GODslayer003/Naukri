@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuLock, LuMail, LuUser } from "react-icons/lu";
+import { LuLock, LuMail } from "react-icons/lu";
 import { loginCompany } from "../api/companyApi";
 import logo from "../assets/maven-logo.svg";
 
@@ -8,11 +8,7 @@ const SESSION_KEY = "company_panel_session";
 
 export default function Login() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    username: "",
-    email: "",
-    password: "",
-  });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -23,7 +19,6 @@ export default function Login() {
 
     try {
       const payload = {
-        username: form.username.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password,
       };
@@ -52,39 +47,26 @@ export default function Login() {
         <aside className="company-login-brand">
           <img src={logo} alt="Maven Jobs" />
           <h2>Company Control</h2>
-          <p>Track package usage, applications, and role approvals in one secure panel.</p>
         </aside>
 
         <section className="company-login-form-wrap">
           <h1>Client Sign In</h1>
-          <p className="company-login-subtitle">Use the username, user mail, and password created by CRM/FSE.</p>
 
           {error ? <div className="status-banner">{error}</div> : null}
 
           <form className="company-form-grid" onSubmit={handleSubmit}>
             <label className="company-field">
-              <span>Username</span>
-              <div className="company-input-wrap">
-                <LuUser size={16} />
-                <input
-                  type="text"
-                  value={form.username}
-                  onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
-                  placeholder="Client username"
-                  required
-                />
-              </div>
-            </label>
-
-            <label className="company-field">
-              <span>User Mail</span>
+              <span>Email ID</span>
               <div className="company-input-wrap">
                 <LuMail size={16} />
                 <input
                   type="email"
                   value={form.email}
-                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, email: event.target.value }))
+                  }
                   placeholder="client@example.com"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -97,8 +79,11 @@ export default function Login() {
                 <input
                   type="password"
                   value={form.password}
-                  onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, password: event.target.value }))
+                  }
                   placeholder="Enter password"
+                  autoComplete="current-password"
                   required
                 />
               </div>
@@ -107,10 +92,6 @@ export default function Login() {
             <button type="submit" className="company-primary-btn" disabled={isSubmitting}>
               {isSubmitting ? "Signing in..." : "Sign In"}
             </button>
-
-            <p className="login-help-copy">
-              Credentials are managed by CRM/FSE in the Client Accounts panel.
-            </p>
           </form>
         </section>
       </div>

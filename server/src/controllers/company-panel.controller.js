@@ -226,20 +226,15 @@ const syncCompanyPackageContext = async (company) => {
 };
 
 exports.login = asyncHandler(async (req, res) => {
-  const username = toTrimmedString(req.body.username);
   const email = toTrimmedString(req.body.email).toLowerCase();
   const password = toTrimmedString(req.body.password);
 
-  if (!username || !email || !password) {
-    throw createHttpError(400, "Username, email, and password are required");
+  if (!email || !password) {
+    throw createHttpError(400, "Email and password are required");
   }
 
   const user = await User.findOne({ email, role: "CLIENT" }).select("+password");
   if (!user) {
-    throw createHttpError(401, "Invalid credentials");
-  }
-
-  if (String(user.name || "").trim().toLowerCase() !== username.toLowerCase()) {
     throw createHttpError(401, "Invalid credentials");
   }
 

@@ -166,51 +166,30 @@ export default function CandidatesPage() {
         ))}
       </section>
 
-      <PanelCard>
-        <SectionHeading
-          eyebrow="Focus areas"
-          title="Candidate network and access coverage"
-          description="Track active talent visibility, source-channel coverage, and restricted profile load in one CRM surface."
-        />
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-            <p className="text-lg font-semibold text-slate-600">Active talent pool</p>
-            <p className="mt-4 text-4xl font-bold text-slate-900">
-              {formatNumber(data.focusAreas?.activeTalentPool || 0)}
-            </p>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Profiles currently active and visible for recruitment workflows.
-            </p>
-          </div>
-
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-            <p className="text-lg font-semibold text-slate-600">Network coverage</p>
-            <p className="mt-4 text-4xl font-bold text-slate-900">
-              {formatNumber(data.focusAreas?.networkCoverageChannels || 0)} channels
-            </p>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Distinct resume source channels currently mapped in candidate profiles.
-            </p>
-          </div>
-
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-            <p className="text-lg font-semibold text-slate-600">Restricted profiles</p>
-            <p className="mt-4 text-4xl font-bold text-slate-900">
-              {formatNumber(data.focusAreas?.restrictedProfiles || 0)}
-            </p>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Candidate accounts limited by access controls or inactive states.
-            </p>
-          </div>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+          <p className="text-lg font-semibold text-slate-600">Active talent pool</p>
+          <p className="mt-4 text-4xl font-bold text-slate-900">
+            {formatNumber(data.focusAreas?.activeTalentPool || 0)}
+          </p>
         </div>
-      </PanelCard>
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+          <p className="text-lg font-semibold text-slate-600">Network coverage</p>
+          <p className="mt-4 text-4xl font-bold text-slate-900">
+            {formatNumber(data.focusAreas?.networkCoverageChannels || 0)} channels
+          </p>
+        </div>
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+          <p className="text-lg font-semibold text-slate-600">Restricted profiles</p>
+          <p className="mt-4 text-4xl font-bold text-slate-900">
+            {formatNumber(data.focusAreas?.restrictedProfiles || 0)}
+          </p>
+        </div>
+      </section>
 
       <PanelCard>
         <SectionHeading
-          eyebrow="Candidate records"
           title="Candidates"
-          description={`Showing ${formatNumber(data.filteredCount || 0)} of ${formatNumber(data.totalCandidates || 0)} candidate profiles.`}
         />
 
         <div className="mt-6 grid gap-3 xl:grid-cols-[1.2fr_0.8fr]">
@@ -273,7 +252,7 @@ export default function CandidatesPage() {
           setResumeDownloadError("");
         }}
         title={selectedCandidate?.candidateName || "Candidate details"}
-        description="Unified candidate profile details from CRM record sync."
+        description=""
       >
         {selectedCandidate ? (
           <div className="space-y-5">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LuLink2, LuMail, LuQrCode, LuSend } from "react-icons/lu";
+import { LuLink2, LuDownload, LuQrCode, LuSend } from "react-icons/lu";
 import {
   Badge,
   EmptyState,
@@ -116,36 +116,22 @@ export default function QRCodesPage() {
         ))}
       </section>
 
-      <PanelCard>
-        <SectionHeading
-          eyebrow="QR creation"
-          title="Generate a new branded QR kit"
-          description="Generate a QR landing token, scannable image, and branded PDF kit for a company. Mandatory fields are marked with a red asterisk."
-        />
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <p className="text-sm text-slate-500">
-            Create a new QR kit without leaving this page.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setIsCreateModalOpen(true);
-              setActionError("");
-              setSuccessNote("");
-            }}
-            className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#20498f]"
-          >
-            Create / Generate QR
-          </button>
-        </div>
-      </PanelCard>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            setIsCreateModalOpen(true);
+            setActionError("");
+            setSuccessNote("");
+          }}
+          className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#20498f]"
+        >
+          Create / Generate QR
+        </button>
+      </div>
 
       <PanelCard>
-        <SectionHeading
-          eyebrow="Generated assets"
-          title="CRM-side QR history and sharing"
-          description="Review every generated QR kit, open PDFs, inspect scan counts, and record sharing activity with client teams."
-        />
+        <SectionHeading title="QR History" />
 
         {successNote ? (
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
@@ -176,6 +162,7 @@ export default function QRCodesPage() {
                       <Badge tone={item.isActive ? "emerald" : "rose"}>
                         {item.isActive ? "Active" : "Inactive"}
                       </Badge>
+                      <Badge tone="amber">{formatNumber(item.scans)} Scans Tracked</Badge>
                     </div>
                     <p className="text-sm text-slate-500">Token: {item.token}</p>
                     <p className="text-sm text-slate-500">
@@ -183,8 +170,7 @@ export default function QRCodesPage() {
                       {item.sharedWithEmail || "no recipient recorded"}
                     </p>
                     <p className="text-xs text-slate-400">
-                      Created {formatDateTime(item.createdAt)} {"\u2022"}{" "}
-                      {formatNumber(item.scans)} scans
+                      Created {formatDateTime(item.createdAt)}
                     </p>
                   </div>
 
@@ -198,16 +184,7 @@ export default function QRCodesPage() {
                       <LuQrCode size={16} />
                       View QR
                     </a>
-                    <a
-                      href={getQrPdfDownloadUrl(item.token)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
-                    >
-                      <LuMail size={16} />
-                      Download PDF
-                    </a>
-                    {item.pdfUrl ? (
+                    {item.pdfUrl && (
                       <a
                         href={item.pdfUrl}
                         target="_blank"
@@ -217,7 +194,16 @@ export default function QRCodesPage() {
                         <LuLink2 size={16} />
                         Open PDF
                       </a>
-                    ) : null}
+                    )}
+                    <a
+                      href={getQrPdfDownloadUrl(item.token)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
+                    >
+                      <LuDownload size={16} />
+                      Download PDF
+                    </a>
                     <button
                       type="button"
                       onClick={() => {

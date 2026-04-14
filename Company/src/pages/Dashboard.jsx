@@ -176,35 +176,25 @@ export default function Dashboard() {
   const metrics = useMemo(
     () => [
       {
-        label: "Package slots",
-        value: `${Number(company.activeJobCount || 0)}/${Number(company.jobLimit || 0)}`,
-        detail: `${Number(company.remainingSlots || 0)} slots available`,
-        icon: LuBriefcaseBusiness,
-        tone: "blue",
-      },
-      {
         label: "Pending approvals",
         value: Number(tracking.pendingApprovals || 0),
-        detail: `${Number(tracking.packageOverflowRequests || 0)} package overflow requests`,
         icon: LuShieldCheck,
         tone: "amber",
       },
       {
         label: "Applications",
         value: Number(tracking.totalApplications || 0),
-        detail: `${Number(tracking.uniqueCandidates || 0)} unique candidates`,
         icon: LuUsers,
         tone: "lime",
       },
       {
         label: "Active jobs",
         value: Number(tracking.activeApprovedJobs || 0),
-        detail: `${Number(tracking.rejectedJobs || 0)} rejected posts`,
         icon: LuQrCode,
         tone: "emerald",
       },
     ],
-    [company.activeJobCount, company.jobLimit, company.remainingSlots, tracking],
+    [tracking],
   );
 
   const pendingJobs = useMemo(
@@ -338,6 +328,8 @@ export default function Dashboard() {
     }
   };
 
+  const [activeTab, setActiveTab] = useState("overview");
+
   if (isLoading) {
     return (
       <div className="company-page-state">
@@ -368,370 +360,411 @@ export default function Dashboard() {
 
   return (
     <div className="company-dashboard">
-      <section className="company-panel-card company-hero-card">
-        <div className="company-hero-copy">
-          <p className="company-section-eyebrow">Company command center</p>
-          <h2 className="company-hero-title">
-            {company.name || "Company"} hiring operations
-          </h2>
-          <p className="company-section-copy">
-            Monitor approvals, hiring progress, and package utilization from one clean operational view.
-          </p>
-
-          <div className="company-hero-meta">
-            <span className={`company-status-badge ${company.status === "ACTIVE" ? "is-success" : "is-danger"}`}>
-              {company.status || "ACTIVE"}
-            </span>
-            <span className="company-context-pill">{company.packageType || "STANDARD"} package</span>
-            <span className="company-hero-muted">Last updated {company.lastUpdated || "-"}</span>
-          </div>
-        </div>
-
-        <div className="company-hero-side">
-          <p className="company-hero-side-label">Package utilization</p>
-          <p className="company-hero-side-value">
-            {Number(company.activeJobCount || 0)} / {Number(company.jobLimit || 0)} jobs
-          </p>
-          <div className="company-progress-track">
-            <span className="company-progress-fill" style={{ width: `${utilization}%` }} />
-          </div>
-          <p className="company-hero-side-note">
-            {Number(company.remainingSlots || 0)} posting slots available
-          </p>
-          <Link to="/create-job" className="company-hero-action">
-            Create New Job
-            <LuArrowRight size={16} />
-          </Link>
-          <button
-            type="button"
-            className="company-hero-secondary-action"
-            onClick={() => {
-              setPackageActionError("");
-              setPackageActionNote("");
-              setIsPackageModalOpen(true);
-            }}
-            disabled={Boolean(activePackageRequest) || !availablePackageTargets.length}
-          >
-            <LuRepeat2 size={15} />
-            {activePackageRequest ? "Request in review" : "Request Package Change"}
-          </button>
-        </div>
-      </section>
+      <nav className="company-tabs-nav">
+        <button
+          className={`company-tab-btn ${activeTab === "overview" ? "active" : ""}`}
+          onClick={() => setActiveTab("overview")}
+        >
+          Overview
+        </button>
+        <button
+          className={`company-tab-btn ${activeTab === "hiring" ? "active" : ""}`}
+          onClick={() => setActiveTab("hiring")}
+        >
+          Hiring Operations
+        </button>
+        <button
+          className={`company-tab-btn ${activeTab === "packages" ? "active" : ""}`}
+          onClick={() => setActiveTab("packages")}
+        >
+          Package & Governance
+        </button>
+      </nav>
 
       {packageActionNote ? <div className="status-banner success-banner">{packageActionNote}</div> : null}
       {packageActionError ? <div className="status-banner">{packageActionError}</div> : null}
 
-      <section className="company-metric-grid">
-        {metrics.map((metric) => (
-          <article key={metric.label} className="company-metric-card">
-            <div className="company-metric-head">
-              <p>{metric.label}</p>
-              <span className={`company-metric-icon tone-${metric.tone || "blue"}`}>
-                <metric.icon size={20} />
-              </span>
-            </div>
-            <strong>{metric.value}</strong>
-            <span>{metric.detail}</span>
-          </article>
-        ))}
-      </section>
-
-      <section className="company-panel-card company-package-request-card">
-        <div className="company-section-head">
-          <p className="company-section-eyebrow">Package governance</p>
-          <h2 className="company-section-title">Package change workflow</h2>
-          <p className="company-section-copy">
-            Upgrades are applied immediately after CRM approval, while downgrades are scheduled for the next billing
-            window to protect active job continuity.
-          </p>
-        </div>
-
-        {activePackageRequest ? (
-          <div className="company-request-row">
-            <div>
-              <p className="company-table-main">
-                {activePackageRequest.currentPackageType} {"->"} {activePackageRequest.requestedPackageType}
-              </p>
-              <p className="company-table-sub">
-                {activePackageRequest.currentJobLimit} {"->"} {activePackageRequest.requestedJobLimit} postings
-              </p>
-              <p className="company-table-sub">
-                Requested on {formatDate(activePackageRequest.createdAt)} | Effective{" "}
-                {formatDate(activePackageRequest.effectiveAt)}
-              </p>
-              {activePackageRequest.reason ? (
-                <p className="company-table-sub">Reason: {activePackageRequest.reason}</p>
-              ) : null}
-            </div>
-            <span
-              className={`company-status-badge ${formatPackageRequestStatus(
-                activePackageRequest.status,
-              )}`}
-            >
-              {activePackageRequest.status}
-            </span>
-          </div>
-        ) : (
-          <p className="company-empty-copy">
-            No active package-change request. You can submit a new request from the command card above.
-          </p>
-        )}
-      </section>
-
-      <section className="company-panel-card">
-        <div className="company-section-head">
-          <p className="company-section-eyebrow">Application flow</p>
-          <h2 className="company-section-title">Candidate application directory</h2>
-          <p className="company-section-copy">
-            View recent candidate submissions with role mapping, status, contact details, and resume access.
-          </p>
-        </div>
-
-        {resumeError ? <div className="status-banner">{resumeError}</div> : null}
-
-        <div className="company-jobs-table-wrap">
-          <table className="company-jobs-table company-applications-table">
-            <thead>
-              <tr>
-                <th>Candidate</th>
-                <th>Applied role</th>
-                <th>Status</th>
-                <th>Contact</th>
-                <th>Applied on</th>
-                <th>Resume</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedApplications.length ? (
-                pagedApplications.map((application) => (
-                  <tr key={application.id}>
-                    <td>
-                      <p className="company-table-main">
-                        {application.candidateName || "Candidate"}
-                      </p>
-                      <p className="company-table-sub">
-                        {application.candidateCurrentTitle || "Role not set"}
-                      </p>
-                    </td>
-                    <td>
-                      <p className="company-table-main">
-                        <LuFileText size={14} /> {application.jobTitle || "Job not found"}
-                      </p>
-                    </td>
-                    <td>
-                      <span className={`company-application-chip ${getApplicationClass(application.status)}`}>
-                        {application.status || "APPLIED"}
-                      </span>
-                    </td>
-                    <td>
-                      <p className="company-table-sub">{application.candidateEmail || "-"}</p>
-                      <p className="company-table-sub">{application.candidatePhone || "-"}</p>
-                    </td>
-                    <td>{formatDate(application.appliedAt)}</td>
-                    <td>
-                      {application.resumeUrl || application.resumeFileName ? (
-                        <button
-                          type="button"
-                          className="company-resume-link"
-                          onClick={() => handleOpenResume(application)}
-                          disabled={resumeBusyId === application.id}
-                        >
-                          {resumeBusyId === application.id ? "Opening..." : "Open resume"}
-                          <LuExternalLink size={13} />
-                        </button>
-                      ) : (
-                        <span className="company-table-sub">Not uploaded</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="company-empty-cell">
-                    No applications received yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {allApplications.length ? (
-          <div className="company-pagination-row">
-            <p className="company-pagination-meta">
-              Showing{" "}
-              <strong>
-                {(applicationPage - 1) * APPLICATIONS_PER_PAGE + 1}
-                {"-"}
-                {Math.min(applicationPage * APPLICATIONS_PER_PAGE, allApplications.length)}
-              </strong>{" "}
-              of <strong>{allApplications.length}</strong> candidates
-            </p>
-
-            <div className="company-pagination-controls">
-              <button
-                type="button"
-                className="company-page-btn"
-                onClick={() => setApplicationPage((current) => Math.max(1, current - 1))}
-                disabled={applicationPage === 1}
-              >
-                Previous
-              </button>
-
-              {Array.from({ length: totalApplicationPages }, (_, index) => index + 1).map((pageNumber) => (
-                <button
-                  key={pageNumber}
-                  type="button"
-                  className={`company-page-btn ${applicationPage === pageNumber ? "active" : ""}`}
-                  onClick={() => setApplicationPage(pageNumber)}
-                >
-                  {pageNumber}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                className="company-page-btn"
-                onClick={() =>
-                  setApplicationPage((current) =>
-                    Math.min(totalApplicationPages, current + 1),
-                  )
-                }
-                disabled={applicationPage === totalApplicationPages}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="company-main-grid company-main-grid-modern">
-        <article className="company-panel-card">
-          <div className="company-section-head">
-            <p className="company-section-eyebrow">Operational readiness</p>
-            <h2 className="company-section-title">Account and package posture</h2>
-            <p className="company-section-copy">
-              Align hiring volume to package capacity while keeping decision-makers informed in real-time.
-            </p>
-          </div>
-
-          <div className="company-package-grid company-package-grid-modern">
-            {packageCards.map((item) => {
-              const isActive =
-                String(company.packageType || "").toUpperCase() ===
-                item.key;
-
-              return (
-                <div
-                  key={item.name}
-                  className={`company-package-card ${isActive ? "company-package-card-active" : ""}`}
-                >
-                  <div className="company-package-top">
-                    <h3>{item.name}</h3>
-                    <span className="company-badge">{item.posts} posts</span>
-                  </div>
-                  <p>{item.description}</p>
+      {activeTab === "overview" && (
+        <div className="company-stack-y company-fade-in">
+          <section className="company-metric-grid">
+            {metrics.map((metric) => (
+              <article key={metric.label} className="company-metric-card">
+                <div className="company-metric-head">
+                  <p>{metric.label}</p>
+                  <span className={`company-metric-icon tone-${metric.tone || "blue"}`}>
+                    <metric.icon size={20} />
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+                <strong>{metric.value}</strong>
+              </article>
+            ))}
+          </section>
 
-          <div className="company-jobs-table-wrap">
-            <table className="company-jobs-table">
-              <thead>
-                <tr>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Applicants</th>
-                  <th>Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentJobs.length ? (
-                  recentJobs.map((job) => (
-                    <tr key={job.id}>
-                      <td>
-                        <p className="company-table-main">{job.title || "Untitled job"}</p>
-                        <p className="company-table-sub">
-                          {job.department || "General"} | {job.location || "Location pending"}
+          <section className="company-main-grid company-main-grid-modern">
+            <article className="company-panel-card">
+              <div className="company-section-head">
+                <h2 className="company-section-title">Approval and hiring signals</h2>
+              </div>
+
+              <div className="company-output-stack">
+                <div className="company-output-card">
+                  <div>
+                    <p>Overflow requests</p>
+                    <strong>{Number(tracking.packageOverflowRequests || 0)}</strong>
+                  </div>
+                  <span className="company-output-icon tone-blue">
+                    <LuBellRing size={20} />
+                  </span>
+                </div>
+
+                <div className="company-output-card">
+                  <div>
+                    <p>Total jobs posted</p>
+                    <strong>{Number(tracking.totalJobs || 0)}</strong>
+                  </div>
+                  <span className="company-output-icon tone-emerald">
+                    <LuShieldAlert size={20} />
+                  </span>
+                </div>
+              </div>
+
+              <div className="company-feed-list">
+                {pendingJobs.length ? (
+                  pendingJobs.map((job) => (
+                    <div key={job.id} className="company-feed-item">
+                      <div>
+                        <p className="company-feed-title">{job.title || "-"}</p>
+                        <p className="company-feed-copy">
+                          <LuMapPin size={14} /> {job.location || "Location pending"}
                         </p>
-                      </td>
-                      <td>
-                        <span className={`company-status-badge ${getApprovalTone(job.approvalStatus)}`}>
-                          {job.approvalStatus || "PENDING"}
-                        </span>
-                      </td>
-                      <td>{Number(job.applicantCount || 0)}</td>
-                      <td>{job.lastUpdated || "-"}</td>
-                    </tr>
+                        <p className="company-feed-meta">
+                          Updated {job.lastUpdated || "-"}
+                          {job.requiresPackageOverride ? " | Package overflow request" : ""}
+                        </p>
+                      </div>
+                      <span className="company-status-badge is-warning">
+                        {job.approvalStatus || "PENDING"}
+                      </span>
+                    </div>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={4} className="company-empty-cell">
-                      No jobs posted yet.
-                    </td>
-                  </tr>
+                  <p className="company-empty-copy">No pending approvals.</p>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article className="company-panel-card">
-          <div className="company-section-head">
-            <p className="company-section-eyebrow">Action center</p>
-            <h2 className="company-section-title">Approval and hiring signals</h2>
-            <p className="company-section-copy">
-              Keep track of overflow approvals and make faster planning decisions.
-            </p>
-          </div>
-
-          <div className="company-output-stack">
-            <div className="company-output-card">
-              <div>
-                <p>Overflow requests</p>
-                <strong>{Number(tracking.packageOverflowRequests || 0)}</strong>
               </div>
-              <span className="company-output-icon tone-blue">
-                <LuBellRing size={20} />
-              </span>
-            </div>
+            </article>
 
-            <div className="company-output-card">
-              <div>
-                <p>Total jobs posted</p>
-                <strong>{Number(tracking.totalJobs || 0)}</strong>
+            <article className="company-panel-card">
+              <div className="company-section-head">
+                <h2 className="company-section-title">Quick Actions</h2>
               </div>
-              <span className="company-output-icon tone-emerald">
-                <LuShieldAlert size={20} />
-              </span>
-            </div>
-          </div>
+              <div className="mt-6 flex flex-col gap-4">
+                <Link
+                  to="/create-job"
+                  className="company-primary-btn w-full justify-center text-center"
+                  style={{ padding: "14px" }}
+                >
+                  Post a New Role
+                  <LuArrowRight size={18} />
+                </Link>
+                <button
+                  type="button"
+                  className="company-secondary-btn w-full justify-center"
+                  style={{ padding: "14px" }}
+                  onClick={() => setIsPackageModalOpen(true)}
+                  disabled={Boolean(activePackageRequest) || !availablePackageTargets.length}
+                >
+                  <LuRepeat2 size={18} />
+                  Change Package
+                </button>
+              </div>
+            </article>
+          </section>
+        </div>
+      )}
 
-          <div className="company-feed-list">
-            {pendingJobs.length ? (
-              pendingJobs.map((job) => (
-                <div key={job.id} className="company-feed-item">
-                  <div>
-                    <p className="company-feed-title">{job.title || "-"}</p>
-                    <p className="company-feed-copy">
-                      <LuMapPin size={14} /> {job.location || "Location pending"}
+      {activeTab === "hiring" && (
+        <div className="company-stack-y company-fade-in">
+          <section className="company-panel-card">
+            <div className="company-section-head">
+              <h2 className="company-section-title">Candidate application directory</h2>
+            </div>
+            {resumeError ? <div className="status-banner">{resumeError}</div> : null}
+            <div className="company-jobs-table-wrap">
+              <table className="company-jobs-table company-applications-table">
+                <thead>
+                  <tr>
+                    <th>Candidate</th>
+                    <th>Applied role</th>
+                    <th>Status</th>
+                    <th>Contact</th>
+                    <th>Applied on</th>
+                    <th>Resume</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedApplications.length ? (
+                    pagedApplications.map((application) => (
+                      <tr key={application.id}>
+                        <td>
+                          <p className="company-table-main">
+                            {application.candidateName || "Candidate"}
+                          </p>
+                          <p className="company-table-sub">
+                            {application.candidateCurrentTitle || "Role not set"}
+                          </p>
+                        </td>
+                        <td>
+                          <p className="company-table-main">
+                            <LuFileText size={14} /> {application.jobTitle || "Job not found"}
+                          </p>
+                        </td>
+                        <td>
+                          <span
+                            className={`company-application-chip ${getApplicationClass(
+                              application.status,
+                            )}`}
+                          >
+                            {application.status || "APPLIED"}
+                          </span>
+                        </td>
+                        <td>
+                          <p className="company-table-sub">{application.candidateEmail || "-"}</p>
+                          <p className="company-table-sub">{application.candidatePhone || "-"}</p>
+                        </td>
+                        <td>{formatDate(application.appliedAt)}</td>
+                        <td>
+                          {application.resumeUrl || application.resumeFileName ? (
+                            <button
+                              type="button"
+                              className="company-resume-link"
+                              onClick={() => handleOpenResume(application)}
+                              disabled={resumeBusyId === application.id}
+                            >
+                              {resumeBusyId === application.id ? "Opening..." : "Open resume"}
+                              <LuExternalLink size={13} />
+                            </button>
+                          ) : (
+                            <span className="company-table-sub">Not uploaded</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="company-empty-cell">
+                        No applications received yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {allApplications.length ? (
+              <div className="company-pagination-row">
+                <p className="company-pagination-meta">
+                  Showing{" "}
+                  <strong>
+                    {(applicationPage - 1) * APPLICATIONS_PER_PAGE + 1}
+                    {"-"}
+                    {Math.min(applicationPage * APPLICATIONS_PER_PAGE, allApplications.length)}
+                  </strong>{" "}
+                  of <strong>{allApplications.length}</strong> candidates
+                </p>
+                <div className="company-pagination-controls">
+                  <button
+                    type="button"
+                    className="company-page-btn"
+                    onClick={() => setApplicationPage((current) => Math.max(1, current - 1))}
+                    disabled={applicationPage === 1}
+                  >
+                    Previous
+                  </button>
+                  {Array.from({ length: totalApplicationPages }, (_, index) => index + 1).map(
+                    (pageNumber) => (
+                      <button
+                        key={pageNumber}
+                        type="button"
+                        className={`company-page-btn ${
+                          applicationPage === pageNumber ? "active" : ""
+                        }`}
+                        onClick={() => setApplicationPage(pageNumber)}
+                      >
+                        {pageNumber}
+                      </button>
+                    ),
+                  )}
+                  <button
+                    type="button"
+                    className="company-page-btn"
+                    onClick={() =>
+                      setApplicationPage((current) => Math.min(totalApplicationPages, current + 1))
+                    }
+                    disabled={applicationPage === totalApplicationPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="company-panel-card">
+            <div className="company-section-head">
+              <h2 className="company-section-title">Job Openings Overview</h2>
+            </div>
+            <div className="company-jobs-table-wrap">
+              <table className="company-jobs-table">
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Applicants</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentJobs.length ? (
+                    recentJobs.map((job) => (
+                      <tr key={job.id}>
+                        <td>
+                          <p className="company-table-main">{job.title || "Untitled job"}</p>
+                          <p className="company-table-sub">
+                            {job.department || "General"} | {job.location || "Location pending"}
+                          </p>
+                        </td>
+                        <td>
+                          <span
+                            className={`company-status-badge ${getApprovalTone(
+                              job.approvalStatus,
+                            )}`}
+                          >
+                            {job.approvalStatus || "PENDING"}
+                          </span>
+                        </td>
+                        <td>{Number(job.applicantCount || 0)}</td>
+                        <td>{job.lastUpdated || "-"}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="company-empty-cell">
+                        No jobs posted yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activeTab === "packages" && (
+        <div className="company-stack-y company-fade-in">
+          <section className="company-main-grid company-main-grid-modern">
+            <article className="company-panel-card">
+              <div className="company-section-head">
+                <h2 className="company-section-title">Packages Offered By Maven</h2>
+              </div>
+              <div className="company-package-grid company-package-grid-modern mt-6">
+                {packageCards.map((item) => {
+                  const isActive = String(company.packageType || "").toUpperCase() === item.key;
+                  return (
+                    <div
+                      key={item.name}
+                      className={`company-package-card ${
+                        isActive ? "company-package-card-active" : ""
+                      }`}
+                    >
+                      <div className="company-package-top">
+                        <h3>{item.name}</h3>
+                        <span className="company-badge">{item.posts} posts</span>
+                      </div>
+                      <p>{item.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+
+            <article className="company-panel-card">
+              <div className="company-section-head">
+                <h2 className="company-section-title">Current Utilization</h2>
+              </div>
+              <div className="mt-8">
+                <p className="company-hero-side-label">SLOT USAGE</p>
+                <p className="company-hero-side-value">
+                  {Number(company.activeJobCount || 0)} / {Number(company.jobLimit || 0)} jobs
+                </p>
+                <div className="company-progress-track">
+                  <span className="company-progress-fill" style={{ width: `${utilization}%` }} />
+                </div>
+                <p className="company-hero-side-note mt-4">
+                  {Number(company.remainingSlots || 0)} posting slots available
+                </p>
+                {activePackageRequest && (
+                  <div
+                    className="mt-6"
+                    style={{
+                      borderRadius: "16px",
+                      border: "1px solid #fde68a",
+                      backgroundColor: "#fffbeb",
+                      padding: "16px",
+                    }}
+                  >
+                    <p style={{ fontSize: "14px", fontWeight: "600", color: "#92400e" }}>
+                      Request in Review
                     </p>
-                    <p className="company-feed-meta">
-                      Updated {job.lastUpdated || "-"}
-                      {job.requiresPackageOverride ? " | Package overflow request" : ""}
+                    <p style={{ fontSize: "12px", color: "#b45309", marginTop: "4px" }}>
+                      Target: {activePackageRequest.requestedPackageType}
                     </p>
                   </div>
-                  <span className="company-status-badge is-warning">{job.approvalStatus || "PENDING"}</span>
+                )}
+              </div>
+            </article>
+          </section>
+
+          <section className="company-panel-card company-package-request-card">
+            <div className="company-section-head">
+              <h2 className="company-section-title">Package change workflow</h2>
+            </div>
+            <div className="mt-6">
+              {activePackageRequest ? (
+                <div className="company-request-row">
+                  <div>
+                    <p className="company-table-main">
+                      {activePackageRequest.currentPackageType} {"->"}
+                      {activePackageRequest.requestedPackageType}
+                    </p>
+                    <p className="company-table-sub">
+                      {activePackageRequest.currentJobLimit} {"->"}
+                      {activePackageRequest.requestedJobLimit} postings
+                    </p>
+                    <p className="company-table-sub">
+                      Requested on {formatDate(activePackageRequest.createdAt)} | Effective{" "}
+                      {formatDate(activePackageRequest.effectiveAt)}
+                    </p>
+                    {activePackageRequest.reason ? (
+                      <p className="company-table-sub">Reason: {activePackageRequest.reason}</p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={`company-status-badge ${formatPackageRequestStatus(
+                      activePackageRequest.status,
+                    )}`}
+                  >
+                    {activePackageRequest.status}
+                  </span>
                 </div>
-              ))
-            ) : (
-              <p className="company-empty-copy">No pending approvals.</p>
-            )}
-          </div>
-        </article>
-      </section>
+              ) : (
+                <p className="company-empty-copy">
+                  No active package-change request. Use the "Change Package" button in the Overview tab or Profile to submit a new request.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
 
       {isPackageModalOpen ? (
         <div className="company-modal-backdrop">
@@ -749,11 +782,15 @@ export default function Dashboard() {
                 Close
               </button>
             </div>
-
             <form className="company-form-grid" onSubmit={handleSubmitPackageChangeRequest}>
               <label className="company-field">
                 <span>Current package</span>
-                <input value={`${company.packageType || "STANDARD"} (${Number(company.jobLimit || 0)} posts)`} disabled />
+                <input
+                  value={`${company.packageType || "STANDARD"} (${Number(
+                    company.jobLimit || 0,
+                  )} posts)`}
+                  disabled
+                />
               </label>
 
               <label className="company-field">

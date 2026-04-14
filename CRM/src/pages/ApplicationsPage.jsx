@@ -28,6 +28,8 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [companyFilter, setCompanyFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState("ALL");
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -36,7 +38,21 @@ export default function ApplicationsPage() {
   const [liveProfile, setLiveProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
+  const companyOptions = useMemo(() => {
+    const names = [...new Set(applications.map((a) => a.companyName).filter(Boolean))].sort();
+    return [{ label: "All companies", value: "ALL" }, ...names.map((n) => ({ label: n, value: n }))];
+  }, [applications]);
+
+  const dateOptions = [
+    { label: "All dates", value: "ALL" },
+    { label: "Today", value: "TODAY" },
+    { label: "Last 7 days", value: "7D" },
+    { label: "Last 30 days", value: "30D" },
+    { label: "Last 90 days", value: "90D" },
+  ];
+
   const filteredApplications = useMemo(() => {
+    const now = new Date();
     return applications.filter((application) => {
       const haystack = [
         application.candidateName,
@@ -53,10 +69,23 @@ export default function ApplicationsPage() {
         !searchQuery.trim() || haystack.includes(searchQuery.trim().toLowerCase());
       const matchesStatus =
         statusFilter === "ALL" || application.status === statusFilter;
+      const matchesCompany =
+        companyFilter === "ALL" || application.companyName === companyFilter;
 
-      return matchesSearch && matchesStatus;
+      let matchesDate = true;
+      if (dateFilter !== "ALL" && application.appliedAt) {
+        const applied = new Date(application.appliedAt);
+        const diffMs = now - applied;
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        if (dateFilter === "TODAY") matchesDate = diffDays < 1;
+        else if (dateFilter === "7D") matchesDate = diffDays <= 7;
+        else if (dateFilter === "30D") matchesDate = diffDays <= 30;
+        else if (dateFilter === "90D") matchesDate = diffDays <= 90;
+      }
+
+      return matchesSearch && matchesStatus && matchesCompany && matchesDate;
     });
-  }, [applications, searchQuery, statusFilter]);
+  }, [applications, searchQuery, statusFilter, companyFilter, dateFilter]);
 
   const metrics = useMemo(() => {
     const inReview = applications.filter((item) =>
@@ -68,21 +97,18 @@ export default function ApplicationsPage() {
       {
         label: "Applications",
         value: formatNumber(applications.length),
-        detail: "System-wide candidate applications visible to CRM.",
         icon: LuFileCheck2,
         tone: "blue",
       },
       {
         label: "In review",
         value: formatNumber(inReview),
-        detail: "Applications progressing through screening and interview flow.",
         icon: LuUsers,
         tone: "amber",
       },
       {
         label: "Offers issued",
         value: formatNumber(offered),
-        detail: "Applications that have already moved to the offer stage.",
         icon: LuFileCheck2,
         tone: "lime",
       },
@@ -125,7 +151,7 @@ export default function ApplicationsPage() {
 
   const handleDownloadResume = async () => {
     if (!liveProfile?.resume?.url && !selectedApplication?.resumeUrl) return;
-    
+
     setIsDownloadingCv(true);
     try {
       const blob = await downloadResume(selectedApplication.candidateId);
@@ -186,11 +212,7 @@ export default function ApplicationsPage() {
       </section>
 
       <PanelCard>
-        <SectionHeading
-          eyebrow="Application visibility"
-          title="Track candidate applications end-to-end"
-          description="CRM can review all applications, inspect candidate identity, and update stage movement across the full hiring funnel."
-        />
+        <SectionHeading title="Applications" />
 
         {actionError ? (
           <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -198,12 +220,24 @@ export default function ApplicationsPage() {
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <ToolbarInput
             icon={LuSearch}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search candidate, company, or job"
+            placeholder="Search candidate or job"
+          />
+          <SelectField
+            label="Company"
+            value={companyFilter}
+            onChange={(event) => setCompanyFilter(event.target.value)}
+            options={companyOptions}
+          />
+          <SelectField
+            label="Date"
+            value={dateFilter}
+            onChange={(event) => setDateFilter(event.target.value)}
+            options={dateOptions}
           />
           <SelectField
             label="Stage"
@@ -290,7 +324,7 @@ export default function ApplicationsPage() {
           selectedApplication?.candidateName ||
           "Candidate Details"
         }
-        description="Candidate profile and application details from the central system record."
+        description=""
       >
         {selectedApplication ? (
           <div className="space-y-5">
@@ -460,11 +494,10 @@ export default function ApplicationsPage() {
                       type="button"
                       disabled={!resumeUrl || isDownloadingCv}
                       onClick={handleDownloadResume}
-                      className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold transition ${
-                        resumeUrl
+                      className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold transition ${resumeUrl
                           ? "border-slate-200 bg-slate-50 text-slate-800 hover:border-slate-300 hover:bg-slate-100 disabled:opacity-50"
                           : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
-                      }`}
+                        }`}
                     >
                       <LuDownload size={16} className={isDownloadingCv ? "animate-bounce" : ""} />
                       {isDownloadingCv ? "Loading PDF..." : resumeUrl ? "Download Candidate CV" : "CV not available"}

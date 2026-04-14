@@ -199,9 +199,7 @@ export default function ApprovalsPage() {
 
       <PanelCard>
         <SectionHeading
-          eyebrow="Approval authority"
           title="Review job and package requests from client companies"
-          description="CRM can approve or reject client job submissions and package change requests from one operational queue."
         />
 
         {actionError ? (
@@ -352,11 +350,7 @@ export default function ApprovalsPage() {
         open={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
         title="Reject job submission"
-        description={
-          selectedJob
-            ? `Provide the reason CRM is returning ${selectedJob.title} to ${selectedJob.companyName}.`
-            : ""
-        }
+        description=""
       >
         <form onSubmit={handleRejectJob} className="space-y-5">
           <TextAreaField
@@ -389,11 +383,7 @@ export default function ApprovalsPage() {
         open={isPackageRejectModalOpen}
         onClose={() => setIsPackageRejectModalOpen(false)}
         title="Reject package change request"
-        description={
-          selectedPackageRequest
-            ? `Provide a clear reason for rejecting ${selectedPackageRequest.companyName}'s package change request.`
-            : ""
-        }
+        description=""
       >
         <form onSubmit={handleRejectPackageRequest} className="space-y-5">
           <TextAreaField

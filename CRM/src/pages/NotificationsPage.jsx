@@ -37,21 +37,18 @@ export default function NotificationsPage() {
       {
         label: "Campaigns sent",
         value: formatNumber(campaigns.length),
-        detail: "Bulk promotions and job alerts sent through the CRM panel.",
         icon: LuBellRing,
         tone: "blue",
       },
       {
         label: "Email campaigns",
         value: formatNumber(emailCampaigns),
-        detail: "Promotions delivered over email distribution.",
         icon: LuMail,
         tone: "lime",
       },
       {
         label: "App campaigns",
         value: formatNumber(appCampaigns),
-        detail: "Notifications distributed through in-app delivery.",
         icon: LuSend,
         tone: "amber",
       },
@@ -111,9 +108,7 @@ export default function NotificationsPage() {
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <PanelCard>
           <SectionHeading
-            eyebrow="Outbound engagement"
             title="Send bulk promotions and job alerts"
-            description="CRM can distribute operational campaigns to clients or candidates using email or app notification channels."
           />
 
           {actionError ? (
@@ -185,9 +180,7 @@ export default function NotificationsPage() {
 
         <PanelCard>
           <SectionHeading
-            eyebrow="Campaign history"
             title="Recent bulk communication"
-            description="Review sent notifications, channel choice, audience, and delivered volume."
           />
 
           <div className="mt-6 space-y-4">
