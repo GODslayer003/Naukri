@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LuInfo } from "react-icons/lu";
+import { LuInfo, LuPlus, LuTrash2 } from "react-icons/lu";
 import { createCompanyJob } from "../api/companyApi";
 
 const defaultForm = {
@@ -12,13 +12,14 @@ const defaultForm = {
   experience: "",
   salaryMin: "",
   salaryMax: "",
-  skills: "",
+  skills: [""],
   deadline: "",
   description: "",
 };
 
 export default function CreateJob({ onSessionRefresh }) {
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState({ ...defaultForm, skills: [] });
+  const [skillDraft, setSkillDraft] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
@@ -27,6 +28,30 @@ export default function CreateJob({ onSessionRefresh }) {
     setForm(defaultForm);
     setError("");
     setNote("");
+  };
+
+  const handleAddSkillTag = (event) => {
+    if (event) event.preventDefault();
+    const normalized = skillDraft.trim();
+    if (!normalized) return;
+
+    if (form.skills.includes(normalized)) {
+      setSkillDraft("");
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      skills: [...current.skills, normalized],
+    }));
+    setSkillDraft("");
+  };
+
+  const handleRemoveSkillTag = (skillToRemove) => {
+    setForm((current) => ({
+      ...current,
+      skills: current.skills.filter((s) => s !== skillToRemove),
+    }));
   };
 
   const handleSubmit = async (event) => {
@@ -40,10 +65,7 @@ export default function CreateJob({ onSessionRefresh }) {
         ...form,
         salaryMin: Number(form.salaryMin || 0),
         salaryMax: Number(form.salaryMax || 0),
-        skills: form.skills
-          .split(",")
-          .map((skill) => skill.trim())
-          .filter(Boolean),
+        skills: form.skills.map((s) => s.trim()).filter(Boolean),
       };
 
       const response = await createCompanyJob(payload);
@@ -170,14 +192,47 @@ export default function CreateJob({ onSessionRefresh }) {
           />
         </label>
 
-        <label className="company-field">
-          <span>Skills (comma separated)</span>
-          <input
-            value={form.skills}
-            onChange={(event) => setForm((current) => ({ ...current, skills: event.target.value }))}
-            placeholder="React, Node.js, MongoDB"
-          />
-        </label>
+        <div className="company-field full">
+          <span>Required Skills *</span>
+          <div className="company-skills-card">
+            <div className="company-skill-input-group">
+              <input
+                value={skillDraft}
+                placeholder="e.g. React.js"
+                onChange={(e) => setSkillDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddSkillTag();
+                  }
+                }}
+              />
+              <button type="button" className="company-skill-add-btn" onClick={handleAddSkillTag}>
+                <LuPlus size={18} />
+                Add
+              </button>
+            </div>
+
+            <div className="company-skill-tags-list">
+              {form.skills.length > 0 ? (
+                form.skills.map((skill) => (
+                  <span key={skill} className="company-skill-tag">
+                    {skill}
+                    <button
+                      type="button"
+                      className="company-tag-remove"
+                      onClick={() => handleRemoveSkillTag(skill)}
+                    >
+                      <LuPlus size={14} style={{ transform: "rotate(45deg)" }} />
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <span className="company-no-skills">No skills added yet. Professional skills help in matching.</span>
+              )}
+            </div>
+          </div>
+        </div>
 
         <label className="company-field full">
           <span>Job Summary</span>

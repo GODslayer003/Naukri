@@ -5,6 +5,7 @@ import {
   LuMapPin,
   LuPlus,
   LuSearch,
+  LuTrash2,
 } from "react-icons/lu";
 import {
   Badge,
@@ -33,7 +34,7 @@ const defaultJobForm = {
   experience: "",
   salaryMin: "",
   salaryMax: "",
-  skills: "",
+  skills: [],
   deadline: "",
   description: "",
   createAsClient: false,
@@ -54,6 +55,7 @@ export default function JobsPage() {
   const [activeToggleId, setActiveToggleId] = useState("");
   const [editingJob, setEditingJob] = useState(null);
   const [jobForm, setJobForm] = useState(defaultJobForm);
+  const [skillDraft, setSkillDraft] = useState("");
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
@@ -120,6 +122,30 @@ export default function JobsPage() {
     loadPage();
   }, []);
 
+  const handleAddSkillTag = (event) => {
+    if (event) event.preventDefault();
+    const normalized = skillDraft.trim();
+    if (!normalized) return;
+
+    if (jobForm.skills.includes(normalized)) {
+      setSkillDraft("");
+      return;
+    }
+
+    setJobForm((current) => ({
+      ...current,
+      skills: [...current.skills, normalized],
+    }));
+    setSkillDraft("");
+  };
+
+  const handleRemoveSkillTag = (skillToRemove) => {
+    setJobForm((current) => ({
+      ...current,
+      skills: current.skills.filter((s) => s !== skillToRemove),
+    }));
+  };
+
   async function loadPage() {
     setIsLoading(true);
     setPageError("");
@@ -144,6 +170,7 @@ export default function JobsPage() {
     setJobForm({
       ...defaultJobForm,
       companyId: clients[0]?.id || "",
+      skills: [],
     });
     setActionError("");
     setSuccessNote("");
@@ -163,7 +190,7 @@ export default function JobsPage() {
       experience: job.experience,
       salaryMin: job.salaryMin || "",
       salaryMax: job.salaryMax || "",
-      skills: Array.isArray(job.skills) ? job.skills.join(", ") : "",
+      skills: Array.isArray(job.skills) ? job.skills : [],
       deadline: job.deadline ? job.deadline.slice(0, 10) : "",
       description: job.description || "",
       createAsClient: job.createdBySource === "CLIENT",
@@ -203,10 +230,7 @@ export default function JobsPage() {
       ...jobForm,
       salaryMin: Number(jobForm.salaryMin || 0),
       salaryMax: Number(jobForm.salaryMax || 0),
-      skills: jobForm.skills
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
+      skills: jobForm.skills.map((s) => s.trim()).filter(Boolean),
     };
 
     try {
@@ -243,9 +267,7 @@ export default function JobsPage() {
 
       <PanelCard>
         <SectionHeading
-          eyebrow="Job command"
-          title="Create, edit, and manage job postings across all clients"
-
+          title="Job management"
           action={
             <button
               onClick={openCreateModal}
@@ -393,7 +415,6 @@ export default function JobsPage() {
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingJob ? "Edit job posting" : "Create job posting"}
-        description="Publish roles on behalf of clients or create them as client-originated requests for CRM review."
         width="max-w-4xl"
       >
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -493,14 +514,53 @@ export default function JobsPage() {
             />
           </div>
 
-          <TextField
-            label="Skills"
-            value={jobForm.skills}
-            onChange={(event) =>
-              setJobForm((current) => ({ ...current, skills: event.target.value }))
-            }
-            placeholder="React, JavaScript, Team Leadership"
-          />
+          <div className="space-y-4 rounded-[24px] border border-slate-100 bg-slate-50/50 p-5">
+            <span className="text-sm font-semibold text-slate-700">Required skills *</span>
+            
+            <div className="flex gap-3">
+              <input
+                value={skillDraft}
+                onChange={(e) => setSkillDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddSkillTag();
+                  }
+                }}
+                placeholder="e.g. React.js"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:ring-4 focus:ring-lime-100"
+              />
+              <button
+                type="button"
+                onClick={handleAddSkillTag}
+                className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#20498f] focus:outline-none focus:ring-4 focus:ring-blue-100"
+              >
+                Add
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {jobForm.skills.length > 0 ? (
+                jobForm.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-1.5 text-xs font-semibold text-[#163060] transition-all hover:border-blue-200"
+                  >
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSkillTag(skill)}
+                      className="text-slate-400 transition-colors hover:text-rose-500"
+                    >
+                      <LuPlus size={14} className="rotate-45" />
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs italic text-slate-400">No skills added yet.</span>
+              )}
+            </div>
+          </div>
 
           <TextAreaField
             label="Description"
@@ -524,12 +584,12 @@ export default function JobsPage() {
                 }
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-lime-500 focus:ring-lime-400"
               />
-              <span>
+               <span>
                 <span className="block font-semibold text-slate-900">
                   Submit as client-created opening
                 </span>
-                <span className="mt-1 block leading-6">
-                  Use this when CRM is entering a role on behalf of the client but still wants it to pass through the approval queue before going live.
+                <span className="mt-1 block text-xs leading-5">
+                  Routes this role through the approval queue before going live.
                 </span>
               </span>
             </label>

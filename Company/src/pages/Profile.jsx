@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchCompanyProfile, updateCompanyProfile } from "../api/companyApi";
 
 const defaultForm = {
-  username: "",
   email: "",
   currentPassword: "",
   newPassword: "",
@@ -41,7 +40,6 @@ export default function Profile({ onSessionRefresh }) {
 
         setProfile(data);
         setForm({
-          username: data.user?.username || "",
           email: data.user?.email || "",
           currentPassword: "",
           newPassword: "",
@@ -95,7 +93,6 @@ export default function Profile({ onSessionRefresh }) {
             ...parsed,
             user: {
               ...(parsed.user || {}),
-              username: nextProfile?.user?.username || parsed.user?.username || "",
               email: nextProfile?.user?.email || parsed.user?.email || "",
             },
             company: {
@@ -127,32 +124,34 @@ export default function Profile({ onSessionRefresh }) {
     <section className="company-panel-card">
       <div className="company-card-head">
         <h2>Profile</h2>
-        <p>Update client login identity and company details used in job operations.</p>
       </div>
 
       {error ? <div className="status-banner">{error}</div> : null}
       {note ? <div className="status-banner success-banner">{note}</div> : null}
 
-      <div className="company-profile-summary">
-        <p><strong>Company:</strong> {companySummary.name || "-"}</p>
-        <p><strong>Package:</strong> {companySummary.packageType || "-"}</p>
-        <p><strong>Job Limit:</strong> {Number(companySummary.jobLimit || 0)}</p>
-        <p><strong>Account Manager:</strong> {companySummary.accountManager || "Unassigned"}</p>
+      <div className="company-summary-grid mt-6">
+        <article className="company-summary-card">
+          <p>Company</p>
+          <strong>{companySummary.name || "-"}</strong>
+        </article>
+        <article className="company-summary-card">
+          <p>Package</p>
+          <strong>{companySummary.packageType || "-"}</strong>
+        </article>
+        <article className="company-summary-card">
+          <p>Job Limit</p>
+          <strong>{Number(companySummary.jobLimit || 0)}</strong>
+        </article>
+        <article className="company-summary-card">
+          <p>Manager</p>
+          <strong>{companySummary.accountManager || "Unassigned"}</strong>
+        </article>
       </div>
 
       <form className="company-form-grid" onSubmit={handleSubmit}>
         <div className="form-section-card">
           <h3>Access Credentials</h3>
           <div className="company-form-grid two-col">
-            <label className="company-field">
-              <span>Username</span>
-              <input
-                value={form.username}
-                onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
-                required
-              />
-            </label>
-
             <label className="company-field">
               <span>User Mail</span>
               <input

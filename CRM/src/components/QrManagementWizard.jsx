@@ -235,7 +235,6 @@ export default function QrManagementWizard({ onGenerated }) {
         <SectionHeading
           eyebrow="QR management"
           title="Create company and generate branded QR kits"
-          description="CRM now owns the full QR workflow previously exposed in the Client panel, including company setup, job mapping, branded PDF generation, and distribution readiness."
         />
 
         {error ? (
@@ -279,7 +278,6 @@ export default function QrManagementWizard({ onGenerated }) {
             visible={activeSection === 0}
             icon={LuBuilding2}
             title="Company identity"
-            description="Capture the company profile that will appear in the QR journey."
           >
             <div className="grid gap-5 md:grid-cols-2">
               <TextField label="Company name" value={formData.companyName} onChange={(event) => updateField("companyName", event.target.value)} required />
@@ -304,7 +302,7 @@ export default function QrManagementWizard({ onGenerated }) {
             </label>
           </WizardSection>
 
-          <WizardSection visible={activeSection === 1} icon={LuMail} title="Contact details" description="Client-facing contact and CRM notes.">
+          <WizardSection visible={activeSection === 1} icon={LuMail} title="Contact details">
             <div className="grid gap-5 md:grid-cols-2">
               <TextField label="Email" type="email" value={formData.email} onChange={(event) => updateField("email", event.target.value)} required />
               <TextField label="Phone" value={formData.phone} onChange={(event) => updateField("phone", event.target.value)} required />
@@ -315,7 +313,7 @@ export default function QrManagementWizard({ onGenerated }) {
             <TextAreaField label="Operational notes" value={formData.notes} onChange={(event) => updateField("notes", event.target.value)} />
           </WizardSection>
 
-          <WizardSection visible={activeSection === 2} icon={LuMapPin} title="Location details" description="Geo fields used for reporting and client display.">
+          <WizardSection visible={activeSection === 2} icon={LuMapPin} title="Location details">
             <div className="grid gap-5 md:grid-cols-2">
               <TextField label="State" value={formData.region} onChange={(event) => updateField("region", event.target.value)} required />
               <TextField label="City" value={formData.city} onChange={(event) => updateField("city", event.target.value)} required />
@@ -325,13 +323,13 @@ export default function QrManagementWizard({ onGenerated }) {
             </div>
           </WizardSection>
 
-          <WizardSection visible={activeSection === 3} icon={LuInfo} title="About the company" description="Content used in the landing page and branded PDF.">
+          <WizardSection visible={activeSection === 3} icon={LuInfo} title="About the company">
             <TextAreaField label="About" value={formData.about} onChange={(event) => updateField("about", event.target.value)} required />
             <TextAreaField label="Mission" value={formData.mission} onChange={(event) => updateField("mission", event.target.value)} />
             <TextAreaField label="Vision" value={formData.vision} onChange={(event) => updateField("vision", event.target.value)} />
           </WizardSection>
 
-          <WizardSection visible={activeSection === 4} icon={LuBriefcaseBusiness} title="Job requirements" description="Map all role requirements before QR generation.">
+          <WizardSection visible={activeSection === 4} icon={LuBriefcaseBusiness} title="Job requirements">
             <div className="space-y-5">
               {formData.jobs.map((job, index) => (
                 <div key={`job-${index}`} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
@@ -354,7 +352,7 @@ export default function QrManagementWizard({ onGenerated }) {
             </div>
           </WizardSection>
 
-          <WizardSection visible={activeSection === 5} icon={LuSparkles} title="Why join us" description="Capture value propositions for the company landing.">
+          <WizardSection visible={activeSection === 5} icon={LuSparkles} title="Why join us">
             <div className="space-y-5">
               {formData.whyJoinUs.map((item, index) => (
                 <div key={`highlight-${index}`} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
@@ -439,24 +437,61 @@ function WizardSection({ visible, icon: IconComponent, title, description, child
 function SkillEditor({ skills, onAdd, onRemove }) {
   const [draft, setDraft] = useState("");
 
+  const handleAdd = () => {
+    const normalized = draft.trim();
+    if (!normalized) return;
+    onAdd(normalized);
+    setDraft("");
+  };
+
   return (
-    <div className="mt-5 rounded-[20px] border border-slate-200 bg-white p-4">
-      <p className="text-sm font-semibold text-slate-700">Skills</p>
-      <div className="mt-3 flex gap-3">
-        <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Add a skill" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:bg-white" />
-        <button type="button" onClick={() => { onAdd(draft); setDraft(""); }} className="rounded-2xl bg-[#163060] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#20498f]">Add</button>
+    <div className="mt-5 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm font-bold text-slate-800">Required Skills</p>
+        <span className="text-xs text-slate-400">{skills.length} skills added</span>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {skills.length ? skills.map((skill, index) => (
-          <span key={`${skill}-${index}`} className="inline-flex items-center gap-2 rounded-full bg-lime-100 px-3 py-1 text-xs font-semibold text-lime-800">
-            <LuCheck size={14} />
-            {skill}
-            <button type="button" onClick={() => onRemove(index)} className="text-lime-800/70 transition hover:text-rose-600">
-              <LuTrash2 size={12} />
-            </button>
-          </span>
-        )) : (
-          <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+      
+      <div className="mt-4 flex gap-3">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAdd();
+            }
+          }}
+          placeholder="Type a skill and press Enter"
+          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:bg-white focus:ring-4 focus:ring-lime-100"
+        />
+        <button
+          type="button"
+          onClick={handleAdd}
+          className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#20498f] focus:outline-none focus:ring-4 focus:ring-blue-100"
+        >
+          Add
+        </button>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {skills.length ? (
+          skills.map((skill, index) => (
+            <span
+              key={`${skill}-${index}`}
+              className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-1.5 text-xs font-semibold text-[#163060] transition-all hover:border-blue-200 animate-in fade-in slide-in-from-bottom-1"
+            >
+              {skill}
+              <button
+                type="button"
+                onClick={() => onRemove(index)}
+                className="text-slate-400 transition-colors hover:text-rose-500"
+              >
+                <LuPlus size={14} className="rotate-45" />
+              </button>
+            </span>
+          ))
+        ) : (
+          <span className="inline-flex items-center gap-2 px-1 text-xs italic text-slate-400">
             <LuCircleDashed size={14} />
             No skills added yet
           </span>

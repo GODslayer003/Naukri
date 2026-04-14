@@ -235,7 +235,6 @@ export default function QRCodesPage() {
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Create / Generate QR"
-        description="Generate a QR landing kit. Ensure all mandatory fields are filled before submitting."
         width="max-w-5xl"
       >
         <QrManagementWizard
@@ -250,11 +249,6 @@ export default function QRCodesPage() {
         open={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         title="Record QR sharing"
-        description={
-          selectedQRCode
-            ? `Track how the QR kit for ${selectedQRCode.companyName} was shared with the client.`
-            : ""
-        }
       >
         <form onSubmit={handleShare} className="space-y-5">
           <SelectField

@@ -256,12 +256,7 @@ export default function Applies() {
     <div className="company-dashboard">
       <section className="company-panel-card company-applies-hero">
         <div>
-          <p className="company-section-eyebrow">Hiring workflow</p>
           <h2 className="company-section-title">Applies</h2>
-          <p className="company-section-copy">
-            Review candidate applications and update progress to shortlisted, rejected, interview, or final stages.
-            Every status update is sent to the candidate panel as a notification.
-          </p>
         </div>
 
         <div className="company-applies-filter-wrap">

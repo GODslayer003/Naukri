@@ -1585,4 +1585,99 @@ a {
   .company-overview-row {
     grid-template-columns: 1fr;
   }
+
+}
+
+.company-skills-card {
+  margin-top: 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.company-skill-input-group {
+  display: flex;
+  gap: 12px;
+}
+
+.company-skill-input-group input {
+  flex: 1;
+  background: #ffffff !important;
+}
+
+.company-skill-add-btn {
+  background: var(--brand-navy);
+  color: #fff;
+  border: none;
+  padding: 0 20px;
+  border-radius: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.company-skill-add-btn:hover {
+  background: var(--brand-navy-light, #204e9a);
+  transform: translateY(-1px);
+}
+
+.company-skill-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.company-skill-tag {
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  color: var(--brand-navy);
+  padding: 8px 14px;
+  border-radius: 100px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: companyFadeInUp 0.3s ease-out;
+}
+
+.company-tag-remove {
+  background: transparent;
+  border: none;
+  color: var(--brand-navy);
+  opacity: 0.5;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: opacity 0.2s;
+}
+
+.company-tag-remove:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
+.company-no-skills {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+@keyframes companyFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
