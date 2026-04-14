@@ -314,7 +314,7 @@ export default function AddLead() {
                     <span style={{ fontSize: '15px', color: '#334155' }}>Company is a Startup</span>
                   </div>
                 </Field>
-                
+
                 <Field label="Master Union">
                   <input
                     className="input add-lead-input"
@@ -414,7 +414,7 @@ export default function AddLead() {
                           <LuMail className="input-icon" />
                         </div>
                       </Field>
-                      
+
                       <Field label={`Contact ${index + 1} Designation`}>
                         <div className="input-shell">
                           <input

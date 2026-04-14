@@ -157,8 +157,10 @@ export default function App() {
     roleTitle: "",
     roleDescription: "",
     budget: "",
+    tagline: "",
+    companySize: "",
+    linkedIn: "",
   });
-  const [clientJdFiles, setClientJdFiles] = useState([]);
   const [clientStep, setClientStep] = useState(1);
 
   const candidateRegisterUrl = useMemo(resolveCandidateRegisterUrl, []);
@@ -202,8 +204,10 @@ export default function App() {
       roleTitle: "",
       roleDescription: "",
       budget: "",
+      tagline: "",
+      companySize: "",
+      linkedIn: "",
     });
-    setClientJdFiles([]);
     setClientFeedback({ type: "", message: "" });
     setClientReferenceId("");
     setClientCompanyName("");
@@ -345,17 +349,8 @@ export default function App() {
       return "Phone number must contain exactly 10 digits.";
     }
 
-    if (clientJdFiles.length > MAX_CLIENT_JD_FILES) {
-      return `You can upload up to ${MAX_CLIENT_JD_FILES} JD files.`;
-    }
-
-    const oversized = clientJdFiles.find((file) => file.size > MAX_UPLOAD_FILE_SIZE);
-    if (oversized) {
-      return `${oversized.name} exceeds the 8MB upload limit.`;
-    }
-
-    if (!clientForm.roleTitle.trim() && !clientJdFiles.length) {
-      return "Add a role title or upload at least one JD file.";
+    if (!clientForm.roleTitle.trim()) {
+      return "Please provide a role title for the position.";
     }
 
     return "";
@@ -441,13 +436,12 @@ export default function App() {
     payload.append("roleTitle", clientForm.roleTitle.trim());
     payload.append("roleDescription", clientForm.roleDescription.trim());
     payload.append("budget", clientForm.budget.trim());
+    payload.append("tagline", clientForm.tagline.trim());
+    payload.append("companySize", clientForm.companySize);
+    payload.append("linkedIn", clientForm.linkedIn.trim());
     if (qrToken) {
       payload.append("qrToken", qrToken);
     }
-
-    clientJdFiles.forEach((file) => {
-      payload.append("jdFiles", file);
-    });
 
     setIsClientSubmitting(true);
 
@@ -741,12 +735,50 @@ export default function App() {
               ) : (
                 <>
                   <label className="form-field">
-                    <span className="field-label">Role Title (option A: manual)</span>
+                    <span className="field-label">Company Tagline</span>
+                    <input
+                      type="text"
+                      value={clientForm.tagline}
+                      onChange={updateClientField("tagline")}
+                      placeholder="e.g. Innovating HR Tech"
+                    />
+                  </label>
+
+                  <label className="form-field">
+                    <span className="field-label">Company Size</span>
+                    <select
+                      className="input custom-select"
+                      style={{ height: "42px", appearance: "auto" }}
+                      value={clientForm.companySize}
+                      onChange={updateClientField("companySize")}
+                    >
+                      <option value="">Select Size...</option>
+                      {["1-10", "11-50", "51-200", "201-500", "500+"].map((size) => (
+                        <option key={size} value={size}>
+                          {size} Employees
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="form-field form-field-full">
+                    <span className="field-label">LinkedIn Page URL</span>
+                    <input
+                      type="url"
+                      value={clientForm.linkedIn}
+                      onChange={updateClientField("linkedIn")}
+                      placeholder="https://linkedin.com/company/..."
+                    />
+                  </label>
+
+                  <label className="form-field form-field-full">
+                    <span className="field-label">Role Title <span className="required-asterisk">*</span></span>
                     <input
                       type="text"
                       value={clientForm.roleTitle}
                       onChange={updateClientField("roleTitle")}
                       placeholder="e.g. Territory Sales Manager"
+                      required
                     />
                   </label>
 
@@ -756,26 +788,8 @@ export default function App() {
                       value={clientForm.roleDescription}
                       onChange={updateClientField("roleDescription")}
                       placeholder="Describe responsibilities, skills, and hiring context."
+                      style={{ minHeight: "100px" }}
                     />
-                  </label>
-
-                  <label className="form-field form-field-full">
-                    <span className="field-label">Upload JD Files (option B)</span>
-                    <input
-                      type="file"
-                      multiple
-                      onChange={(event) => setClientJdFiles(Array.from(event.target.files || []))}
-                    />
-                    <small className="field-hint">
-                      Upload up to {MAX_CLIENT_JD_FILES} files, max 8MB each. Add role title or at least one JD file.
-                    </small>
-                    {clientJdFiles.length ? (
-                      <div className="selected-files">
-                        {clientJdFiles.map((file) => (
-                          <span key={`${file.name}-${file.size}`}>{file.name}</span>
-                        ))}
-                      </div>
-                    ) : null}
                   </label>
 
                   <div className="form-actions">
@@ -790,7 +804,7 @@ export default function App() {
                       Back
                     </button>
                     <button type="submit" className="button button-primary" disabled={isClientSubmitting}>
-                      {isClientSubmitting ? "Submitting..." : "Submit Role Posting"}
+                      {isClientSubmitting ? "Submitting..." : "Submit Registration"}
                     </button>
                   </div>
                 </>

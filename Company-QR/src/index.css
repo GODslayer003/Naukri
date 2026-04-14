@@ -134,11 +134,71 @@ textarea {
   color: #1d4ed8;
 }
 
+.wizard-progress {
+  margin: 24px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.progress-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #94a3b8;
+  transition: all 0.3s ease;
+}
+
+.progress-dot.active {
+  background: #163060;
+  border-color: #163060;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(22, 48, 96, 0.2);
+}
+
+.progress-line {
+  width: 60px;
+  height: 2px;
+  background: #e2e8f0;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: #163060;
+  transition: width 0.3s ease;
+}
+
+.progress-line.active::after {
+  width: 100%;
+}
+
 .candidate-form {
   margin-top: 20px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 16px;
+  animation: formStepsFadeIn 0.4s ease-out;
+}
+
+@keyframes formStepsFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .form-field {
@@ -160,20 +220,32 @@ textarea {
   line-height: 1;
 }
 
-.candidate-form input {
+.candidate-form input,
+.custom-select {
   width: 100%;
   border: 1px solid #cfdcef;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #f8fbff;
-  padding: 11px 12px;
+  padding: 13px 14px;
   outline: none;
   color: #1d3558;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: all 0.2s ease;
+  font-size: 0.92rem;
 }
 
-.candidate-form input:focus {
-  border-color: #88afed;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
+.candidate-form input:focus,
+.custom-select:focus {
+  border-color: #163060;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(22, 48, 96, 0.08);
+}
+
+.custom-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23526b93' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  cursor: pointer;
 }
 
 .candidate-form textarea {

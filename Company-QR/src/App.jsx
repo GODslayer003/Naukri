@@ -4,6 +4,13 @@ import logo from "./assets/maven-logo.svg";
 const MAX_UPLOAD_FILE_SIZE = 8 * 1024 * 1024;
 const PHONE_DIGITS_REQUIRED = 10;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const COMPANY_SIZES = [
+  "1-10 (Startup)",
+  "11-50 (Small)",
+  "51-200 (Mid-size)",
+  "201-500 (Large)",
+  "500+ (Enterprise)",
+];
 
 const normalizeApiV1BaseUrl = (value = "") => {
   const rawValue = String(value || "").trim();
@@ -78,6 +85,7 @@ const resolveQrTokenFromLocation = () => {
 
 export default function App() {
   const [view, setView] = useState("candidate");
+  const [currentStep, setCurrentStep] = useState(1);
   const [isCandidateSubmitting, setIsCandidateSubmitting] = useState(false);
 
   const [candidateFeedback, setCandidateFeedback] = useState({ type: "", message: "" });
@@ -90,6 +98,9 @@ export default function App() {
     preferredPosition: "",
     email: "",
     phone: "",
+    tagline: "",
+    companySize: "",
+    linkedIn: "",
   });
   const [resumeFile, setResumeFile] = useState(null);
 
@@ -100,6 +111,29 @@ export default function App() {
 
   const updateCandidateField = (field) => (event) => {
     setCandidateForm((prev) => ({ ...prev, [field]: event.target.value }));
+    setCandidateFeedback({ type: "", message: "" });
+  };
+
+  const handleNext = () => {
+    if (!candidateForm.name.trim() || !candidateForm.preferredPosition.trim() || !candidateForm.email.trim() || !candidateForm.phone.trim()) {
+      setCandidateFeedback({ type: "error", message: "All personal details are mandatory." });
+      return;
+    }
+    if (!isValidPhoneNumber(candidateForm.phone)) {
+      setCandidateFeedback({ type: "error", message: "Enter a valid 10-digit phone number." });
+      return;
+    }
+    if (!EMAIL_PATTERN.test(candidateForm.email.trim())) {
+      setCandidateFeedback({ type: "error", message: "Enter a valid email address." });
+      return;
+    }
+    setCurrentStep(2);
+    window.scrollTo(0, 0);
+  };
+
+  const handleBack = () => {
+    setCurrentStep(1);
+    window.scrollTo(0, 0);
   };
 
   const resetCandidateDraft = () => {
@@ -108,12 +142,16 @@ export default function App() {
       preferredPosition: "",
       email: "",
       phone: "",
+      tagline: "",
+      companySize: "",
+      linkedIn: "",
     });
     setResumeFile(null);
     setCandidateName("");
     setCandidateReferenceId("");
     setShowDownloadModal(false);
     setCandidateFeedback({ type: "", message: "" });
+    setCurrentStep(1);
   };
 
   const resetCandidateFlow = () => {
@@ -122,31 +160,12 @@ export default function App() {
   };
 
   const validateCandidateForm = () => {
-    if (
-      !candidateForm.name.trim() ||
-      !candidateForm.preferredPosition.trim() ||
-      !candidateForm.email.trim() ||
-      !candidateForm.phone.trim()
-    ) {
-      return "All fields are mandatory.";
-    }
-
-    if (!isValidPhoneNumber(candidateForm.phone)) {
-      return "Phone number must contain exactly 10 digits.";
-    }
-
-    if (!EMAIL_PATTERN.test(candidateForm.email.trim())) {
-      return "Please enter a valid email address.";
-    }
-
     if (!resumeFile) {
       return "CV upload is mandatory.";
     }
-
     if (resumeFile.size > MAX_UPLOAD_FILE_SIZE) {
       return "CV size must be 8MB or less.";
     }
-
     return "";
   };
 
@@ -165,6 +184,9 @@ export default function App() {
     payload.append("designation", candidateForm.preferredPosition.trim());
     payload.append("phone", `+91${toIndianPhoneDigits(candidateForm.phone)}`);
     payload.append("email", candidateForm.email.trim());
+    payload.append("tagline", candidateForm.tagline.trim());
+    payload.append("companySize", candidateForm.companySize);
+    payload.append("linkedIn", candidateForm.linkedIn.trim());
     if (qrToken) {
       payload.append("qrToken", qrToken);
     }
@@ -216,7 +238,7 @@ export default function App() {
     <main className="landing-shell">
       <section className="landing-card">
         <header className="landing-head">
-          <img src={logo} alt="OneScanr" className="brand-logo" />
+          <img src={logo} alt="Maven" className="brand-logo" />
           <p className="brand-copy">OneScanr Gateway</p>
         </header>
 
@@ -224,8 +246,16 @@ export default function App() {
           <>
             <h1 className="headline">Company Application</h1>
             <p className="sub-copy">
-              Step 1: Personal details. Step 2: Upload CV (mandatory).
+              {currentStep === 1 
+                ? "Step 1: Personal details. Let's get to know you." 
+                : "Step 2: Experience & Documents. Upload your credentials."}
             </p>
+
+            <div className="wizard-progress">
+              <div className={`progress-dot ${currentStep >= 1 ? "active" : ""}`}>1</div>
+              <div className={`progress-line ${currentStep >= 2 ? "active" : ""}`} />
+              <div className={`progress-dot ${currentStep >= 2 ? "active" : ""}`}>2</div>
+            </div>
 
             {candidateFeedback.message ? (
               <div className={`feedback ${candidateFeedback.type === "error" ? "feedback-error" : "feedback-info"}`}>
@@ -234,78 +264,109 @@ export default function App() {
             ) : null}
 
             <form className="candidate-form" onSubmit={submitCandidate} noValidate>
-              <label className="form-field">
-                <span className="field-label">
-                  Full Name <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="text"
-                  value={candidateForm.name}
-                  onChange={updateCandidateField("name")}
-                  placeholder="Your full name"
-                />
-              </label>
-
-              <label className="form-field">
-                <span className="field-label">
-                  Preferred Position <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="text"
-                  value={candidateForm.preferredPosition}
-                  onChange={updateCandidateField("preferredPosition")}
-                  placeholder="e.g. Software Engineer"
-                />
-              </label>
-
-              <label className="form-field">
-                <span className="field-label">
-                  Email <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="email"
-                  value={candidateForm.email}
-                  onChange={updateCandidateField("email")}
-                  placeholder="you@example.com"
-                />
-              </label>
-
-              <label className="form-field">
-                <span className="field-label">
-                  Phone Number <span className="required-asterisk">*</span>
-                </span>
-                <div className="phone-input-row">
-                  <span className="country-code-pill">+91</span>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]{10}"
-                    maxLength={10}
-                    value={candidateForm.phone}
-                    onChange={(event) =>
-                      setCandidateForm((prev) => ({ ...prev, phone: toIndianPhoneDigits(event.target.value) }))
-                    }
-                    placeholder="9876543210"
-                  />
-                </div>
-              </label>
-
-              <label className="form-field">
-                <span className="field-label">
-                  Upload CV <span className="required-asterisk">*</span>
-                </span>
-                <input
-                  type="file"
-                  accept="*/*"
-                  onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
-                />
-              </label>
-
-              <div className="form-actions">
-                <button type="submit" className="button button-primary" disabled={isCandidateSubmitting} style={{ width: "100%" }}>
-                  {isCandidateSubmitting ? "Submitting..." : "Submit Application"}
-                </button>
-              </div>
+              {currentStep === 1 ? (
+                <>
+                  <label className="form-field">
+                    <span className="field-label">Full Name <span className="required-asterisk">*</span></span>
+                    <input
+                      type="text"
+                      value={candidateForm.name}
+                      onChange={updateCandidateField("name")}
+                      placeholder="Your full name"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span className="field-label">Preferred Position <span className="required-asterisk">*</span></span>
+                    <input
+                      type="text"
+                      value={candidateForm.preferredPosition}
+                      onChange={updateCandidateField("preferredPosition")}
+                      placeholder="e.g. Software Engineer"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span className="field-label">Email <span className="required-asterisk">*</span></span>
+                    <input
+                      type="email"
+                      value={candidateForm.email}
+                      onChange={updateCandidateField("email")}
+                      placeholder="you@example.com"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span className="field-label">Phone Number <span className="required-asterisk">*</span></span>
+                    <div className="phone-input-row">
+                      <span className="country-code-pill">+91</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]{10}"
+                        maxLength={10}
+                        value={candidateForm.phone}
+                        onChange={(event) =>
+                          setCandidateForm((prev) => ({ ...prev, phone: toIndianPhoneDigits(event.target.value) }))
+                        }
+                        placeholder="9876543210"
+                      />
+                    </div>
+                  </label>
+                  <div className="form-actions" style={{ gridColumn: "1 / -1" }}>
+                    <button type="button" className="button button-primary" onClick={handleNext} style={{ width: "100%" }}>
+                      Next Step
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label className="form-field">
+                    <span className="field-label">Current Company Tagline</span>
+                    <input
+                      type="text"
+                      value={candidateForm.tagline}
+                      onChange={updateCandidateField("tagline")}
+                      placeholder="e.g. Innovating HR Tech"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span className="field-label">Current Business Size</span>
+                    <select 
+                      className="custom-select"
+                      value={candidateForm.companySize}
+                      onChange={updateCandidateField("companySize")}
+                    >
+                      <option value="">Select Company Size</option>
+                      {COMPANY_SIZES.map(size => (
+                        <option key={size} value={size}>{size}</option>
+                      ) )}
+                    </select>
+                  </label>
+                  <label className="form-field form-field-full">
+                    <span className="field-label">LinkedIn Profile URL</span>
+                    <input
+                      type="url"
+                      value={candidateForm.linkedIn}
+                      onChange={updateCandidateField("linkedIn")}
+                      placeholder="https://linkedin.com/in/..."
+                    />
+                  </label>
+                  <label className="form-field form-field-full">
+                    <span className="field-label">Upload CV <span className="required-asterisk">*</span></span>
+                    <input
+                      type="file"
+                      accept="application/pdf,.doc,.docx"
+                      onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
+                    />
+                  </label>
+                  <div className="form-actions" style={{ gridColumn: "1 / -1", display: "flex", gap: "10px" }}>
+                    <button type="button" className="button button-secondary" onClick={handleBack} style={{ flex: 1 }}>
+                      Back
+                    </button>
+                    <button type="submit" className="button button-primary" disabled={isCandidateSubmitting} style={{ flex: 2 }}>
+                      {isCandidateSubmitting ? "Submitting..." : "Submit Application"}
+                    </button>
+                  </div>
+                </>
+              )}
             </form>
           </>
         ) : null}
