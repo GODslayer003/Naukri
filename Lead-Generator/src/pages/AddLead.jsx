@@ -46,7 +46,8 @@ const initialForm = {
   address: "",
   sourcingDate: "",
   isStartup: false,
-  masterUnion: "",
+  isMasterUnion: false,
+  isOtherSource: false,
   subStatus: "",
   franchiseStatus: "",
   employeeCount: "",
@@ -218,7 +219,8 @@ export default function AddLead() {
         address: form.address.trim(),
         sourcingDate: form.sourcingDate || null,
         isStartup: form.isStartup,
-        masterUnion: form.masterUnion.trim(),
+        masterUnion: form.isMasterUnion ? "Yes" : "No",
+        isOtherSource: form.isOtherSource,
         subStatus: form.subStatus.trim(),
         franchiseStatus: form.franchiseStatus.trim(),
         employeeCount: form.employeeCount.trim(),
@@ -464,40 +466,6 @@ export default function AddLead() {
                     className="input add-lead-input"
                     name="sourcingDate"
                     value={form.sourcingDate}
-                    onChange={handleChange}
-                  />
-                </Field>
-              </div>
-
-              <div className="lead-block-grid two-col lead-source-grid" style={{ marginTop: "16px" }}>
-                <Field label="Sub Status">
-                  <input
-                    className="input add-lead-input"
-                    name="subStatus"
-                    value={form.subStatus}
-                    onChange={handleChange}
-                    placeholder="Sub Status"
-                  />
-                </Field>
-
-                <Field label="Franchise Status">
-                  <input
-                    className="input add-lead-input"
-                    name="franchiseStatus"
-                    value={form.franchiseStatus}
-                    onChange={handleChange}
-                    placeholder="Franchise Status"
-                  />
-                </Field>
-              </div>
-
-              <div className="lead-block-grid two-col lead-source-grid" style={{ marginTop: "16px" }}>
-                <Field label="Next Follow-up">
-                  <input
-                    type="date"
-                    className="input add-lead-input"
-                    name="nextFollowUpAt"
-                    value={form.nextFollowUpAt}
                     onChange={handleChange}
                   />
                 </Field>

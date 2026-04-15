@@ -39,7 +39,10 @@ a {
   flex-direction: column;
   background: #18458a;
   color: #e8effa;
-  min-height: 100vh;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 

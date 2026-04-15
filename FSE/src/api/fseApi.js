@@ -120,6 +120,11 @@ export async function updateFseLeadStatus(leadId, status) {
   return data.data;
 }
 
+export async function updateFseLeadProjection(leadId, projection) {
+  const { data } = await http.patch(`/leads/${leadId}/projection`, { projection });
+  return data.data;
+}
+
 export async function logFseLeadActivity(leadId, payload) {
   const { data } = await http.post(`/leads/${leadId}/activity`, payload);
   return data.data;

@@ -10,6 +10,7 @@ import {
   LuCircleCheck,
   LuPencil,
   LuTrash2,
+  LuUserPlus,
 } from "react-icons/lu";
 
 const getLeadContacts = (lead = {}) => {
@@ -37,7 +38,7 @@ const getLeadContacts = (lead = {}) => {
   return fallback.fullName || fallback.phone || fallback.email ? [fallback] : [];
 };
 
-const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEditActivity, onDeleteActivity }) => {
+const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEditActivity, onDeleteActivity, onAddContact }) => {
   if (!lead) return null;
 
   const isApproved = lead.status === "Approved";
@@ -127,7 +128,12 @@ const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEdit
           </section>
 
           <section className="detail-section">
-            <h3>Contact Details</h3>
+            <div className="section-header">
+              <h3>Contact Details</h3>
+              <button className="log-activity-btn" onClick={() => onAddContact && onAddContact(lead)} style={{ background: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe' }}>
+                <LuUserPlus /> Add Contact
+              </button>
+            </div>
             <div className="lead-contacts-list">
               {contacts.map((contact, index) => (
                 <article
@@ -184,6 +190,16 @@ const LeadDetailModal = ({ lead, activities = [], onClose, onLogActivity, onEdit
                         </div>
                       </div>
                     </div>
+                    {activity.subStatus ? (
+                      <p className="activity-substatus" style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: "600", marginTop: "4px", marginBottom: "4px" }}>
+                        SubStatus: {activity.subStatus}
+                      </p>
+                    ) : null}
+                    {activity.franchiseStatus ? (
+                      <p className="activity-substatus" style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: "600", marginTop: "0", marginBottom: "4px" }}>
+                        Franchise Status: {activity.franchiseStatus}
+                      </p>
+                    ) : null}
                     <p className="activity-notes">{activity.notes}</p>
                     {activity?.contact?.fullName ? (
                       <p className="activity-contact-name">

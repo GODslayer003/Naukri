@@ -144,6 +144,11 @@ export async function logLeadActivity(leadId, activityData) {
   return data.data;
 }
 
+export async function addLeadContact(leadId, contactData) {
+  const { data } = await http.post(`/leads/${leadId}/contacts`, contactData);
+  return data.data;
+}
+
 export async function deleteLeadActivity(leadId, index) {
   const { data } = await http.delete(`/leads/${leadId}/activity/${index}`);
   return data.data;

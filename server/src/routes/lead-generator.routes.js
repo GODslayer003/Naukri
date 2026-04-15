@@ -26,6 +26,7 @@ router.get("/leads", controller.getLeads);
 router.get("/clients", controller.getClientIntakes);
 router.post("/leads", controller.createLead);
 router.patch("/leads/:id/status", controller.updateLeadStatus);
+router.post("/leads/:id/contacts", controller.addLeadContact);
 router.post("/leads/:id/activity", controller.logLeadActivity);
 router.delete("/leads/:id/activity/:index", controller.deleteLeadActivity);
 router.patch("/auth/change-password", controller.changePassword);

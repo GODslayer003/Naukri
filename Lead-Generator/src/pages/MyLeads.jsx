@@ -9,11 +9,12 @@ import {
   LuRefreshCw,
   LuSend
 } from "react-icons/lu";
-import { fetchLeads, updateLeadStatus, logLeadActivity, deleteLeadActivity } from "../api/leadApi";
+import { fetchLeads, updateLeadStatus, logLeadActivity, deleteLeadActivity, addLeadContact } from "../api/leadApi";
 import LeadDetailModal from "../components/LeadDetailModal";
 import LogActivityModal from "../components/LogActivityModal";
 import ContactPickerModal from "../components/ContactPickerModal";
 import ActionConfirmModal from "../components/ActionConfirmModal";
+import AddContactModal from "../components/AddContactModal";
 
 const TIMELINE_FILTERS = [
   { value: "", label: "All Dates" },
@@ -117,6 +118,7 @@ export default function MyLeads() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showContactPickerModal, setShowContactPickerModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [activities, setActivities] = useState({});
   const [editingActivityIndex, setEditingActivityIndex] = useState(null);
   const [selectedActivityContact, setSelectedActivityContact] = useState(null);
@@ -281,6 +283,26 @@ export default function MyLeads() {
       setShowDetailModal(true);
     } catch (error) {
       alert(error?.response?.data?.message || "Failed to log activity.");
+    }
+  };
+
+  const handleAddContact = (lead) => {
+    setShowDetailModal(false);
+    setShowAddContactModal(true);
+  };
+
+  const handleAddContactSubmit = async (contactData) => {
+    const leadId = selectedLead._id || selectedLead.id;
+    try {
+      const updatedLead = await addLeadContact(leadId, contactData);
+      const mappedLead = mapLeadForRow(updatedLead);
+      
+      setShowAddContactModal(false);
+      setRows((prev) => prev.map((row) => (row.id === mappedLead.id ? { ...row, ...mappedLead } : row)));
+      setSelectedLead((current) => (current?.id === mappedLead.id ? { ...current, ...mappedLead } : current));
+      setShowDetailModal(true);
+    } catch (error) {
+      alert(error?.response?.data?.message || "Failed to add contact.");
     }
   };
 
@@ -494,6 +516,18 @@ export default function MyLeads() {
           onLogActivity={handleLogActivity}
           onEditActivity={handleEditActivity}
           onDeleteActivity={handleDeleteActivity}
+          onAddContact={handleAddContact}
+        />
+      )}
+
+      {showAddContactModal && (
+        <AddContactModal
+          lead={selectedLead}
+          onClose={() => {
+            setShowAddContactModal(false);
+            setShowDetailModal(true);
+          }}
+          onSubmit={handleAddContactSubmit}
         />
       )}
 

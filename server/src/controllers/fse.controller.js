@@ -214,7 +214,14 @@ const formatLead = (lead) => ({
   contacts: Array.isArray(lead.contacts) ? lead.contacts : [],
   nextFollowUpAt: lead.nextFollowUpAt,
   lastContactedAt: lead.lastContactedAt,
-  activities: lead.activities || [],
+  activities: (lead.activities || []).map((activity) => ({
+    outcome: activity.outcome,
+    notes: activity.notes,
+    subStatus: activity.subStatus || "",
+    nextFollowUpAt: activity.nextFollowUpAt,
+    date: activity.date,
+    contact: activity.contact,
+  })),
   createdAt: lead.createdAt,
   updatedAt: lead.updatedAt,
   createdBy: lead.createdBy
@@ -786,12 +793,44 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
   });
 });
 
+exports.updateLeadProjection = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { projection } = req.body;
+
+  if (!PROJECTION_VALUES.includes(projection)) {
+    throw createHttpError(400, "Invalid projection value.");
+  }
+
+  const lead = await Lead.findById(id);
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  if (String(lead.assignedTo) !== String(req.user._id)) {
+    throw createHttpError(403, "You can only update leads assigned to you.");
+  }
+
+  lead.projection = projection;
+  lead.updatedBy = req.user._id;
+  await lead.save();
+
+  const updatedLead = await Lead.findById(id)
+    .populate("createdBy", "fullName role territory profileImageUrl")
+    .populate("assignedBy", "fullName role");
+
+  res.status(200).json({
+    success: true,
+    message: "Projection updated successfully.",
+    data: formatLead(updatedLead),
+  });
+});
+
 exports.logLeadActivity = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { outcome, notes, nextFollowUpAt, activityIndex } = req.body;
+  const { outcome, notes, subStatus, nextFollowUpAt, activityIndex } = req.body;
 
   if (!outcome || !notes) {
-    throw createHttpError(400, "Outcome and notes are required");
+    throw createHttpError(400, "Outcome and notes are required fields");
   }
 
   const lead = await Lead.findById(id);
@@ -806,6 +845,7 @@ exports.logLeadActivity = asyncHandler(async (req, res) => {
   const activityData = {
     outcome: String(outcome).trim(),
     notes: String(notes).trim(),
+    subStatus: subStatus ? String(subStatus).trim() : "",
     nextFollowUpAt: nextFollowUpAt || null,
     date: new Date(),
   };

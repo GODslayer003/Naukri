@@ -505,6 +505,8 @@ const formatLead = (lead) => ({
     return {
       outcome: activity?.outcome || "",
       notes: activity?.notes || "",
+      subStatus: activity?.subStatus || "",
+      franchiseStatus: activity?.franchiseStatus || "",
       nextFollowUpAt: activity?.nextFollowUpAt || null,
       date: activity?.date || null,
       contact:
@@ -1416,7 +1418,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
 
 exports.logLeadActivity = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { outcome, notes, nextFollowUpAt, activityIndex, contact } = req.body;
+  const { outcome, notes, subStatus, franchiseStatus, nextFollowUpAt, activityIndex, contact } = req.body;
 
   if (!outcome || !notes) {
     throw createHttpError(400, "Outcome and notes are required");
@@ -1436,8 +1438,10 @@ exports.logLeadActivity = asyncHandler(async (req, res) => {
   });
 
   const activityData = {
-    outcome,
-    notes,
+    outcome: String(outcome).trim(),
+    notes: String(notes).trim(),
+    subStatus: subStatus ? String(subStatus).trim() : "",
+    franchiseStatus: franchiseStatus ? String(franchiseStatus).trim() : "",
     nextFollowUpAt: nextFollowUpAt || null,
     contact: selectedContact,
     date: new Date(),
@@ -1487,6 +1491,80 @@ exports.deleteLeadActivity = asyncHandler(async (req, res) => {
 
   lead.activities.splice(index, 1);
   lead.updatedBy = req.user._id;
+  await lead.save();
+
+  res.status(200).json({
+    success: true,
+    data: formatLead(lead),
+  });
+});
+
+exports.addLeadContact = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { fullName, phone, email, designation, isPrimary } = req.body;
+
+  if (!fullName || !phone) {
+    throw createHttpError(400, "Full name and phone are required for a contact.");
+  }
+
+  const normalizedPhone = Lead.normalizePhoneNumber(phone);
+  if (normalizedPhone.length < 10) {
+    throw createHttpError(400, "Phone number must contain at least 10 digits.");
+  }
+
+  let normalizedEmail = "";
+  if (email) {
+    normalizedEmail = String(email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      throw createHttpError(400, "Enter a valid email address.");
+    }
+  }
+
+  const lead = await Lead.findById(id);
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  // Create robust contacts array
+  let existingContacts = Array.isArray(lead.contacts) ? lead.contacts : [];
+  if (existingContacts.length === 0) {
+     if (lead.contactName || lead.phone || lead.email) {
+       existingContacts.push({
+         fullName: lead.contactName || "",
+         phone: lead.phone || "",
+         email: lead.email || "",
+         isPrimary: true
+       });
+     }
+  }
+
+  const isDuplicateContact = existingContacts.some(c => 
+    (normalizedPhone && c.phone === normalizedPhone) || 
+    (normalizedEmail && c.email === normalizedEmail)
+  );
+
+  if (isDuplicateContact) {
+    throw createHttpError(400, "A contact with this phone or email already exists for this lead.");
+  }
+
+  if (isPrimary) {
+     existingContacts = existingContacts.map(c => ({ ...c.toObject ? c.toObject() : c, isPrimary: false }));
+     lead.contactName = String(fullName).trim();
+     lead.phone = normalizedPhone;
+     if (normalizedEmail) lead.email = normalizedEmail;
+  }
+
+  existingContacts.push({
+    fullName: String(fullName).trim(),
+    phone: normalizedPhone,
+    email: normalizedEmail,
+    designation: String(designation || "").trim(),
+    isPrimary: existingContacts.length === 0 ? true : Boolean(isPrimary)
+  });
+
+  lead.contacts = existingContacts;
+  lead.updatedBy = req.user._id;
+
   await lead.save();
 
   res.status(200).json({

@@ -164,6 +164,10 @@ const leadSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    isOtherSource: {
+      type: Boolean,
+      default: false,
+    },
     subStatus: {
       type: String,
       trim: true,
@@ -284,6 +288,7 @@ const leadSchema = new mongoose.Schema(
       {
         outcome: { type: String, required: true },
         notes: { type: String, required: true },
+        subStatus: { type: String, trim: true, default: "" },
         nextFollowUpAt: { type: Date },
         contact: {
           type: activityContactSchema,

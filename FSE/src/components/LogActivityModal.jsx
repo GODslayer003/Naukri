@@ -8,6 +8,8 @@ const OUTCOME_OPTIONS = [
   "Busy",
   "Wrong Number",
   "Meeting Done",
+  "Visit",
+  "Call",
 ];
 
 const toDateTimeLocalInput = (value) => {
@@ -25,18 +27,21 @@ const toDateTimeLocalInput = (value) => {
 export default function LogActivityModal({ lead, initialData, onClose, onSubmit, isSubmitting }) {
   const [outcome, setOutcome] = useState("");
   const [notes, setNotes] = useState("");
+  const [subStatus, setSubStatus] = useState("");
   const [nextFollowUpAt, setNextFollowUpAt] = useState("");
 
   useEffect(() => {
     if (initialData) {
       setOutcome(initialData.outcome || "");
       setNotes(initialData.notes || "");
+      setSubStatus(initialData.subStatus || "");
       setNextFollowUpAt(toDateTimeLocalInput(initialData.nextFollowUpAt));
       return;
     }
 
     setOutcome("");
     setNotes("");
+    setSubStatus("");
     setNextFollowUpAt("");
   }, [initialData]);
 
@@ -45,6 +50,7 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
     onSubmit({
       outcome,
       notes,
+      subStatus,
       nextFollowUpAt: nextFollowUpAt || null,
     });
   };
@@ -80,6 +86,17 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
               </select>
               <LuChevronDown className="select-icon" />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="activity-substatus">SUB STATUS</label>
+            <input
+              id="activity-substatus"
+              className="form-input"
+              value={subStatus}
+              onChange={(event) => setSubStatus(event.target.value)}
+              placeholder="e.g. Call Picked, Switch Off"
+            />
           </div>
 
           <div className="form-group">

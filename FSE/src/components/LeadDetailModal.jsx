@@ -186,6 +186,11 @@ export default function LeadDetailModal({
                         </div>
                       </div>
                     </div>
+                    {activity.subStatus ? (
+                      <p className="activity-substatus" style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: "600", marginTop: "4px" }}>
+                        SubStatus: {activity.subStatus}
+                      </p>
+                    ) : null}
                     <p className="activity-notes">{activity.notes || "—"}</p>
                     {activity.nextFollowUpAt ? (
                       <p className="next-follow-up">

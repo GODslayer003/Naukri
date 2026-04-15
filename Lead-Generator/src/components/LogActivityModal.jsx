@@ -10,13 +10,15 @@ const normalizeContact = (contact = {}) => ({
 const LogActivityModal = ({ lead, initialData, activityContact, onClose, onSubmit }) => {
   const [outcome, setOutcome] = useState(initialData?.outcome || "");
   const [notes, setNotes] = useState(initialData?.notes || "");
+  const [subStatus, setSubStatus] = useState(initialData?.subStatus || "");
+  const [franchiseStatus, setFranchiseStatus] = useState(initialData?.franchiseStatus || "");
   const [nextFollowUp, setNextFollowUp] = useState(initialData?.nextFollowUpAt || initialData?.nextFollowUp || "");
 
   const resolvedContact = normalizeContact(activityContact || initialData?.contact || {});
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ outcome, notes, nextFollowUp, contact: resolvedContact });
+    onSubmit({ outcome, notes, subStatus, franchiseStatus, nextFollowUp, contact: resolvedContact });
   };
 
   return (
@@ -57,8 +59,62 @@ const LogActivityModal = ({ lead, initialData, activityContact, onClose, onSubmi
                 <option value="Follow Up Required">Follow Up Required</option>
                 <option value="Busy">Busy</option>
                 <option value="Wrong Number">Wrong Number</option>
+                <option value="Visit">Visit</option>
+                <option value="Call">Call</option>
               </select>
               <LuChevronDown className="select-icon" />
+            </div>
+          </div>
+
+          <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div>
+              <label className="form-label">Sub Status</label>
+              <div className="select-container">
+                <select 
+                  value={subStatus} 
+                  onChange={(e) => setSubStatus(e.target.value)}
+                  className="form-select"
+                >
+                  <option value="" disabled>Select Sub Status</option>
+                  <option value="2nd time not picked">2nd time not picked</option>
+                  <option value="Contract Share">Contract Share</option>
+                  <option value="Enough Vendor Empanelment">Enough Vendor Empanelment</option>
+                  <option value="Hiring Sealed">Hiring Sealed</option>
+                  <option value="Manager Ask">Manager Ask</option>
+                  <option value="Meeting Align">Meeting Align</option>
+                  <option value="Misaligned T&C">Misaligned T&C</option>
+                  <option value="Not Right Person">Not Right Person</option>
+                  <option value="Official Mail Ask">Official Mail Ask</option>
+                  <option value="Reference Ask">Reference Ask</option>
+                  <option value="Self Hiring">Self Hiring</option>
+                  <option value="Ready To Visit">Ready To Visit</option>
+                  <option value="Callback">Callback</option>
+                  <option value="NA">NA</option>
+                  <option value="New Lead">New Lead</option>
+                </select>
+                <LuChevronDown className="select-icon" />
+              </div>
+            </div>
+
+            <div>
+              <label className="form-label">Franchise Status</label>
+              <div className="select-container">
+                <select 
+                  value={franchiseStatus} 
+                  onChange={(e) => setFranchiseStatus(e.target.value)}
+                  className="form-select"
+                >
+                  <option value="" disabled>Select Status</option>
+                  <option value="All">All</option>
+                  <option value="Application Form Share">Application Form Share</option>
+                  <option value="No Franchise Discuss">No Franchise Discuss</option>
+                  <option value="Not Interested">Not Interested</option>
+                  <option value="Will Think About It">Will Think About It</option>
+                  <option value="Form Filled">Form Filled</option>
+                  <option value="Form Not Filled">Form Not Filled</option>
+                </select>
+                <LuChevronDown className="select-icon" />
+              </div>
             </div>
           </div>
 
