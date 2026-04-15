@@ -252,6 +252,13 @@ export function getCandidateProfile(candidateId) {
   return request(`/candidates/${candidateId}/profile`);
 }
 
+export function updateCandidate(candidateId, payload) {
+  return request(`/candidates/${candidateId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export async function downloadResume(candidateId) {
   const token = getStoredToken();
   const response = await fetch(`${API_ROOT}/candidates/${candidateId}/resume/download`, {

@@ -1800,6 +1800,55 @@ exports.getCandidateProfile = asyncHandler(async (req, res) => {
   });
 });
 
+exports.updateCandidate = asyncHandler(async (req, res) => {
+  const { candidateId } = req.params;
+  const {
+    name,
+    email,
+    phone,
+    designation,
+    currentCompany,
+    totalExperience,
+    city,
+    state,
+    country,
+  } = req.body;
+
+  const candidateUser = await User.findById(candidateId);
+  if (!candidateUser) {
+    throw createHttpError(404, "Candidate user record not found.");
+  }
+
+  if (name !== undefined) candidateUser.name = String(name || "").trim();
+  if (email !== undefined) candidateUser.email = String(email || "").trim().toLowerCase();
+  await candidateUser.save();
+
+  let candidateProfile = await CandidateProfile.findOne({ userId: candidateId });
+  if (!candidateProfile) {
+    candidateProfile = new CandidateProfile({ userId: candidateId });
+  }
+
+  if (phone !== undefined) candidateProfile.phone = String(phone || "").trim();
+  if (designation !== undefined) candidateProfile.currentTitle = String(designation || "").trim();
+  if (currentCompany !== undefined)
+    candidateProfile.currentCompany = String(currentCompany || "").trim();
+  if (totalExperience !== undefined)
+    candidateProfile.totalExperience = String(totalExperience || "").trim();
+  if (city !== undefined) candidateProfile.currentCity = String(city || "").trim();
+  if (state !== undefined) candidateProfile.currentState = String(state || "").trim();
+  if (country !== undefined) candidateProfile.currentCountry = String(country || "").trim();
+
+  await candidateProfile.save();
+
+  res.status(200).json({
+    success: true,
+    data: formatCandidateRecord({
+      candidateUser,
+      candidateProfile,
+    }),
+  });
+});
+
 exports.updateApplicationStatus = asyncHandler(async (req, res) => {
   const application = await Application.findById(req.params.id)
     .populate("companyId", "name")

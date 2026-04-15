@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   LuDownload,
+  LuPencil,
+  LuPhone,
+  LuSave,
   LuSearch,
   LuShieldCheck,
   LuUsers,
+  LuX,
 } from "react-icons/lu";
 import {
   Badge,
@@ -14,9 +18,10 @@ import {
   PanelCard,
   SectionHeading,
   SelectField,
+  TextField,
   ToolbarInput,
 } from "../components/Ui";
-import { downloadResume, getCandidates } from "../services/crmApi";
+import { downloadResume, getCandidates, updateCandidate } from "../services/crmApi";
 import { formatDateTime, formatNumber, titleCase } from "../utils/formatters";
 
 const statusOptions = [
@@ -62,6 +67,9 @@ export default function CandidatesPage() {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [isDownloadingResume, setIsDownloadingResume] = useState(false);
   const [resumeDownloadError, setResumeDownloadError] = useState("");
+  const [editingCandidate, setEditingCandidate] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState("");
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -150,6 +158,59 @@ export default function CandidatesPage() {
     }
   };
 
+  const handleEditClick = (event, candidate) => {
+    event.stopPropagation();
+    setEditingCandidate({
+      id: candidate.id,
+      name: candidate.candidateName,
+      email: candidate.candidateEmail,
+      phone: candidate.candidatePhone,
+      designation: candidate.candidateDesignation,
+      currentCompany: candidate.candidateCurrentCompany,
+      totalExperience: candidate.candidateExperience,
+      city: candidate.candidateCity,
+      state: candidate.candidateState,
+      country: candidate.candidateCountry,
+    });
+    setUpdateError("");
+  };
+
+  const handleSaveCandidate = async (event) => {
+    event.preventDefault();
+    if (!editingCandidate) return;
+
+    setIsUpdating(true);
+    setUpdateError("");
+
+    try {
+      const response = await updateCandidate(editingCandidate.id, {
+        name: editingCandidate.name,
+        email: editingCandidate.email,
+        phone: editingCandidate.phone,
+        designation: editingCandidate.designation,
+        currentCompany: editingCandidate.currentCompany,
+        totalExperience: editingCandidate.totalExperience,
+        city: editingCandidate.city,
+        state: editingCandidate.state,
+        country: editingCandidate.country,
+      });
+
+      if (response.success) {
+        setData((prev) => ({
+          ...prev,
+          items: prev.items.map((item) =>
+            item.id === editingCandidate.id ? { ...item, ...response.data } : item
+          ),
+        }));
+        setEditingCandidate(null);
+      }
+    } catch (err) {
+      setUpdateError(err.message || "Unable to save changes.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   if (isLoading) {
     return <PageState title="Loading candidate panel..." />;
   }
@@ -208,11 +269,13 @@ export default function CandidatesPage() {
         </div>
 
         <div className="mt-6 overflow-hidden rounded-[24px] border border-slate-200">
-          <div className="grid grid-cols-[1fr_1fr_0.7fr_0.8fr] gap-3 bg-slate-50 px-5 py-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+          <div className="grid grid-cols-[1fr_1.2fr_1fr_0.7fr_0.8fr_auto] gap-3 bg-slate-50 px-5 py-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
             <span>Candidate</span>
             <span>Email</span>
+            <span>Phone</span>
             <span>Status</span>
             <span>Last updated</span>
+            <span className="text-right">Actions</span>
           </div>
           {data.items?.length ? (
             data.items.map((candidate) => (
@@ -220,10 +283,11 @@ export default function CandidatesPage() {
                 type="button"
                 key={candidate.id}
                 onClick={() => setSelectedCandidate(candidate)}
-                className="grid w-full grid-cols-[1fr_1fr_0.7fr_0.8fr] gap-3 border-t border-slate-200 px-5 py-4 text-left text-sm text-slate-600 transition hover:bg-lime-50/30"
+                className="grid w-full grid-cols-[1fr_1.2fr_1fr_0.7fr_0.8fr_auto] items-center gap-3 border-t border-slate-200 px-5 py-4 text-left text-sm text-slate-600 transition hover:bg-lime-50/30"
               >
                 <div className="font-semibold text-slate-900">{candidate.candidateName}</div>
                 <div className="truncate">{candidate.candidateEmail || "Unavailable"}</div>
+                <div className="truncate font-medium text-slate-500">{candidate.candidatePhone || "Not filled"}</div>
                 <div>
                   <Badge tone={getStatusTone(candidate.status)}>
                     {titleCase(candidate.status)}
@@ -231,6 +295,14 @@ export default function CandidatesPage() {
                 </div>
                 <div className="text-xs text-slate-500">
                   {candidate.lastUpdated || "Unavailable"}
+                </div>
+                <div className="flex justify-end">
+                  <div
+                    onClick={(e) => handleEditClick(e, candidate)}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-lime-300 hover:bg-lime-50 hover:text-slate-900"
+                  >
+                    <LuPencil size={15} />
+                  </div>
                 </div>
               </button>
             ))
@@ -306,6 +378,95 @@ export default function CandidatesPage() {
               </div>
             ) : null}
           </div>
+        ) : null}
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(editingCandidate)}
+        onClose={() => {
+          setEditingCandidate(null);
+          setUpdateError("");
+        }}
+        title="Edit Candidate Details"
+        description="Update candidate information manually."
+      >
+        {editingCandidate ? (
+          <form onSubmit={handleSaveCandidate} className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField
+                label="Full Name"
+                value={editingCandidate.name}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, name: e.target.value })}
+                required
+              />
+              <TextField
+                label="Email Address"
+                type="email"
+                value={editingCandidate.email}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, email: e.target.value })}
+                required
+              />
+              <TextField
+                label="Phone Number"
+                value={editingCandidate.phone}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, phone: e.target.value })}
+              />
+              <TextField
+                label="Designation"
+                value={editingCandidate.designation}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, designation: e.target.value })}
+              />
+              <TextField
+                label="Current Company"
+                value={editingCandidate.currentCompany}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, currentCompany: e.target.value })}
+              />
+              <TextField
+                label="Experience (e.g. 5 Years)"
+                value={editingCandidate.totalExperience}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, totalExperience: e.target.value })}
+              />
+              <TextField
+                label="City"
+                value={editingCandidate.city}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, city: e.target.value })}
+              />
+              <TextField
+                label="State"
+                value={editingCandidate.state}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, state: e.target.value })}
+              />
+              <TextField
+                label="Country"
+                value={editingCandidate.country}
+                onChange={(e) => setEditingCandidate({ ...editingCandidate, country: e.target.value })}
+              />
+            </div>
+
+            {updateError ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                {updateError}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingCandidate(null)}
+                className="rounded-2xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isUpdating}
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#163060] px-8 py-3 text-sm font-semibold text-white transition hover:bg-[#1f437f] disabled:opacity-60"
+              >
+                <LuSave size={18} />
+                {isUpdating ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
         ) : null}
       </ModalShell>
     </div>

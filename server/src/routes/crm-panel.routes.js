@@ -62,6 +62,11 @@ router.get(
   protectCrmPanel,
   crmPanelController.getCandidateProfile,
 );
+router.patch(
+  "/candidates/:candidateId",
+  protectCrmPanel,
+  crmPanelController.updateCandidate,
+);
 
 router.get(
   "/candidates/:candidateId/resume/download",

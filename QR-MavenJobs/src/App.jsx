@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { LuLoaderCircle } from "react-icons/lu";
 import logo from "./assets/maven-logo.svg";
 
 const MAX_UPLOAD_FILE_SIZE = 8 * 1024 * 1024;
@@ -487,10 +488,23 @@ export default function App() {
 
   return (
     <main className="landing-shell">
-      <section className="landing-card">
-        <header className="landing-head">
-          <img src={logo} alt="Maven Jobs" className="brand-logo" />
-        </header>
+      <img src={logo} alt="Maven Jobs" className="brand-logo brand-logo-fixed" />
+      
+      {view === "role" && (
+        <div className="hero-section">
+          <h1 className="headline">Find Jobs. Build Teams.</h1>
+          <p className="sub-copy">Your Next Job or Hire Starts Here</p>
+          <p className="trust-copy">Trusted by thousands of candidates and companies</p>
+        </div>
+      )}
+
+      <section className={view === "role" ? "role-selection-wrapper" : "landing-card"}>
+        {view !== "role" && (
+          <header className="landing-head">
+            <h1 className="headline" style={{ margin: 0 }}>Find Jobs. Build Teams.</h1>
+            <p className="sub-copy">Your Next Job or Hire Starts Here</p>
+          </header>
+        )}
 
         {view === "role" ? (
           <>
@@ -504,8 +518,9 @@ export default function App() {
                   setView("candidate");
                 }}
               >
-                <span className="role-chip">Candidate</span>
-                <h2>Apply for opportunities</h2>
+                <span className="role-chip">For Candidates</span>
+                <h2>Discover jobs that match your skills <br/> and apply for job opportunities</h2>
+                <span className="role-card-btn">Apply for Jobs</span>
               </button>
 
               <button
@@ -517,8 +532,9 @@ export default function App() {
                   setView("client");
                 }}
               >
-                <span className="role-chip role-chip-muted">Client</span>
-                <h2>Hire with Maven Jobs</h2>
+                <span className="role-chip role-chip-muted">For Employers</span>
+                <h2>Need to build a great team? <br/> Connect with Maven</h2>
+                <span className="role-card-btn">Start Hiring</span>
               </button>
             </div>
           </>
@@ -599,23 +615,12 @@ export default function App() {
 
                   <div className="form-actions">
                     <button type="submit" className="button button-primary" disabled={isCandidateSubmitting}>
-                      {isCandidateSubmitting ? "Submitting..." : "Next"}
+                      {isCandidateSubmitting ? <LuLoaderCircle className="spin" /> : "Next"}
                     </button>
                   </div>
                 </>
               ) : (
                 <>
-                  <label className="form-field">
-                    <span className="field-label">
-                      Upload CV (optional)
-                    </span>
-                    <input
-                      type="file"
-                      accept=".pdf,application/pdf"
-                      onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
-                    />
-                  </label>
-
                   <label className="form-field">
                     <span className="field-label">Preferred Location (optional)</span>
                     <input
@@ -627,7 +632,7 @@ export default function App() {
                   </label>
 
                   <label className="form-field">
-                    <span className="field-label">Expected Salary (optional)</span>
+                    <span className="field-label">Expected CTC (optional)</span>
                     <input
                       type="text"
                       value={candidateForm.expectedSalary}
@@ -636,9 +641,20 @@ export default function App() {
                     />
                   </label>
 
+                  <label className="form-field">
+                    <span className="field-label">
+                      Upload CV (optional)
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
+                    />
+                  </label>
+
                   <div className="form-actions">
                     <button type="submit" className="button button-primary" disabled={isCandidateSubmitting}>
-                      {isCandidateSubmitting ? "Submitting..." : "Submit Application"}
+                      {isCandidateSubmitting ? <LuLoaderCircle className="spin" /> : "Join with Maven"}
                     </button>
                   </div>
                 </>
@@ -727,8 +743,8 @@ export default function App() {
                     <button type="button" className="button button-secondary" onClick={resetClientFlow}>
                       Back
                     </button>
-                    <button type="submit" className="button button-primary">
-                      Next
+                    <button type="submit" className="button button-primary" disabled={isClientSubmitting}>
+                      {isClientSubmitting ? <LuLoaderCircle className="spin" /> : "Next"}
                     </button>
                   </div>
                 </>
@@ -804,7 +820,7 @@ export default function App() {
                       Back
                     </button>
                     <button type="submit" className="button button-primary" disabled={isClientSubmitting}>
-                      {isClientSubmitting ? "Submitting..." : "Submit Registration"}
+                      {isClientSubmitting ? <LuLoaderCircle className="spin" /> : "Connect with Maven"}
                     </button>
                   </div>
                 </>
