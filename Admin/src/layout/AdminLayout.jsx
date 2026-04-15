@@ -50,7 +50,7 @@ export default function AdminLayout() {
         />
       </div>
 
-      <div className="md:pl-72">
+      <div className={`transition-all duration-300 ${isSidebarOpen ? "md:pl-72" : ""}`}>
         <AdminHeader toggleSidebar={() => setIsSidebarOpen((prev) => !prev)} />
         <main className="px-4 py-6 md:px-8">
           <Outlet />

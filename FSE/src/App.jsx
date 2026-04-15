@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import {
   LuBell,
   LuBuilding2,
@@ -10,6 +10,8 @@ import {
   LuPlus,
   LuQrCode,
   LuUser,
+  LuMenu,
+  LuX,
 } from "react-icons/lu";
 import logo from "./assets/maven-logo.svg";
 import Login from "./pages/Login";
@@ -45,7 +47,16 @@ function RequireAuth({ children }) {
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState(getSession);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Auto-close sidebar on mobile when navigating
+  useEffect(() => {
+    if (window.innerWidth <= 1024) {
+      setIsSidebarOpen(false);
+    }
+  }, [location.pathname]);
   useEffect(() => {
     const syncSession = () => setSession(getSession());
     window.addEventListener("crm-session-updated", syncSession);
@@ -74,10 +85,18 @@ export default function App() {
         path="/*"
         element={(
           <RequireAuth>
-            <div className="panel-shell">
+            <div className={`panel-shell ${isSidebarOpen ? "" : "is-collapsed"} ${isSidebarOpen ? "is-mobile-open" : ""}`}>
+              <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
               <aside className="sidebar">
                 <div className="logo-card">
                   <img src={logo} alt="Maven Jobs" className="login-brand-logo" style={{ width: "120px" }} />
+                  <button 
+                    className="icon-btn lg-hide" 
+                    onClick={() => setIsSidebarOpen(false)}
+                    style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'white' }}
+                  >
+                    <LuX size={20} />
+                  </button>
                 </div>
 
                 <nav className="sidebar-nav">
@@ -160,7 +179,17 @@ export default function App() {
               </aside>
 
               <main className="page-shell">
-                <header className="top-bar" style={{ justifyContent: "flex-end" }}>
+                <header className="top-bar">
+                  <div className="top-bar-left">
+                    <button 
+                      type="button" 
+                      className="icon-btn" 
+                      onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                      aria-label="Toggle Sidebar"
+                    >
+                      <LuMenu />
+                    </button>
+                  </div>
                   <div className="top-bar-actions">
                     <button type="button" className="icon-btn" aria-label="Notifications">
                       <LuBell />

@@ -6,7 +6,7 @@ import {
   LuMapPin, 
   LuCalendar,
   LuCircleCheck,
-  LuLoader2
+  LuLoader
 } from "react-icons/lu";
 import { fetchLeads } from "../api/leadApi";
 
@@ -83,7 +83,7 @@ export default function MemberReportModal({ isOpen, onClose, member }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '100px 0', color: '#64748b' }}>
-              <LuLoader2 className="animate-spin" size={40} style={{ marginBottom: '16px', color: '#3b82f6' }} />
+              <LuLoader className="animate-spin" size={40} style={{ marginBottom: '16px', color: '#3b82f6' }} />
               <p>Fetching work records...</p>
             </div>
           ) : leads.length === 0 ? (

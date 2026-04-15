@@ -2,7 +2,8 @@
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   color: #0f172a;
   background: #eef1f6;
-  --lead-panel-sidebar-width: 288px;
+  --sidebar-width: 288px;
+  --sidebar-transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -31,7 +32,12 @@ a {
 .panel-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: var(--lead-panel-sidebar-width) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  transition: grid-template-columns var(--sidebar-transition);
+}
+
+.panel-shell.is-collapsed {
+  grid-template-columns: 0 1fr;
 }
 
 .sidebar {
@@ -41,6 +47,15 @@ a {
   color: #e8effa;
   min-height: 100vh;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  transition: transform var(--sidebar-transition), opacity var(--sidebar-transition);
+  overflow: hidden;
+  z-index: 50;
+}
+
+.panel-shell.is-collapsed .sidebar {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .logo-card {
@@ -155,6 +170,15 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .search-wrap {
@@ -1836,6 +1860,52 @@ a {
 }
 
 /* Table Row Hover Effects */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 45;
+  opacity: 0;
+  transition: opacity var(--sidebar-transition);
+}
+
+@media (max-width: 1024px) {
+  .panel-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-width);
+    height: 100vh;
+    transform: translateX(-100%);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .panel-shell.is-mobile-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 20px 0 50px rgba(0,0,0,0.2);
+  }
+
+  .panel-shell.is-mobile-open .sidebar-overlay {
+    display: block;
+    opacity: 1;
+  }
+}
+
+/* Responsive Utilities */
+@media (min-width: 1025px) {
+  .lg-hide { display: none !important; }
+}
+@media (max-width: 1024px) {
+  .lg-show { display: none !important; }
+}
+
 .clickable-row {
   cursor: pointer;
   transition: background-color 0.2s;

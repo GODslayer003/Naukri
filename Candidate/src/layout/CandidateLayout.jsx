@@ -52,7 +52,7 @@ export default function CandidateLayout() {
         />
       </div>
 
-      <div className="md:pl-72">
+      <div className={`transition-all duration-300 ${isSidebarOpen ? "md:pl-72" : ""}`}>
         <CandidateHeader
           toggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         />
