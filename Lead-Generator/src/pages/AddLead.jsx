@@ -46,7 +46,7 @@ const initialForm = {
   address: "",
   sourcingDate: "",
   isStartup: false,
-  isMasterUnion: false,
+  masterUnion: "No",
   isOtherSource: false,
   subStatus: "",
   franchiseStatus: "",
@@ -295,6 +295,7 @@ export default function AddLead() {
 
               <div className="lead-block-grid one-col">
                 <Field label="Employee Count / Company Size">
+                  <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#64748b', marginBottom: '6px', display: 'block' }}>Company Size</span>
                   <input
                     className="input add-lead-input"
                     name="employeeCount"
@@ -318,13 +319,16 @@ export default function AddLead() {
                 </Field>
 
                 <Field label="Master Union">
-                  <input
-                    className="input add-lead-input"
+                  <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#64748b', marginBottom: '6px', display: 'block' }}>Master Union</span>
+                  <select
+                    className="input add-lead-input add-lead-select"
                     name="masterUnion"
-                    value={form.masterUnion}
+                    value={form.masterUnion || "No"}
                     onChange={handleChange}
-                    placeholder="Master Union"
-                  />
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
                 </Field>
 
                 <Field label="Location or Address">

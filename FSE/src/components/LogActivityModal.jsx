@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
 import { LuCircleCheck, LuChevronDown, LuX } from "react-icons/lu";
 
-const OUTCOME_OPTIONS = [
+const STATUS_OPTIONS = [
   "Interested",
   "Not Interested",
-  "Follow Up Required",
-  "Busy",
-  "Wrong Number",
-  "Meeting Done",
-  "Visit",
-  "Call",
+  "Not Picked",
+  "Onboard",
+  "Call Later",
+  "New",
 ];
 
 const toDateTimeLocalInput = (value) => {
@@ -70,7 +68,7 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
 
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
-            <label className="form-label" htmlFor="activity-outcome">OUTCOME</label>
+            <label className="form-label" htmlFor="activity-outcome">STATUS</label>
             <div className="select-container">
               <select
                 id="activity-outcome"
@@ -79,8 +77,8 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
                 className="form-select"
                 required
               >
-                <option value="">Select Outcome...</option>
-                {OUTCOME_OPTIONS.map((option) => (
+                <option value="">Select Status...</option>
+                {STATUS_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>

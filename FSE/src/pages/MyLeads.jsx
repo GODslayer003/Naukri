@@ -261,7 +261,11 @@ export default function MyLeads() {
                           <LuBuilding2 />
                         </span>
                         <div>
-                          <strong>{lead.companyName || "-"}</strong>
+                          <strong>
+                            {lead.companyName || "-"}
+                            {lead.isStartup && <span className="lead-badge lead-badge-s" title="Startup">S</span>}
+                            {lead.masterUnion === "Yes" && <span className="lead-badge lead-badge-m" title="Master Union">M</span>}
+                          </strong>
                           <small>{lead.contactName || "-"} | {lead.phone || "-"}</small>
                         </div>
                       </div>

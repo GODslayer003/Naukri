@@ -45,7 +45,7 @@ const LogActivityModal = ({ lead, initialData, activityContact, onClose, onSubmi
           </div>
 
           <div className="form-group">
-            <label className="form-label">OUTCOME</label>
+            <label className="form-label">STATUS</label>
             <div className="select-container">
               <select 
                 value={outcome} 
@@ -53,14 +53,13 @@ const LogActivityModal = ({ lead, initialData, activityContact, onClose, onSubmi
                 className="form-select"
                 required
               >
-                <option value="">Select Outcome...</option>
+                <option value="">Select Status...</option>
                 <option value="Interested">Interested</option>
                 <option value="Not Interested">Not Interested</option>
-                <option value="Follow Up Required">Follow Up Required</option>
-                <option value="Busy">Busy</option>
-                <option value="Wrong Number">Wrong Number</option>
-                <option value="Visit">Visit</option>
-                <option value="Call">Call</option>
+                <option value="Not Picked">Not Picked</option>
+                <option value="Onboard">Onboard</option>
+                <option value="Call Later">Call Later</option>
+                <option value="New">New</option>
               </select>
               <LuChevronDown className="select-icon" />
             </div>

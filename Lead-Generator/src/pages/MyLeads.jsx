@@ -438,7 +438,11 @@ export default function MyLeads() {
                         <span className="row-icon">
                           <LuBuilding2 />
                         </span>
-                        <strong>{lead.companyName}</strong>
+                        <strong>
+                          {lead.companyName}
+                          {lead.isStartup && <span className="lead-badge lead-badge-s" title="Startup">S</span>}
+                          {lead.masterUnion === "Yes" && <span className="lead-badge lead-badge-m" title="Master Union">M</span>}
+                        </strong>
                       </div>
                     </td>
                     <td>
