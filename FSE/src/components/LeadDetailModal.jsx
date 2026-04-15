@@ -1,6 +1,8 @@
 import {
   LuBuilding2,
   LuCalendar,
+  LuCalendarDays,
+  LuChartNoAxesCombined,
   LuCircleCheck,
   LuMail,
   LuMapPin,
@@ -12,13 +14,9 @@ import {
 } from "react-icons/lu";
 
 const formatDate = (value) => {
-  if (!value) {
-    return "-";
-  }
+  if (!value) return "—";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "-";
-  }
+  if (Number.isNaN(parsed.getTime())) return "—";
   return parsed.toLocaleString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -26,6 +24,24 @@ const formatDate = (value) => {
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+const formatDateOnly = (value) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const PROJECTION_COLOR = {
+  "WP > 50": { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
+  "WP < 50": { bg: "#fefce8", color: "#854d0e", border: "#fde68a" },
+  "MP < 50": { bg: "#fff7ed", color: "#9a3412", border: "#fed7aa" },
+  "MP > 50": { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
 };
 
 export default function LeadDetailModal({
@@ -36,65 +52,114 @@ export default function LeadDetailModal({
   onEditActivity,
   onDeleteActivity,
 }) {
-  if (!lead) {
-    return null;
-  }
+  if (!lead) return null;
+
+  const contactList = Array.isArray(lead.contacts) && lead.contacts.length
+    ? lead.contacts
+    : [{ fullName: lead.contactName, phone: lead.phone, email: lead.email, designation: "", isPrimary: true }];
+
+  const projStyle = lead.projection ? PROJECTION_COLOR[lead.projection] : null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content lead-detail-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-content lead-detail-modal" onClick={(e) => e.stopPropagation()}>
+
+        {/* ── Header ─────────────────────────────────────────────────── */}
         <header className="modal-header header-approved">
           <div className="header-info">
-            <div className="header-icon-circle">
-              <LuBuilding2 />
-            </div>
+            <div className="header-icon-circle"><LuBuilding2 /></div>
             <div>
               <h2>Lead Details</h2>
               <p>{lead.leadCode || lead.id} | Status: {lead.status}</p>
             </div>
           </div>
-          <button className="close-btn" onClick={onClose}>
-            <LuX />
-          </button>
+          <button className="close-btn" onClick={onClose}><LuX /></button>
         </header>
 
         <div className="modal-body">
+
+          {/* ── Company Information ────────────────────────────────────── */}
           <section className="detail-section">
             <h3>Company Information</h3>
             <div className="detail-grid">
               <div className="detail-item">
                 <span className="detail-label"><LuBuilding2 /> COMPANY</span>
-                <p className="detail-value">{lead.companyName || "-"}</p>
+                <p className="detail-value">{lead.companyName || "—"}</p>
               </div>
               <div className="detail-item">
                 <span className="detail-label"><LuBuilding2 /> CATEGORY</span>
-                <p className="detail-value">{lead.businessCategory || "-"}</p>
+                <p className="detail-value">{lead.businessCategory || "—"}</p>
               </div>
               <div className="detail-item full-width">
                 <span className="detail-label"><LuMapPin /> ADDRESS</span>
-                <p className="detail-value">{lead.address || `${lead.city || "-"}, ${lead.state || "-"}`}</p>
+                <p className="detail-value">{lead.address || `${lead.city || "—"}, ${lead.state || "—"}`}</p>
               </div>
+
+              {/* Sourcing Date */}
+              {lead.sourcingDate ? (
+                <div className="detail-item">
+                  <span className="detail-label"><LuCalendarDays /> SOURCING DATE</span>
+                  <p className="detail-value">{formatDateOnly(lead.sourcingDate)}</p>
+                </div>
+              ) : null}
+
+              {/* Projection */}
+              {lead.projection ? (
+                <div className="detail-item">
+                  <span className="detail-label"><LuChartNoAxesCombined /> PROJECTION</span>
+                  <p className="detail-value">
+                    <span
+                      className="ldm-projection-badge"
+                      style={projStyle ? {
+                        background: projStyle.bg,
+                        color: projStyle.color,
+                        border: `1px solid ${projStyle.border}`,
+                      } : undefined}
+                    >
+                      {lead.projection}
+                    </span>
+                  </p>
+                </div>
+              ) : null}
             </div>
           </section>
 
+          {/* ── Contact Persons ────────────────────────────────────────── */}
           <section className="detail-section">
-            <h3>Contact Details</h3>
-            <div className="detail-grid">
-              <div className="detail-item">
-                <span className="detail-label"><LuUserRound /> CONTACT PERSON</span>
-                <p className="detail-value">{lead.contactName || "-"}</p>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label"><LuPhone /> PHONE</span>
-                <p className="detail-value">{lead.phone || "-"}</p>
-              </div>
-              <div className="detail-item full-width">
-                <span className="detail-label"><LuMail /> EMAIL</span>
-                <p className="detail-value">{lead.email || "-"}</p>
-              </div>
+            <h3>Contact Person{contactList.length > 1 ? "s" : ""}</h3>
+            <div className="ldm-contacts-list">
+              {contactList.map((c, idx) => (
+                <div key={idx} className="ldm-contact-card">
+                  <div className="ldm-contact-top">
+                    <span className="ldm-contact-name">
+                      <LuUserRound />
+                      {c.fullName || "—"}
+                    </span>
+                    {c.isPrimary || idx === 0 ? (
+                      <span className="ldm-primary-badge">Primary</span>
+                    ) : null}
+                  </div>
+                  <div className="ldm-contact-details">
+                    {c.phone ? (
+                      <a href={`tel:${c.phone}`} className="ldm-contact-link">
+                        <LuPhone /> {c.phone}
+                      </a>
+                    ) : null}
+                    {c.email ? (
+                      <a href={`mailto:${c.email}`} className="ldm-contact-link">
+                        <LuMail /> {c.email}
+                      </a>
+                    ) : null}
+                    {c.designation ? (
+                      <span className="ldm-contact-designation">{c.designation}</span>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
+          {/* ── Follow Ups ─────────────────────────────────────────────── */}
           <section className="detail-section">
             <div className="section-header">
               <h3>Follow Ups</h3>
@@ -102,6 +167,7 @@ export default function LeadDetailModal({
                 <LuCircleCheck /> Log Activity
               </button>
             </div>
+
             {activities.length ? (
               <div className="activities-list">
                 {activities.map((activity, index) => (
@@ -120,10 +186,11 @@ export default function LeadDetailModal({
                         </div>
                       </div>
                     </div>
-                    <p className="activity-notes">{activity.notes || "-"}</p>
+                    <p className="activity-notes">{activity.notes || "—"}</p>
                     {activity.nextFollowUpAt ? (
                       <p className="next-follow-up">
-                        <LuCalendar className="calendar-icon" /> Next Follow-up: {formatDate(activity.nextFollowUpAt)}
+                        <LuCalendar className="calendar-icon" />
+                        Next Follow-up: {formatDate(activity.nextFollowUpAt)}
                       </p>
                     ) : null}
                   </div>

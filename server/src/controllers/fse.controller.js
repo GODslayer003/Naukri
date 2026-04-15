@@ -81,16 +81,42 @@ const parseEnum = (value, allowedValues, fallback) => {
   return allowedValues.includes(normalized) ? normalized : fallback;
 };
 
+const PROJECTION_VALUES = ["", "WP > 50", "WP < 50", "MP < 50", "MP > 50"];
+
 const normalizeCreateLeadInput = (payload = {}, user = {}) => {
   const normalizedUserState = getUserState(user);
   const normalizedPayloadState = normalizeIndianStateInput(payload.state);
 
+  // Resolve primary contact from contacts array or flat fields
+  const contactsRaw = Array.isArray(payload.contacts) ? payload.contacts : [];
+  const primaryContact = contactsRaw[0] || {};
+  const resolvedContactName = String(
+    payload.contactName || payload.fullName || primaryContact.fullName || ""
+  ).trim();
+  const resolvedPhone = String(
+    payload.phone || payload.phoneNumber || primaryContact.phone || ""
+  ).trim();
+  const resolvedEmail = String(
+    payload.email || primaryContact.email || ""
+  ).trim().toLowerCase();
+
+  const normalizedContacts = contactsRaw.map((c, i) => ({
+    fullName: String(c.fullName || "").trim(),
+    phone: String(c.phone || "").trim(),
+    email: String(c.email || "").trim().toLowerCase(),
+    designation: String(c.designation || "").trim(),
+    isPrimary: i === 0,
+  })).filter(c => c.fullName || c.phone);
+
+  const projectionRaw = String(payload.projection || "").trim();
+  const projection = PROJECTION_VALUES.includes(projectionRaw) ? projectionRaw : "";
+
   return {
-    contactName: String(payload.contactName || payload.fullName || "").trim(),
+    contactName: resolvedContactName,
     companyName: String(payload.companyName || "").trim(),
-    phone: String(payload.phone || payload.phoneNumber || "").trim(),
+    phone: resolvedPhone,
     alternatePhone: String(payload.alternatePhone || "").trim(),
-    email: String(payload.email || "").trim().toLowerCase(),
+    email: resolvedEmail,
     businessCategory: String(payload.businessCategory || "").trim(),
     leadSource: String(payload.leadSource || "").trim(),
     priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
@@ -99,6 +125,9 @@ const normalizeCreateLeadInput = (payload = {}, user = {}) => {
     address: String(payload.address || payload.location || "").trim(),
     pincode: String(payload.pincode || "").trim(),
     notes: String(payload.notes || "").trim(),
+    sourcingDate: payload.sourcingDate || null,
+    projection,
+    contacts: normalizedContacts,
     nextFollowUpAt: payload.nextFollowUpAt || null,
   };
 };
@@ -180,6 +209,9 @@ const formatLead = (lead) => ({
   leadSource: lead.leadSource,
   businessCategory: lead.businessCategory,
   notes: lead.notes || "",
+  projection: lead.projection || "",
+  sourcingDate: lead.sourcingDate || null,
+  contacts: Array.isArray(lead.contacts) ? lead.contacts : [],
   nextFollowUpAt: lead.nextFollowUpAt,
   lastContactedAt: lead.lastContactedAt,
   activities: lead.activities || [],
@@ -453,6 +485,7 @@ exports.createLead = asyncHandler(async (req, res) => {
     phone: input.phone,
     alternatePhone: input.alternatePhone,
     email: normalizedEmail,
+    contacts: input.contacts,
     businessCategory: input.businessCategory,
     leadSource: input.leadSource,
     status: "ASSIGNED",
@@ -462,6 +495,8 @@ exports.createLead = asyncHandler(async (req, res) => {
     address: input.address,
     pincode: input.pincode,
     notes: input.notes,
+    sourcingDate: input.sourcingDate || null,
+    projection: input.projection || "",
     nextFollowUpAt: input.nextFollowUpAt,
     createdBy: req.user._id,
     updatedBy: req.user._id,
@@ -488,33 +523,163 @@ exports.getDashboard = asyncHandler(async (req, res) => {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
-  const [totalAssigned, converted, pending, followUpsToday, recentLeads] = await Promise.all([
-    Lead.countDocuments(baseQuery),
-    Lead.countDocuments({ ...baseQuery, status: "CONVERTED" }),
-    Lead.countDocuments({ ...baseQuery, status: { $in: ["ASSIGNED", "CONTACTED", "FOLLOW_UP", "QUALIFIED"] } }),
+  // ── Date‑range filter ─────────────────────────────────────────────────────
+  let startDate = null;
+  let endDate = null;
+
+  if (req.query.startDate) {
+    const parsed = new Date(req.query.startDate);
+    if (!Number.isNaN(parsed.getTime())) {
+      startDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+  }
+
+  if (req.query.endDate) {
+    const parsed = new Date(req.query.endDate);
+    if (!Number.isNaN(parsed.getTime())) {
+      endDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() + 1);
+    }
+  }
+
+  const rangedQuery = { ...baseQuery };
+  if (startDate || endDate) {
+    rangedQuery.createdAt = {};
+    if (startDate) rangedQuery.createdAt.$gte = startDate;
+    if (endDate) rangedQuery.createdAt.$lt = endDate;
+  }
+
+  // ── Core counts (ranged) ──────────────────────────────────────────────────
+  const [
+    totalAssigned,
+    converted,
+    pending,
+    followUpsToday,
+    interestedCount,
+    notInterestedCount,
+    fieldVisitLeads,
+    coldCallLeads,
+    allLeadsInRange,
+  ] = await Promise.all([
+    Lead.countDocuments(rangedQuery),
+    Lead.countDocuments({ ...rangedQuery, status: "CONVERTED" }),
+    Lead.countDocuments({
+      ...rangedQuery,
+      status: { $in: ["ASSIGNED", "CONTACTED", "FOLLOW_UP", "QUALIFIED"] },
+    }),
     Lead.countDocuments({
       ...baseQuery,
       nextFollowUpAt: { $gte: startOfToday, $lt: endOfToday },
     }),
-    Lead.find(baseQuery)
-      .sort({ updatedAt: -1 })
-      .limit(8)
-      .populate("createdBy", "fullName role territory profileImageUrl"),
+    // "Interested" = leads whose latest activity outcome is "Interested"
+    Lead.countDocuments({
+      ...rangedQuery,
+      "activities.0": { $exists: true },
+      $expr: {
+        $eq: [
+          { $arrayElemAt: ["$activities.outcome", -1] },
+          "Interested",
+        ],
+      },
+    }),
+    // "Not Interested" = leads whose latest activity outcome is "Not Interested"
+    Lead.countDocuments({
+      ...rangedQuery,
+      "activities.0": { $exists: true },
+      $expr: {
+        $eq: [
+          { $arrayElemAt: ["$activities.outcome", -1] },
+          "Not Interested",
+        ],
+      },
+    }),
+    // "Field Visit" source = visits
+    Lead.countDocuments({ ...rangedQuery, leadSource: "Field Visit" }),
+    // "Cold Call" source = calls
+    Lead.countDocuments({ ...rangedQuery, leadSource: "Cold Call" }),
+    // All leads in range (for repeat-visit detection)
+    Lead.find(rangedQuery).select("activities leadSource").lean(),
   ]);
 
+  // ── Visit breakdown ───────────────────────────────────────────────────────
+  // New Visit = visited leads with ZERO logged activities (first time)
+  // Repeat Visit = visited leads with 1+ logged activities (followed up)
+  const visitLeads = allLeadsInRange.filter((l) => l.leadSource === "Field Visit");
+  const newVisit = visitLeads.filter((l) => !l.activities || l.activities.length === 0).length;
+  const repeatVisit = visitLeads.filter((l) => l.activities && l.activities.length > 0).length;
+  const totalVisit = fieldVisitLeads;
+  const totalCalls = coldCallLeads;
+
+  // Avg Visit = totalVisit / number of days in range (min 1)
+  let daySpan = 1;
+  if (startDate && endDate) {
+    daySpan = Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)));
+  }
+  const avgVisit = totalVisit > 0 ? +(totalVisit / daySpan).toFixed(2) : 0;
+
+  // ── Monthly buckets (always last 6 months, ignores date filter) ───────────
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const monthlyLeads = await Lead.aggregate([
+    {
+      $match: {
+        assignedTo: req.user._id,
+        createdAt: { $gte: sixMonthsAgo },
+      },
+    },
+    {
+      $group: {
+        _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+        totalVisit: { $sum: { $cond: [{ $eq: ["$leadSource", "Field Visit"] }, 1, 0] } },
+        totalCalls: { $sum: { $cond: [{ $eq: ["$leadSource", "Cold Call"] }, 1, 0] } },
+        totalLeads: { $sum: 1 },
+        converted: { $sum: { $cond: [{ $eq: ["$status", "CONVERTED"] }, 1, 0] } },
+      },
+    },
+    { $sort: { "_id.year": 1, "_id.month": 1 } },
+  ]);
+
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthlyStats = monthlyLeads.map((m) => ({
+    label: `${MONTH_NAMES[m._id.month - 1]} ${m._id.year}`,
+    totalVisit: m.totalVisit,
+    totalCalls: m.totalCalls,
+    totalLeads: m.totalLeads,
+    converted: m.converted,
+    newVisit: m.totalLeads - m.converted,
+  }));
+
   const conversionRate = totalAssigned > 0 ? Math.round((converted / totalAssigned) * 100) : 0;
+
+  // ── Recent leads ─────────────────────────────────────────────────────────
+  const recentLeads = await Lead.find(baseQuery)
+    .sort({ updatedAt: -1 })
+    .limit(8)
+    .populate("createdBy", "fullName role territory profileImageUrl");
 
   res.status(200).json({
     success: true,
     data: {
       zone: myZone,
+      dateRange: {
+        startDate: startDate ? startDate.toISOString() : null,
+        endDate: endDate ? new Date(endDate.getTime() - 1).toISOString() : null,
+      },
       summary: {
         totalAssigned,
         pending,
         converted,
         followUpsToday,
         conversionRate,
+        // Visit / Call breakdown
+        totalVisit,
+        totalCalls,
+        newVisit,
+        repeatVisit,
+        avgVisit,
+        // Status-wise
+        interested: interestedCount,
+        notInterested: notInterestedCount,
       },
+      monthlyStats,
       recentLeads: recentLeads.map(formatLead),
     },
   });

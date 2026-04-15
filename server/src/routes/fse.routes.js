@@ -17,6 +17,7 @@ router.get("/dashboard", controller.getDashboard);
 router.post("/leads", controller.createLead);
 router.get("/leads", controller.getLeads);
 router.patch("/leads/:id/status", controller.updateLeadStatus);
+router.patch("/leads/:id/projection", controller.updateLeadProjection);
 router.post("/leads/:id/activity", controller.logLeadActivity);
 router.delete("/leads/:id/activity/:index", controller.deleteLeadActivity);
 router.get("/profile", controller.getProfile);

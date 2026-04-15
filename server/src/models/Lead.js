@@ -174,6 +174,12 @@ const leadSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    projection: {
+      type: String,
+      enum: ["", "WP > 50", "WP < 50", "MP < 50", "MP > 50"],
+      default: "",
+      trim: true,
+    },
     employeeCount: {
       type: String,
       trim: true,

@@ -95,8 +95,8 @@ export async function changeFsePassword(payload) {
   return data;
 }
 
-export async function fetchFseDashboard() {
-  const { data } = await http.get("/dashboard");
+export async function fetchFseDashboard(params = {}) {
+  const { data } = await http.get("/dashboard", { params });
   return data.data;
 }
 

@@ -2,15 +2,20 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   LuBuilding2,
+  LuCalendarDays,
+  LuChartNoAxesCombined,
   LuFileText,
   LuLoaderCircle,
   LuMail,
   LuMapPin,
   LuPhone,
+  LuPlus,
+  LuTrash2,
   LuUserRound,
 } from "react-icons/lu";
 import { createFseLead, fetchFseMeta } from "../api/fseApi";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const DEFAULT_BUSINESS_CATEGORY_OPTIONS = [
   "IT & Technology",
   "Manufacturing",
@@ -28,14 +33,26 @@ const DEFAULT_LEAD_SOURCE_OPTIONS = [
   "Inbound Inquiry",
 ];
 
-const initialForm = {
+const PROJECTION_OPTIONS = ["WP > 50", "WP < 50", "MP < 50", "MP > 50"];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const createEmptyContact = () => ({
   fullName: "",
-  companyName: "",
   phone: "",
   email: "",
+  designation: "",
+});
+
+const initialForm = {
+  companyName: "",
   businessCategory: "",
   leadSource: "",
   address: "",
+  sourcingDate: "",
+  projection: "",
+  notes: "",
+  nextFollowUpAt: "",
+  contacts: [createEmptyContact()],
 };
 
 function Field({ label, children }) {
@@ -47,6 +64,7 @@ function Field({ label, children }) {
   );
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function AddLead() {
   const navigate = useNavigate();
   const [meta, setMeta] = useState({
@@ -58,9 +76,9 @@ export default function AddLead() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // ── Load meta ───────────────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
-
     const loadMeta = async () => {
       try {
         setLoadingMeta(true);
@@ -72,59 +90,113 @@ export default function AddLead() {
               : DEFAULT_BUSINESS_CATEGORY_OPTIONS,
             leadSources: data?.leadSources?.length ? data.leadSources : DEFAULT_LEAD_SOURCE_OPTIONS,
           });
-          setError("");
         }
-      } catch (requestError) {
+      } catch {
         if (mounted) {
           setMeta({
             businessCategories: DEFAULT_BUSINESS_CATEGORY_OPTIONS,
             leadSources: DEFAULT_LEAD_SOURCE_OPTIONS,
           });
-          setError(requestError?.response?.data?.message || "Unable to load lead options.");
         }
       } finally {
-        if (mounted) {
-          setLoadingMeta(false);
-        }
+        if (mounted) setLoadingMeta(false);
       }
     };
-
     loadMeta();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
+  // ── Form field handlers ─────────────────────────────────────────────────────
   const handleChange = (event) => {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    const { name, value, type, checked } = event.target;
+    setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  // ── Contact handlers ────────────────────────────────────────────────────────
+  const handleContactChange = (index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      contacts: prev.contacts.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+    }));
+  };
+
+  const handleAddContact = () => {
+    setForm((prev) => ({ ...prev, contacts: [...prev.contacts, createEmptyContact()] }));
+  };
+
+  const handleRemoveContact = (index) => {
+    setForm((prev) => {
+      if (prev.contacts.length === 1) return prev;
+      return { ...prev, contacts: prev.contacts.filter((_, i) => i !== index) };
+    });
+  };
+
+  // ── Validation & submit ─────────────────────────────────────────────────────
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
 
-    const normalizedPhone = form.phone.replace(/\D/g, "");
-    if (normalizedPhone.length < 10) {
-      setError("Phone number must contain at least 10 digits.");
+    const sanitizedContacts = form.contacts.map((c) => ({
+      fullName: c.fullName.trim(),
+      phone: c.phone.trim(),
+      email: c.email.trim().toLowerCase(),
+      designation: c.designation?.trim() || "",
+    }));
+
+    if (!sanitizedContacts.length) {
+      setError("Add at least one contact person.");
       return;
     }
 
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setError("Please enter a valid email address.");
-      return;
+    const uniquePhones = new Set();
+    const uniqueEmails = new Set();
+
+    for (const [idx, contact] of sanitizedContacts.entries()) {
+      const num = idx + 1;
+      if (!contact.fullName) {
+        setError(`Contact ${num}: full name is required.`);
+        return;
+      }
+      const digits = contact.phone.replace(/\D/g, "");
+      if (digits.length < 10) {
+        setError(`Contact ${num}: phone number must contain at least 10 digits.`);
+        return;
+      }
+      if (uniquePhones.has(digits)) {
+        setError(`Contact ${num}: this phone number is already added.`);
+        return;
+      }
+      uniquePhones.add(digits);
+
+      if (contact.email) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
+          setError(`Contact ${num}: please enter a valid email address.`);
+          return;
+        }
+        if (uniqueEmails.has(contact.email)) {
+          setError(`Contact ${num}: this email is already added.`);
+          return;
+        }
+        uniqueEmails.add(contact.email);
+      }
     }
 
     try {
       setSaving(true);
+      const [primaryContact] = sanitizedContacts;
       const payload = {
-        contactName: form.fullName.trim(),
+        contactName: primaryContact.fullName,
         companyName: form.companyName.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
+        phone: primaryContact.phone,
+        email: primaryContact.email,
+        contacts: sanitizedContacts.map((c, i) => ({ ...c, isPrimary: i === 0 })),
         businessCategory: form.businessCategory,
         leadSource: form.leadSource,
         address: form.address.trim(),
+        sourcingDate: form.sourcingDate || null,
+        projection: form.projection || "",
+        notes: form.notes.trim(),
+        nextFollowUpAt: form.nextFollowUpAt || null,
       };
       await createFseLead(payload);
       navigate("/my-leads", { replace: true });
@@ -135,12 +207,13 @@ export default function AddLead() {
     }
   };
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="page-section">
       <section className="add-lead-header">
         <div>
-          <h1>Add New Lead Details</h1>
-          <p>FSE can add and manage leads directly from this panel.</p>
+          <h1>Add New Lead</h1>
+          <p>Fill in the details below to create and assign this lead.</p>
         </div>
       </section>
 
@@ -148,17 +221,16 @@ export default function AddLead() {
         {loadingMeta ? (
           <div className="loading-block">
             <LuLoaderCircle className="spin" />
-            Loading lead form...
+            Loading lead form…
           </div>
         ) : (
           <>
             {error ? <div className="status-banner">{error}</div> : null}
 
+            {/* ── Company Info ───────────────────────────────────────────── */}
             <section className="lead-block company-block">
               <div className="lead-block-header">
-                <span className="lead-block-icon">
-                  <LuBuilding2 />
-                </span>
+                <span className="lead-block-icon"><LuBuilding2 /></span>
                 <h2>Company Information</h2>
               </div>
 
@@ -182,20 +254,16 @@ export default function AddLead() {
                     onChange={handleChange}
                     required
                   >
-                    <option value="" disabled>
-                      Select Category...
-                    </option>
-                    {(meta?.businessCategories || []).map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
+                    <option value="" disabled>Select Category…</option>
+                    {(meta?.businessCategories || []).map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
                 </Field>
               </div>
 
-              <div className="lead-block-grid one-col">
-                <Field label="Location or Address">
+              <div className="lead-block-grid one-col" style={{ marginTop: "12px" }}>
+                <Field label="Location / Address">
                   <div className="input-shell">
                     <input
                       className="input add-lead-input"
@@ -211,67 +279,104 @@ export default function AddLead() {
               </div>
             </section>
 
+            {/* ── Multiple Contacts ──────────────────────────────────────── */}
             <section className="lead-block">
-              <div className="lead-block-header">
-                <span className="lead-block-icon">
-                  <LuUserRound />
-                </span>
-                <h2>Contact Person</h2>
+              <div className="lead-block-header contact-block-header">
+                <div className="lead-block-title">
+                  <span className="lead-block-icon"><LuUserRound /></span>
+                  <h2>Contact Person(s)</h2>
+                </div>
+                <button
+                  type="button"
+                  className="button button-secondary add-contact-button"
+                  onClick={handleAddContact}
+                >
+                  <LuPlus /> Add Contact
+                </button>
               </div>
 
-              <div className="lead-block-grid two-col">
-                <Field label="Full Name">
-                  <input
-                    className="input add-lead-input"
-                    name="fullName"
-                    value={form.fullName}
-                    onChange={handleChange}
-                    placeholder="Full Name"
-                    required
-                  />
-                </Field>
+              <div className="contact-list">
+                {form.contacts.map((contact, index) => (
+                  <article className="contact-card" key={`contact-${index}`}>
+                    <div className="contact-card-header">
+                      <h3>
+                        {index === 0 ? "Primary Contact" : `Contact ${index + 1}`}
+                        {index === 0 ? (
+                          <span className="contact-primary-badge">Primary</span>
+                        ) : null}
+                      </h3>
+                      {form.contacts.length > 1 ? (
+                        <button
+                          type="button"
+                          className="contact-remove-button"
+                          onClick={() => handleRemoveContact(index)}
+                        >
+                          <LuTrash2 /> Remove
+                        </button>
+                      ) : null}
+                    </div>
 
-                <Field label="Phone Number">
-                  <div className="input-shell">
-                    <input
-                      className="input add-lead-input"
-                      name="phone"
-                      value={form.phone}
-                      onChange={handleChange}
-                      placeholder="Phone Number"
-                      required
-                    />
-                    <LuPhone className="input-icon" />
-                  </div>
-                </Field>
-              </div>
+                    <div className="lead-block-grid two-col contact-grid">
+                      <Field label={`Contact ${index + 1} Full Name`}>
+                        <input
+                          className="input add-lead-input"
+                          value={contact.fullName}
+                          onChange={(e) => handleContactChange(index, "fullName", e.target.value)}
+                          placeholder="Full Name"
+                          required
+                        />
+                      </Field>
 
-              <div className="lead-block-grid one-col">
-                <Field label="Email Address">
-                  <div className="input-shell">
-                    <input
-                      className="input add-lead-input"
-                      type="email"
-                      name="email"
-                      value={form.email}
-                      onChange={handleChange}
-                      placeholder="Email Address"
-                    />
-                    <LuMail className="input-icon" />
-                  </div>
-                </Field>
+                      <Field label={`Contact ${index + 1} Phone Number`}>
+                        <div className="input-shell">
+                          <input
+                            className="input add-lead-input"
+                            value={contact.phone}
+                            onChange={(e) => handleContactChange(index, "phone", e.target.value)}
+                            placeholder="Phone Number"
+                            required
+                          />
+                          <LuPhone className="input-icon" />
+                        </div>
+                      </Field>
+                    </div>
+
+                    <div className="lead-block-grid two-col contact-grid" style={{ marginTop: "10px" }}>
+                      <Field label={`Contact ${index + 1} Email Address`}>
+                        <div className="input-shell">
+                          <input
+                            className="input add-lead-input"
+                            type="email"
+                            value={contact.email}
+                            onChange={(e) => handleContactChange(index, "email", e.target.value)}
+                            placeholder="Email Address (optional)"
+                          />
+                          <LuMail className="input-icon" />
+                        </div>
+                      </Field>
+
+                      <Field label={`Contact ${index + 1} Designation`}>
+                        <input
+                          className="input add-lead-input"
+                          value={contact.designation || ""}
+                          onChange={(e) => handleContactChange(index, "designation", e.target.value)}
+                          placeholder="Designation (optional)"
+                        />
+                      </Field>
+                    </div>
+                  </article>
+                ))}
               </div>
             </section>
 
+            {/* ── Lead Source & Projection ───────────────────────────────── */}
             <section className="lead-block">
               <div className="lead-block-header">
-                <span className="lead-block-icon">
-                  <LuFileText />
-                </span>
+                <span className="lead-block-icon"><LuFileText /></span>
                 <h2>Lead Source</h2>
               </div>
 
-              <div className="lead-block-grid one-col lead-source-grid">
+              <div className="lead-block-grid two-col lead-source-grid">
                 <Field label="Source">
                   <select
                     className="input add-lead-input add-lead-select"
@@ -280,26 +385,106 @@ export default function AddLead() {
                     onChange={handleChange}
                     required
                   >
-                    <option value="" disabled>
-                      Select Source...
-                    </option>
-                    {(meta?.leadSources || []).map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
+                    <option value="" disabled>Select Source…</option>
+                    {(meta?.leadSources || []).map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
+                </Field>
+
+                <Field label="Sourcing Date">
+                  <div className="input-shell">
+                    <input
+                      type="date"
+                      className="input add-lead-input"
+                      name="sourcingDate"
+                      value={form.sourcingDate}
+                      onChange={handleChange}
+                    />
+                    <LuCalendarDays className="input-icon" />
+                  </div>
+                </Field>
+              </div>
+
+              <div className="lead-block-grid one-col lead-source-grid" style={{ marginTop: "12px" }}>
+                <div className="fse-projection-block">
+                  <div className="fse-projection-header">
+                    <LuChartNoAxesCombined />
+                    <span>Projection</span>
+                    <span className="fse-projection-hint">Select a projection tier for this lead</span>
+                  </div>
+                  <div className="fse-projection-options" role="group" aria-label="Projection">
+                    {PROJECTION_OPTIONS.map((opt) => (
+                      <label
+                        key={opt}
+                        className={`fse-projection-chip${form.projection === opt ? " selected" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="projection"
+                          value={opt}
+                          checked={form.projection === opt}
+                          onChange={handleChange}
+                          className="sr-only"
+                        />
+                        {opt}
+                      </label>
+                    ))}
+                    {form.projection ? (
+                      <button
+                        type="button"
+                        className="fse-projection-clear"
+                        onClick={() => setForm((prev) => ({ ...prev, projection: "" }))}
+                        aria-label="Clear projection"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── Notes & Follow-up ──────────────────────────────────────── */}
+            <section className="lead-block">
+              <div className="lead-block-header">
+                <span className="lead-block-icon"><LuCalendarDays /></span>
+                <h2>Notes &amp; Follow-up</h2>
+              </div>
+
+              <div className="lead-block-grid one-col" style={{ marginTop: "4px" }}>
+                <Field label="Notes">
+                  <textarea
+                    className="input add-lead-input textarea"
+                    name="notes"
+                    value={form.notes}
+                    onChange={handleChange}
+                    placeholder="Any relevant notes about this lead…"
+                    rows={3}
+                  />
+                </Field>
+
+                <Field label="Next Follow-up Date">
+                  <div className="input-shell">
+                    <input
+                      type="date"
+                      className="input add-lead-input"
+                      name="nextFollowUpAt"
+                      value={form.nextFollowUpAt}
+                      onChange={handleChange}
+                    />
+                    <LuCalendarDays className="input-icon" />
+                  </div>
                 </Field>
               </div>
             </section>
 
+            {/* ── Actions ───────────────────────────────────────────────── */}
             <div className="add-lead-actions">
-              <Link to="/my-leads" className="cancel-inline">
-                Cancel
-              </Link>
+              <Link to="/my-leads" className="cancel-inline">Cancel</Link>
               <button type="submit" className="button button-primary" disabled={saving}>
                 {saving ? <LuLoaderCircle className="spin" /> : null}
-                {saving ? "Submitting..." : "Submit Lead"}
+                {saving ? "Submitting…" : "Submit Lead"}
               </button>
             </div>
           </>
