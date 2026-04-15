@@ -12,6 +12,8 @@ import {
   LuShieldAlert,
   LuShieldCheck,
   LuUsers,
+  LuChevronRight,
+  LuSparkles,
 } from "react-icons/lu";
 import {
   createCompanyPackageChangeRequest,
@@ -365,19 +367,19 @@ export default function Dashboard() {
           className={`company-tab-btn ${activeTab === "overview" ? "active" : ""}`}
           onClick={() => setActiveTab("overview")}
         >
-          Overview
+          Main Dashboard
         </button>
         <button
           className={`company-tab-btn ${activeTab === "hiring" ? "active" : ""}`}
           onClick={() => setActiveTab("hiring")}
         >
-          Hiring Operations
+          CV History
         </button>
         <button
           className={`company-tab-btn ${activeTab === "packages" ? "active" : ""}`}
           onClick={() => setActiveTab("packages")}
         >
-          Package & Governance
+          Upgrade Package
         </button>
       </nav>
 
@@ -664,9 +666,37 @@ export default function Dashboard() {
           <section className="company-main-grid company-main-grid-modern">
             <article className="company-panel-card">
               <div className="company-section-head">
-                <h2 className="company-section-title">Packages Offered By Maven</h2>
+                <h2 className="company-section-title">Packages Available</h2>
               </div>
-              <div className="company-package-grid company-package-grid-modern mt-6">
+              
+              <div className="mt-6">
+                {company.packageType?.toUpperCase() === 'ELITE' ? (
+                  <div className="bg-highest-plan">
+                    🎉 You are on the highest plan! Enjoy your scales.
+                  </div>
+                ) : (
+                  <div className="company-stack-y-sm">
+                    <p className="company-hero-side-label">Recommended Upgrades</p>
+                    <div className="plan-upgrade-path">
+                      <span className={`plan-badge plan-badge-${company.packageType?.toLowerCase()}`}>
+                        {company.packageType}
+                      </span>
+                      <LuChevronRight className="upgrade-arrow" />
+                      {company.packageType?.toUpperCase() === 'STANDARD' ? (
+                        <>
+                          <span className="plan-badge plan-badge-premium">PREMIUM</span>
+                          <LuChevronRight className="upgrade-arrow" />
+                          <span className="plan-badge plan-badge-elite">ELITE</span>
+                        </>
+                      ) : (
+                        <span className="plan-badge plan-badge-elite">ELITE</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="company-package-grid company-package-grid-modern mt-8">
                 {packageCards.map((item) => {
                   const isActive = String(company.packageType || "").toUpperCase() === item.key;
                   return (
@@ -675,9 +705,10 @@ export default function Dashboard() {
                       className={`company-package-card ${
                         isActive ? "company-package-card-active" : ""
                       }`}
+                      style={isActive ? { borderColor: item.key === 'ELITE' ? '#ddd6fe' : item.key === 'PREMIUM' ? '#bfdbfe' : '#fef08a', borderWidth: '2px' } : {}}
                     >
                       <div className="company-package-top">
-                        <h3>{item.name}</h3>
+                        <span className={`plan-badge plan-badge-${item.key.toLowerCase()}`}>{item.name}</span>
                         <span className="company-badge">{item.posts} posts</span>
                       </div>
                       <p>{item.description}</p>

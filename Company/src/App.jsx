@@ -9,6 +9,8 @@ import {
   LuLogOut,
   LuMenu,
   LuSettings,
+  LuX,
+  LuChevronRight,
 } from "react-icons/lu";
 import logo from "./assets/maven-logo.svg";
 import Login from "./pages/Login";
@@ -48,27 +50,29 @@ const navItems = [
   { path: "/profile", label: "Profile", icon: LuSettings },
 ];
 
-const pageMeta = (pathname) => {
+const pageMeta = (pathname, companyName) => {
+  const base = { panelLabel: "Dashboard" };
+
   if (pathname.startsWith("/create-job")) {
-    return { panelLabel: "Company Panel", title: "Create Job" };
+    return { ...base, title: "Create Job" };
   }
 
   if (pathname.startsWith("/profile")) {
-    return { panelLabel: "Company Panel", title: "Profile" };
+    return { ...base, title: "Profile" };
   }
 
   if (pathname.startsWith("/applies")) {
-    return { panelLabel: "Company Panel", title: "Applies" };
+    return { ...base, title: "Applies" };
   }
 
-  return { panelLabel: "Company Panel", title: "Dashboard" };
+  return { ...base, title: companyName || "Dashboard" };
 };
 
 function PanelLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [session, setSession] = useState(parseSession);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const displayUser = useMemo(() => {
     const user = session?.user || {};
@@ -83,7 +87,9 @@ function PanelLayout() {
   }, [session]);
 
   useEffect(() => {
-    setIsSidebarOpen(false);
+    if (window.innerWidth <= 1024) {
+      setIsSidebarOpen(false);
+    }
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [pathname]);
 
@@ -96,15 +102,28 @@ function PanelLayout() {
   };
 
   return (
-    <div className="company-shell">
+    <div className={`company-shell ${isSidebarOpen ? "" : "is-collapsed"} ${isSidebarOpen ? "is-mobile-open" : ""}`}>
       <div
-        className={`company-sidebar-backdrop ${isSidebarOpen ? "show" : ""}`}
+        className="company-sidebar-backdrop"
         onClick={() => setIsSidebarOpen(false)}
       />
 
-      <aside className={`company-sidebar ${isSidebarOpen ? "open" : ""}`}>
-        <div className="company-sidebar-brand">
+      <aside className="company-sidebar">
+        <div className="company-sidebar-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <img src={logo} alt="Maven Jobs" className="company-sidebar-logo" />
+          <button 
+            className="company-menu-btn lg-hide" 
+            onClick={() => setIsSidebarOpen(false)}
+            style={{ border: 'none', background: 'transparent', color: 'white' }}
+          >
+            <LuX size={18} />
+          </button>
+        </div>
+
+        <div className="company-sidebar-user">
+          <p className="company-user-name">{displayUser.companyName}</p>
+          <p className="company-user-role">{displayUser.packageType} package</p>
+          <p className="company-user-email">{displayUser.email || "No email linked"}</p>
         </div>
 
         <nav className="company-nav">
@@ -125,11 +144,7 @@ function PanelLayout() {
           })}
         </nav>
 
-        <div className="company-sidebar-user">
-          <p className="company-user-name">{displayUser.companyName}</p>
-          <p className="company-user-role">{displayUser.packageType} package</p>
-          <p className="company-user-email">{displayUser.email || "No email linked"}</p>
-        </div>
+        <div className="company-sidebar-foot-spacer" />
       </aside>
 
       <div className="company-main-wrap">
@@ -138,14 +153,14 @@ function PanelLayout() {
             <button
               type="button"
               className="company-menu-btn"
-              onClick={() => setIsSidebarOpen(true)}
-              aria-label="Open navigation menu"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-label="Toggle Sidebar"
             >
               <LuMenu size={20} />
             </button>
             <div>
-              <p className="company-panel-label">{pageMeta(pathname).panelLabel}</p>
-              <h1 className="company-page-title">{pageMeta(pathname).title}</h1>
+              <p className="company-panel-label">{pageMeta(pathname, displayUser.companyName).panelLabel}</p>
+              <h1 className="company-page-title">{pageMeta(pathname, displayUser.companyName).title}</h1>
             </div>
           </div>
 
@@ -163,11 +178,9 @@ function PanelLayout() {
 
         <main className="company-main">
           <section className="company-panel-context">
-            <span className="company-context-pill company-context-pill-primary">
-              <LuBuilding2 size={14} />
-              {displayUser.companyName}
+            <span className={`plan-badge plan-badge-${displayUser.packageType.toLowerCase()}`}>
+              {displayUser.packageType} package
             </span>
-            <span className="company-context-pill">{displayUser.packageType} package</span>
           </section>
 
           <Routes>
