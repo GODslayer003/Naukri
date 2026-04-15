@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LuChevronLeft,
   LuChevronRight,
+  LuFileText,
   LuMail,
   LuMapPin,
   LuPencil,
@@ -14,6 +15,7 @@ import {
 } from "react-icons/lu";
 import { toast } from "sonner";
 import ActionConfirmModal from "../components/ActionConfirmModal";
+import MemberReportModal from "../components/MemberReportModal";
 import {
   deleteManagedMember,
   createManagedMember,
@@ -125,6 +127,8 @@ export default function TeamManagement() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState("");
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportMember, setReportMember] = useState(null);
 
   const currentPage = pageByRole[activeRole] || 1;
 
@@ -264,6 +268,14 @@ export default function TeamManagement() {
       ...prev,
       [activeRole]: nextPage,
     }));
+  };
+
+  const handleViewReport = (member) => {
+    setReportMember({
+      id: member.id,
+      fullName: member.name || member.fullName,
+    });
+    setIsReportModalOpen(true);
   };
 
   const openMemberDetail = async (memberId) => {
@@ -485,12 +497,13 @@ export default function TeamManagement() {
                   <th>Converted</th>
                   <th>Assigned</th>
                   <th>CVR</th>
+                  <th>Report</th>
                 </tr>
               </thead>
               <tbody>
                 {rolePerformanceLoading ? (
                   <tr>
-                    <td colSpan="5" className="empty-cell">
+                    <td colSpan="6" className="empty-cell">
                       Loading FSE performance...
                     </td>
                   </tr>
@@ -502,11 +515,19 @@ export default function TeamManagement() {
                       <td>{member.convertedLeads ?? 0}</td>
                       <td>{member.totalAssignedLeads ?? 0}</td>
                       <td className="team-performance-cvr">{formatRate(member.conversionRate)}</td>
+                      <td style={{ padding: "8px" }}>
+                        <button 
+                          onClick={() => handleViewReport(member)}
+                          style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
+                        >
+                          <LuFileText size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="empty-cell">
+                    <td colSpan="6" className="empty-cell">
                       {rolePerformanceError || "No FSE performance records yet."}
                     </td>
                   </tr>
@@ -545,12 +566,13 @@ export default function TeamManagement() {
                   <th>Forwarded</th>
                   <th>Converted</th>
                   <th>CVR</th>
+                  <th>Report</th>
                 </tr>
               </thead>
               <tbody>
                 {rolePerformanceLoading ? (
                   <tr>
-                    <td colSpan="5" className="empty-cell">
+                    <td colSpan="6" className="empty-cell">
                       Loading Lead Generator performance...
                     </td>
                   </tr>
@@ -562,11 +584,19 @@ export default function TeamManagement() {
                       <td>{member.forwardedLeads ?? 0}</td>
                       <td>{member.convertedLeads ?? 0}</td>
                       <td className="team-performance-cvr">{formatRate(member.conversionRate)}</td>
+                      <td style={{ padding: "8px" }}>
+                        <button 
+                          onClick={() => handleViewReport(member)}
+                          style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
+                        >
+                          <LuFileText size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="empty-cell">
+                    <td colSpan="6" className="empty-cell">
                       {rolePerformanceError || "No Lead Generator performance records yet."}
                     </td>
                   </tr>
@@ -587,15 +617,16 @@ export default function TeamManagement() {
             aria-label={`Create ${activeRole === "FSE" ? "FSE" : "Lead Generator"}`}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="modal-header">
+            <header className="modal-header" style={{ background: 'linear-gradient(to right, #ffffff, #f8fafc)', borderBottom: '1px solid #e2e8f0', padding: '24px' }}>
               <div className="header-info">
-                <h2>Create {activeRole === "FSE" ? "FSE" : "Lead Generator"}</h2>
-                <p>This account will be created in your assigned state and zone.</p>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e3a8a' }}>Create {activeRole === "FSE" ? "FSE" : "Lead Generator"}</h2>
+                <p style={{ color: '#64748b', marginTop: '4px' }}>New account setup for your assigned territory.</p>
               </div>
               <button
                 type="button"
                 className="close-btn"
                 onClick={() => !createSubmitting && setIsCreateModalOpen(false)}
+                style={{ top: '24px', right: '24px' }}
               >
                 &times;
               </button>
@@ -695,15 +726,16 @@ export default function TeamManagement() {
             aria-label={`Edit ${activeRole === "FSE" ? "FSE" : "Lead Generator"}`}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="modal-header">
+            <header className="modal-header" style={{ background: 'linear-gradient(to right, #ffffff, #f8fafc)', borderBottom: '1px solid #e2e8f0', padding: '24px' }}>
               <div className="header-info">
-                <h2>Edit {activeRole === "FSE" ? "FSE" : "Lead Generator"}</h2>
-                <p>Update account details for this team member.</p>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e3a8a' }}>Edit {activeRole === "FSE" ? "FSE" : "Lead Generator"}</h2>
+                <p style={{ color: '#64748b', marginTop: '4px' }}>Manage account details and credentials.</p>
               </div>
               <button
                 type="button"
                 className="close-btn"
                 onClick={() => !editSubmitting && setIsEditModalOpen(false)}
+                style={{ top: '24px', right: '24px' }}
               >
                 &times;
               </button>
@@ -800,21 +832,22 @@ export default function TeamManagement() {
                 <th>NAME</th>
                 <th>EMAIL</th>
                 <th>PHONE</th>
-                <th>TOTAL LEADS</th>
-                <th>CONVERTED</th>
+                <th>LEADS</th>
+                <th>CVR</th>
                 <th>ACTIONS</th>
+                <th>REPORT</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="empty-cell">
+                  <td colSpan="7" className="empty-cell">
                     Loading {title.toLowerCase()}...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="6" className="empty-cell">
+                  <td colSpan="7" className="empty-cell">
                     {error}
                   </td>
                 </tr>
@@ -836,31 +869,41 @@ export default function TeamManagement() {
                     <td>{member.email}</td>
                     <td>{member.phone || "-"}</td>
                     <td>{member.totalLeadsGenerated ?? 0}</td>
-                    <td>{member.convertedLeads ?? 0}</td>
+                    <td style={{ fontWeight: 700, color: '#1e3a8a' }}>{formatRate((member.convertedLeads / (member.totalLeadsGenerated || 1)) * 100)}</td>
                     <td onClick={(event) => event.stopPropagation()}>
-                      <button
-                        type="button"
-                        className="status-action-btn"
-                        title={`Edit ${formatRole(activeRole)}`}
-                        onClick={() => openEditModal(member)}
-                        style={{ marginRight: "8px" }}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="status-action-btn"
+                          title={`Edit ${formatRole(activeRole)}`}
+                          onClick={() => openEditModal(member)}
+                        >
+                          <LuPencil />
+                        </button>
+                        <button
+                          type="button"
+                          className="status-action-btn delete"
+                          title={`Delete ${formatRole(activeRole)}`}
+                          onClick={() => setMemberToDelete(member)}
+                        >
+                          <LuTrash2 />
+                        </button>
+                      </div>
+                    </td>
+                    <td onClick={(event) => event.stopPropagation()}>
+                      <button 
+                        onClick={() => handleViewReport(member)}
+                        style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
+                        title="Full Work Report"
                       >
-                        <LuPencil />
-                      </button>
-                      <button
-                        type="button"
-                        className="status-action-btn"
-                        title={`Delete ${formatRole(activeRole)}`}
-                        onClick={() => setMemberToDelete(member)}
-                      >
-                        <LuTrash2 />
+                        <LuFileText size={16} />
                       </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="empty-cell">
+                  <td colSpan="7" className="empty-cell">
                     No {title.toLowerCase()} found.
                   </td>
                 </tr>
@@ -1015,6 +1058,12 @@ export default function TeamManagement() {
           }
         }}
         onConfirm={handleConfirmDelete}
+      />
+
+      <MemberReportModal 
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        member={reportMember}
       />
     </div>
   );

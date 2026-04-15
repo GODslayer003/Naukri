@@ -529,10 +529,16 @@ exports.getLeads = asyncHandler(async (req, res) => {
 
   // Build Query
   const query = {
-    createdBy: { $in: generatorIds },
     state: managerState,
-    status: { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"] },
   };
+
+  const memberId = req.query.memberId;
+  if (memberId) {
+    query.$or = [{ createdBy: memberId }, { assignedTo: memberId }];
+  } else {
+    query.createdBy = { $in: generatorIds };
+    query.status = { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"] };
+  }
 
   if (req.user.role === "STATE_MANAGER") {
     query.$and = [buildManagerOwnershipFilter(req.user._id)];
@@ -711,13 +717,15 @@ exports.createManagedMember = asyncHandler(async (req, res) => {
     const hasManagedDesignation = existingRoles.some((item) => MANAGED_MEMBER_ROLES.includes(item));
 
     if (!hasManagedDesignation) {
-      throw createHttpError(409, "A non-team user already exists with this email.");
+      // If it's a candidate or client, we might still want to add the role if the admin allows, 
+      // but for now let's keep it restricted to managed roles as per UI.
+      throw createHttpError(409, "An account with this email already exists with a different user type.");
     }
 
     if (existingZone !== managerZone || existingState !== managerState) {
       throw createHttpError(
         409,
-        "This email is already mapped to a team user in a different state/zone.",
+        "This email is already registered in a different state/zone.",
       );
     }
 
@@ -725,7 +733,10 @@ exports.createManagedMember = asyncHandler(async (req, res) => {
       if (!existingUser.isActive || existingUser.accessStatus === "RESTRICTED") {
         existingUser.fullName = normalizedFullName;
         existingUser.phone = normalizedPhone;
-        existingUser.password = hashedPassword;
+        // Only update password if provided
+        if (password) {
+          existingUser.password = hashedPassword;
+        }
         existingUser.territory = managerZone;
         existingUser.state = managerState;
         existingUser.accessStatus = "ACTIVE";
@@ -753,19 +764,22 @@ exports.createManagedMember = asyncHandler(async (req, res) => {
         });
       }
 
-      throw createHttpError(409, `${role === "FSE" ? "FSE" : "Lead Generator"} designation already exists for this account.`);
+      throw createHttpError(409, `This account already has the ${role === "FSE" ? "FSE" : "Lead Generator"} designation.`);
     }
 
     const nextRoleSet = new Set(existingRoles);
     nextRoleSet.add(role);
     const nextRoles = Array.from(nextRoleSet);
 
-    const nextPrimaryRole = nextRoles.includes(existingUser.role) ? existingUser.role : nextRoles[0];
+    // Keep the current primary role if it's already one of the managed roles
+    const nextPrimaryRole = MANAGED_MEMBER_ROLES.includes(existingUser.role) ? existingUser.role : nextRoles[0];
     const nextDesignations = nextRoles.filter((item) => item !== nextPrimaryRole);
 
     existingUser.fullName = normalizedFullName;
     existingUser.phone = normalizedPhone;
-    existingUser.password = hashedPassword;
+    if (password) {
+      existingUser.password = hashedPassword;
+    }
     existingUser.role = nextPrimaryRole;
     existingUser.designations = nextDesignations;
     existingUser.territory = managerZone;
@@ -776,7 +790,7 @@ exports.createManagedMember = asyncHandler(async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `${role === "FSE" ? "FSE" : "Lead Generator"} designation added to the existing account.`,
+      message: `${role === "FSE" ? "FSE" : "Lead Generator"} designation successfully added to existing user.`,
       data: {
         id: String(existingUser._id),
         fullName: existingUser.fullName,

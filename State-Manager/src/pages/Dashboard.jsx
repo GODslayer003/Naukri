@@ -6,8 +6,10 @@ import {
   LuCircleCheck,
   LuTrendingUp,
   LuArrowRight,
+  LuFileText,
 } from "react-icons/lu";
 import { fetchLeadDashboard } from "../api/leadApi";
+import MemberReportModal from "../components/MemberReportModal";
 
 const SESSION_KEY = "crm_panel_session";
 
@@ -28,6 +30,8 @@ export default function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [reportMember, setReportMember] = useState(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   useEffect(() => {
     // simple clock
@@ -128,6 +132,11 @@ export default function Dashboard() {
   const managerName = currentUser?.fullName || currentUser?.email || "State Manager";
   const managerZone = currentUser?.zone || "Assigned";
   const managerState = currentUser?.state || "State Not Assigned";
+
+  const handleViewReport = (member) => {
+    setReportMember(member);
+    setIsReportModalOpen(true);
+  };
 
   const renderNotificationItem = (activity) => {
     const colorMap = {
@@ -232,16 +241,24 @@ export default function Dashboard() {
         </div>
 
         {/* Conversion Rate Card */}
-        <div style={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "24px", position: "relative", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+        <div style={{ 
+          background: "linear-gradient(135deg, #9333ea 0%, #7e22ce 100%)", 
+          border: "none", 
+          borderRadius: "16px", 
+          padding: "24px", 
+          position: "relative", 
+          boxShadow: "0 10px 15px -3px rgba(147, 51, 234, 0.2)",
+          color: "#fff"
+        }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <span style={{ color: "#64748b", fontSize: "0.8rem", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Conversion Rate</span>
-            <div style={{ backgroundColor: "#9333ea", color: "#fff", width: "40px", height: "40px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.8rem", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Conversion Rate</span>
+            <div style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "#fff", width: "40px", height: "40px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <LuTrendingUp size={24} />
             </div>
           </div>
           <div style={{ marginTop: "16px", display: "flex", alignItems: "baseline", gap: "12px" }}>
-            <span style={{ fontSize: "2.5rem", fontWeight: "700", color: "#9333ea", lineHeight: "1" }}>{conversionRate}</span>
-            <span style={{ fontSize: "1rem", fontWeight: "700", color: "#16a34a" }}>{conversionGrowth}</span>
+            <span style={{ fontSize: "2.5rem", fontWeight: "700", lineHeight: "1" }}>{conversionRate}</span>
+            <span style={{ fontSize: "1rem", fontWeight: "700", color: "#4ade80" }}>{conversionGrowth}</span>
           </div>
         </div>
 
@@ -408,6 +425,7 @@ export default function Dashboard() {
                   <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Converted</th>
                   <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Assigned</th>
                   <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>CVR</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Report</th>
                 </tr>
               </thead>
               <tbody>
@@ -419,11 +437,20 @@ export default function Dashboard() {
                       <td style={{ padding: "14px 20px", color: "#334155" }}>{member.convertedLeads ?? 0}</td>
                       <td style={{ padding: "14px 20px", color: "#334155" }}>{member.totalAssignedLeads ?? 0}</td>
                       <td style={{ padding: "14px 20px", color: "#1e3a8a", fontWeight: "700" }}>{member.conversionRate || "0%"}</td>
+                      <td style={{ padding: "14px 20px" }}>
+                        <button 
+                          onClick={() => handleViewReport(member)}
+                          style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
+                          title="Full Work Report"
+                        >
+                          <LuFileText size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" style={{ padding: "20px", color: "#94a3b8", textAlign: "center" }}>
+                    <td colSpan="6" style={{ padding: "20px", color: "#94a3b8", textAlign: "center" }}>
                       No FSE performance records yet.
                     </td>
                   </tr>
@@ -475,6 +502,7 @@ export default function Dashboard() {
                   <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Forwarded</th>
                   <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Converted</th>
                   <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>CVR</th>
+                  <th style={{ padding: "14px 20px", fontSize: "0.72rem", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px" }}>Report</th>
                 </tr>
               </thead>
               <tbody>
@@ -486,11 +514,20 @@ export default function Dashboard() {
                       <td style={{ padding: "14px 20px", color: "#334155" }}>{member.forwardedLeads ?? 0}</td>
                       <td style={{ padding: "14px 20px", color: "#334155" }}>{member.convertedLeads ?? 0}</td>
                       <td style={{ padding: "14px 20px", color: "#1e3a8a", fontWeight: "700" }}>{member.conversionRate || "0%"}</td>
+                      <td style={{ padding: "14px 20px" }}>
+                        <button 
+                          onClick={() => handleViewReport(member)}
+                          style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
+                          title="Full Work Report"
+                        >
+                          <LuFileText size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" style={{ padding: "20px", color: "#94a3b8", textAlign: "center" }}>
+                    <td colSpan="6" style={{ padding: "20px", color: "#94a3b8", textAlign: "center" }}>
                       No Lead Generator performance records yet.
                     </td>
                   </tr>
@@ -627,6 +664,12 @@ export default function Dashboard() {
           </section>
         </div>
       ) : null}
+
+      <MemberReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        member={reportMember}
+      />
     </div>
   );
 }

@@ -99,6 +99,10 @@ export async function fetchLeads(params = {}) {
     normalizedParams.date = params.date.trim();
   }
 
+  if (params.memberId?.trim()) {
+    normalizedParams.memberId = params.memberId.trim();
+  }
+
   const { data } = await http.get("/leads", { params: normalizedParams });
   return data.data;
 }
