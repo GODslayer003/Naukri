@@ -7,9 +7,12 @@
   --sidebar-width: 276px;
   --sidebar-transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   --brand-navy: #163060;
+  --brand-navy-2: #2856a6;
   --brand-lime: #84cc16;
   --border: #dbe3ef;
   --surface: #ffffff;
+  --surface-soft: #f8fbff;
+  --text-main: #0f172a;
   --text-soft: #64748b;
 }
 
@@ -898,6 +901,9 @@ a {
     pointer-events: auto;
   }
 }
+
+.company-summary-grid {
+  display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
