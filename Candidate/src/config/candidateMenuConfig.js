@@ -22,6 +22,6 @@ export function getCandidatePageMeta(pathname = "") {
 
   return {
     title: page.title,
-    panelLabel: "Candidate Workspace",
+    panelLabel: "Candidate Panel",
   };
 }

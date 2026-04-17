@@ -102,35 +102,30 @@ export default function CandidateDashboard() {
         <MetricCard
           label="Applications"
           value={formatNumber(summary.totalApplications)}
-          detail="All submitted roles visible in your candidate pipeline."
           icon={LuScrollText}
           tone="blue"
         />
         <MetricCard
           label="Shortlisted"
           value={formatNumber(summary.shortlisted)}
-          detail="Applications moved beyond the initial review stage."
           icon={LuBadgeCheck}
           tone="emerald"
         />
         <MetricCard
           label="Interviews"
           value={formatNumber(summary.interviews)}
-          detail="Roles currently in interview or advanced decision stages."
           icon={LuSparkles}
           tone="amber"
         />
         <MetricCard
           label="Companies Applied"
           value={formatNumber(summary.companiesApplied || 0)}
-          detail="Unique companies where you have active applications."
           icon={LuBriefcase}
           tone="emerald"
         />
         <MetricCard
           label="Unread Alerts"
           value={formatNumber(summary.unreadAlerts)}
-          detail="Campaigns, application changes, and profile reminders."
           icon={LuBellRing}
           tone="lime"
         />

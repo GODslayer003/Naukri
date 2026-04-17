@@ -1,21 +1,40 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import CandidateHeader from "../components/CandidateHeader";
 import CandidateSidebar from "../components/CandidateSidebar";
 
+const DESKTOP_BREAKPOINT = "(min-width: 768px)";
+
 export default function CandidateLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia(DESKTOP_BREAKPOINT).matches
+      : false,
+  );
   const { pathname } = useLocation();
-  const sidebarRef = useRef(null);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setIsSidebarOpen(false), 0);
+    const mediaQuery = window.matchMedia(DESKTOP_BREAKPOINT);
+    const syncViewport = (event) => {
+      setIsDesktop(event.matches);
+    };
+
+    setIsDesktop(mediaQuery.matches);
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
+
+  useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
 
-    return () => window.clearTimeout(timer);
-  }, [pathname]);
+    if (!isDesktop) {
+      setIsSidebarOpen(false);
+    }
+  }, [isDesktop, pathname]);
 
   useEffect(() => {
     const handleEscape = (event) => {
@@ -29,28 +48,20 @@ export default function CandidateLayout() {
   }, []);
 
   useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (
-        isSidebarOpen &&
-        sidebarRef.current &&
-        !sidebarRef.current.contains(event.target)
-      ) {
-        setIsSidebarOpen(false);
-      }
-    };
+    document.body.style.overflow = !isDesktop && isSidebarOpen ? "hidden" : "";
 
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [isSidebarOpen]);
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isDesktop, isSidebarOpen]);
 
   return (
     <div className="min-h-screen bg-transparent text-slate-900">
-      <div ref={sidebarRef}>
-        <CandidateSidebar
-          isOpen={isSidebarOpen}
-          closeSidebar={() => setIsSidebarOpen(false)}
-        />
-      </div>
+      <CandidateSidebar
+        isOpen={isSidebarOpen}
+        closeSidebar={() => setIsSidebarOpen(false)}
+        shouldCloseOnNavigate={!isDesktop}
+      />
 
       <div className={`transition-all duration-300 ${isSidebarOpen ? "md:pl-72" : ""}`}>
         <CandidateHeader

@@ -1,10 +1,21 @@
 import { NavLink } from "react-router-dom";
 import logo from "../assets/maven-logo.svg";
 import { candidateMenu } from "../config/candidateMenuConfig";
-import { getStoredCandidateUser } from "../services/candidateApi";
+import { getStoredSession } from "../services/candidateApi";
 
-export default function CandidateSidebar({ isOpen, closeSidebar }) {
-  const candidateUser = getStoredCandidateUser();
+export default function CandidateSidebar({
+  isOpen,
+  closeSidebar,
+  shouldCloseOnNavigate = false,
+}) {
+  const session = getStoredSession();
+  const candidateUser = session?.user || null;
+  const candidateProfile = session?.profile || null;
+  const displayName = candidateUser?.name || "Candidate Session";
+  const displayRole =
+    candidateProfile?.currentTitle ||
+    candidateUser?.designation ||
+    "Candidate Workspace";
 
   return (
     <>
@@ -16,7 +27,7 @@ export default function CandidateSidebar({ isOpen, closeSidebar }) {
       />
 
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen w-72 flex-col bg-[#163060] text-white shadow-2xl transition-transform duration-300 md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-40 flex h-screen w-72 flex-col bg-[#163060] text-white shadow-2xl transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -32,7 +43,7 @@ export default function CandidateSidebar({ isOpen, closeSidebar }) {
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={closeSidebar}
+                onClick={shouldCloseOnNavigate ? closeSidebar : undefined}
                 className={({ isActive }) =>
                   `group flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     isActive
@@ -53,12 +64,9 @@ export default function CandidateSidebar({ isOpen, closeSidebar }) {
 
         <div className="p-4">
           <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-            <p className="text-sm font-semibold">
-              {candidateUser?.name || "Candidate Session"}
-            </p>
-            <p className="mt-1 text-xs leading-5 text-white/70">
-              Track jobs, applications, alerts, and profile readiness from one
-              place.
+            <p className="text-sm font-semibold">{displayName}</p>
+            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-white/70">
+              {displayRole}
             </p>
           </div>
         </div>
