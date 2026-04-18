@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
-import logo from "../assets/maven-logo.svg";
 
 const resolveRootApiBaseUrl = () => {
   const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -55,10 +54,14 @@ export default function Login() {
     setError("");
 
     try {
-      const response = await loginLeadGenerator({ email: email.trim(), zone: zone.trim(), password });
+      const response = await loginLeadGenerator({
+        email: email.trim(),
+        zone: zone.trim(),
+        password,
+      });
       sessionStorage.setItem(
         SESSION_KEY,
-        JSON.stringify({ token: response.token, user: response.user })
+        JSON.stringify({ token: response.token, user: response.user }),
       );
       navigate("/", { replace: true });
     } catch (err) {
@@ -69,44 +72,15 @@ export default function Login() {
   };
 
   return (
-    <div className="login-shell">
-      <div className="login-card">
-        {/* Left panel */}
-        <div className="login-brand">
-          <img src={logo} alt="Maven Jobs" className="login-brand-logo" />
-          <h1 className="login-brand-title">
-            Lead Generation Portal
-          </h1>
-          <p className="login-brand-sub">
-            Sign in with your CRM account to manage leads, track your pipeline,
-            and submit new opportunities.
-          </p>
-          <ul className="login-feature-list">
-            {[
-              "Submit and track leads in real-time",
-              "View approval status and feedback",
-              "Monitor your performance dashboard",
-            ].map((item) => (
-              <li key={item} className="login-feature-item">
-                <span className="login-feature-dot" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Right panel */}
-        <div className="login-form-wrap">
-          <p className="login-eyebrow">Lead Generator Access</p>
-          <h2 className="login-form-title">Sign in to your account</h2>
-          <p className="login-form-sub">
-            Use your Maven CRM credentials to access the portal.
-          </p>
+    <div className="login-shell login-shell-compact">
+      <div className="login-card login-card-compact">
+        <div className="login-form-wrap login-form-wrap-compact">
+          <h1 className="login-panel-title">Lead Generator Panel</h1>
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="login-field">
               <label className="login-label" htmlFor="lg-email">
-                Email address
+                Email
               </label>
               <input
                 id="lg-email"
@@ -130,7 +104,9 @@ export default function Login() {
                 className="login-input"
                 style={{ appearance: "auto" }}
               >
-                <option value="" disabled>Select a zone</option>
+                <option value="" disabled>
+                  Select a zone
+                </option>
                 <option value="North">North</option>
                 <option value="South">South</option>
                 <option value="East">East</option>
@@ -164,10 +140,10 @@ export default function Login() {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "rgba(255, 255, 255, 0.5)",
+                    color: "#64748b",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
                   }}
                   title={showPassword ? "Hide password" : "Show password"}
                 >
@@ -182,16 +158,9 @@ export default function Login() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="login-btn"
-            >
-              {isSubmitting ? "Signing in…" : "Sign in"}
+            <button type="submit" disabled={isSubmitting} className="login-btn">
+              {isSubmitting ? "Logging in..." : "Login"}
             </button>
-            <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.875rem", color: "#475569", fontWeight: "500" }}>
-              Account creation is managed by your State Manager.
-            </div>
           </form>
         </div>
       </div>

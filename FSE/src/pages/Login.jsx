@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
-import logo from "../assets/maven-logo.svg";
 import { loginFSE } from "../api/fseApi";
 
 const SESSION_KEY = "crm_panel_session";
@@ -32,31 +31,14 @@ export default function Login() {
   };
 
   return (
-    <div className="login-shell">
-      <div className="login-card">
-        <div className="login-brand">
-          <div className="login-brand-logo-card">
-            <img src={logo} alt="Maven Jobs" className="login-brand-logo" />
-          </div>
-          <h1 className="login-brand-title">Field Sales Executive Portal</h1>
-          <p className="login-brand-sub">
-            Sign in to manage assigned leads, update statuses, and track follow-up activity.
-          </p>
-          <ul className="login-feature-list">
-            <li className="login-feature-item"><span className="login-feature-dot" />Track zone-wise assigned leads</li>
-            <li className="login-feature-item"><span className="login-feature-dot" />Update lead status in real time</li>
-            <li className="login-feature-item"><span className="login-feature-dot" />Log complete follow-up history</li>
-          </ul>
-        </div>
-
-        <div className="login-form-wrap">
-          <p className="login-eyebrow">FSE Access</p>
-          <h2 className="login-form-title">Sign in to your account</h2>
-          <p className="login-form-sub">Use your registered email, zone, and password.</p>
+    <div className="login-shell login-shell-compact">
+      <div className="login-card login-card-compact">
+        <div className="login-form-wrap login-form-wrap-compact">
+          <h1 className="login-panel-title">FSE Panel</h1>
 
           <form className="login-form" onSubmit={handleSubmit}>
             <div className="login-field">
-              <label className="login-label" htmlFor="fse-email">Email address</label>
+              <label className="login-label" htmlFor="fse-email">Email</label>
               <input
                 id="fse-email"
                 className="login-input"
@@ -127,12 +109,8 @@ export default function Login() {
             {error ? <div className="login-error">{error}</div> : null}
 
             <button type="submit" className="login-btn" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "Logging in..." : "Login"}
             </button>
-
-            <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.875rem", color: "#475569", fontWeight: 500 }}>
-              Account creation is managed by your State Manager.
-            </div>
           </form>
         </div>
       </div>

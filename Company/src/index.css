@@ -1513,50 +1513,41 @@ a {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(132, 204, 22, 0.14), transparent 28%),
+    linear-gradient(180deg, #f8fafc 0%, #eef4ff 100%);
 }
 
 .company-login-card {
-  width: min(1000px, 100%);
-  display: grid;
-  grid-template-columns: 0.92fr 1.08fr;
+  width: min(460px, 100%);
+  display: block;
   border-radius: 30px;
   border: 1px solid var(--border);
-  overflow: hidden;
   background: #ffffff;
-  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.12);
 }
 
 .company-login-brand {
-  padding: 34px 30px;
-  color: #ffffff;
-  background: linear-gradient(150deg, #163060 0%, #2856a6 64%, #163060 100%);
-}
-
-.company-login-brand img {
-  width: 170px;
-  border-radius: 8px;
-  padding: 8px;
-  background: #ffffff;
-}
-
-.company-login-brand h2 {
-  margin: 24px 0 8px;
-  font-size: 2.3rem;
-}
-
-.company-login-brand p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.86);
-  line-height: 1.7;
+  display: none;
 }
 
 .company-login-form-wrap {
-  padding: 34px;
+  display: flex;
+  justify-content: center;
+  padding: 36px 32px;
+}
+
+.company-login-panel {
+  width: 100%;
+  max-width: 396px;
 }
 
 .company-login-form-wrap h1 {
   margin: 0;
-  font-size: 2rem;
+  text-align: center;
+  font-size: 2.3rem;
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--brand-navy);
 }
 
 .company-login-subtitle {
@@ -1569,6 +1560,11 @@ a {
   margin: 2px 0 0;
   font-size: 0.85rem;
   color: #64748b;
+}
+
+.company-login-submit {
+  width: 100%;
+  margin-top: 8px;
 }
 
 @media (max-width: 1220px) {
@@ -1640,9 +1636,6 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .company-login-card {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 680px) {
@@ -1694,6 +1687,14 @@ a {
   .company-overview-head,
   .company-overview-row {
     grid-template-columns: 1fr;
+  }
+
+  .company-login-form-wrap {
+    padding: 28px 22px;
+  }
+
+  .company-login-form-wrap h1 {
+    font-size: 1.9rem;
   }
 
 }

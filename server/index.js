@@ -1,24 +1,20 @@
 require("dotenv").config();
 
 const http = require("http");
-const app = require("./src/app");
-const connectDB = require("./src/config/db");
-
+const mongoose = require("mongoose");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 
-// -----------------------------
-// App Info
-// -----------------------------
+const app = require("./src/app");
+const connectDB = require("./src/config/db");
+
 const APP_NAME = process.env.APP_NAME || "Application";
 const APP_VERSION = process.env.APP_VERSION || "1.0.0";
 const NODE_ENV = process.env.NODE_ENV || "development";
 const PORT = process.env.PORT || 5000;
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
-// -----------------------------
-// Security Middlewares
-// -----------------------------
 app.use(helmet());
 
 if (NODE_ENV === "development") {
@@ -32,41 +28,80 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// -----------------------------
-// Bootstrap Application
-// -----------------------------
 const startServer = async () => {
+  let server;
+
+  const closeMongoConnection = async () => {
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.connection.close();
+      console.log("[server] MongoDB connection closed.");
+    }
+  };
+
+  const shutdown = (signal, error = null) => {
+    if (error) {
+      console.error(`[server] ${signal}:`, error);
+    } else {
+      console.log(`[server] ${signal} received. Shutting down gracefully...`);
+    }
+
+    const exitCode = error ? 1 : 0;
+
+    if (!server) {
+      closeMongoConnection()
+        .catch((closeError) => {
+          console.error("[server] Error while closing MongoDB connection:", closeError);
+        })
+        .finally(() => process.exit(exitCode));
+      return;
+    }
+
+    server.close(async () => {
+      try {
+        await closeMongoConnection();
+      } catch (closeError) {
+        console.error("[server] Error while closing MongoDB connection:", closeError);
+      } finally {
+        process.exit(exitCode);
+      }
+    });
+  };
+
   try {
     const dbConnection = await connectDB();
 
-    const server = http.createServer(app);
+    server = http.createServer(app);
 
     server.listen(PORT, () => {
       console.log("\n==================================================");
-      console.log(`🚀 ${APP_NAME} Started Successfully`);
+      console.log(`${APP_NAME} Started Successfully`);
       console.log("==================================================");
-      console.log(`📦 Version       : v${APP_VERSION}`);
-      console.log(`🌍 Environment   : ${NODE_ENV}`);
-      console.log(`🗄️  Database     :  ${dbConnection.connection.host}`);
-      console.log(`🗄️  Database     :  ✅ Connected Successfully`);
-      console.log(`🔗 Base URL      : https://maven-qr.onrender.com`);
-      console.log(`📡 API Base      : https://maven-qr.onrender.com/api/v${APP_VERSION}`);
+      console.log(`Version       : v${APP_VERSION}`);
+      console.log(`Environment   : ${NODE_ENV}`);
+      console.log(`Database Host : ${dbConnection.connection.host}`);
+      console.log("Database      : Connected Successfully");
+      console.log(`Base URL      : ${BASE_URL}`);
+      console.log(`API Base      : ${BASE_URL}/api/v${APP_VERSION}`);
       console.log("==================================================\n");
     });
 
-    // Graceful Shutdown
     process.on("unhandledRejection", (err) => {
-      console.error("Unhandled Rejection:", err);
-      server.close(() => process.exit(1));
+      shutdown("Unhandled Rejection", err);
     });
 
     process.on("uncaughtException", (err) => {
-      console.error("Uncaught Exception:", err);
-      process.exit(1);
+      shutdown("Uncaught Exception", err);
     });
 
+    process.on("SIGINT", () => {
+      shutdown("SIGINT");
+    });
+
+    process.on("SIGTERM", () => {
+      shutdown("SIGTERM");
+    });
   } catch (error) {
-    console.error("❌ Failed to start server:", error);
+    console.error("[server] Failed to start server:", error);
     process.exit(1);
   }
 };

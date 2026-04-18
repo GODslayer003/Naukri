@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuLock, LuMail } from "react-icons/lu";
 import { loginCompany } from "../api/companyApi";
-import logo from "../assets/maven-logo.svg";
 
 const SESSION_KEY = "company_panel_session";
 
@@ -44,55 +43,56 @@ export default function Login() {
   return (
     <div className="company-login-shell">
       <div className="company-login-card">
-        <aside className="company-login-brand">
-          <img src={logo} alt="Maven Jobs" />
-          <h2>Company Control</h2>
-        </aside>
-
         <section className="company-login-form-wrap">
-          <h1>Client Sign In</h1>
+          <div className="company-login-panel">
+            <h1>Company Panel</h1>
 
-          {error ? <div className="status-banner">{error}</div> : null}
+            {error ? <div className="status-banner">{error}</div> : null}
 
-          <form className="company-form-grid" onSubmit={handleSubmit}>
-            <label className="company-field">
-              <span>Email ID</span>
-              <div className="company-input-wrap">
-                <LuMail size={16} />
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, email: event.target.value }))
-                  }
-                  placeholder="client@example.com"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-            </label>
+            <form className="company-form-grid" onSubmit={handleSubmit}>
+              <label className="company-field">
+                <span>Email</span>
+                <div className="company-input-wrap">
+                  <LuMail size={16} />
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                    placeholder="client@example.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+              </label>
 
-            <label className="company-field">
-              <span>Password</span>
-              <div className="company-input-wrap">
-                <LuLock size={16} />
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, password: event.target.value }))
-                  }
-                  placeholder="Enter password"
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-            </label>
+              <label className="company-field">
+                <span>Password</span>
+                <div className="company-input-wrap">
+                  <LuLock size={16} />
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, password: event.target.value }))
+                    }
+                    placeholder="Enter password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+              </label>
 
-            <button type="submit" className="company-primary-btn" disabled={isSubmitting}>
-              {isSubmitting ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
+              <button
+                type="submit"
+                className="company-primary-btn company-login-submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Logging in..." : "Login"}
+              </button>
+            </form>
+          </div>
         </section>
       </div>
     </div>
