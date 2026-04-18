@@ -1509,18 +1509,15 @@ a {
   transition: opacity var(--sidebar-transition);
 }
 
-  .panel-shell {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Responsive Utilities */
 @media (min-width: 1025px) {
   .lg-hide { display: none !important; }
 }
 @media (max-width: 1024px) {
   .lg-show { display: none !important; }
-}
+  .panel-shell {
+    grid-template-columns: 1fr;
+  }
 
   .sidebar {
     position: fixed;

@@ -156,11 +156,13 @@ export default function App() {
     email: "",
     phone: "",
     roleTitle: "",
-    roleDescription: "",
     budget: "",
-    tagline: "",
     companySize: "",
-    linkedIn: "",
+    gstRegistration: "",
+    interviewLocation: "",
+    alternatePhone: "",
+    alternateEmail: "",
+    specialNotes: "",
   });
   const [clientStep, setClientStep] = useState(1);
 
@@ -203,11 +205,13 @@ export default function App() {
       email: "",
       phone: "",
       roleTitle: "",
-      roleDescription: "",
       budget: "",
-      tagline: "",
       companySize: "",
-      linkedIn: "",
+      gstRegistration: "",
+      interviewLocation: "",
+      alternatePhone: "",
+      alternateEmail: "",
+      specialNotes: "",
     });
     setClientFeedback({ type: "", message: "" });
     setClientReferenceId("");
@@ -354,6 +358,14 @@ export default function App() {
       return "Please provide a role title for the position.";
     }
 
+    if (clientForm.alternateEmail.trim() && !EMAIL_PATTERN.test(clientForm.alternateEmail.trim())) {
+      return "Please enter a valid alternate email address.";
+    }
+
+    if (clientForm.alternatePhone.trim() && !isValidPhoneNumber(clientForm.alternatePhone)) {
+      return "Alternate contact number must contain exactly 10 digits.";
+    }
+
     return "";
   };
 
@@ -435,11 +447,13 @@ export default function App() {
     payload.append("email", clientForm.email.trim());
     payload.append("phone", `+91${toIndianPhoneDigits(clientForm.phone)}`);
     payload.append("roleTitle", clientForm.roleTitle.trim());
-    payload.append("roleDescription", clientForm.roleDescription.trim());
     payload.append("budget", clientForm.budget.trim());
-    payload.append("tagline", clientForm.tagline.trim());
     payload.append("companySize", clientForm.companySize);
-    payload.append("linkedIn", clientForm.linkedIn.trim());
+    payload.append("gstRegistration", clientForm.gstRegistration.trim());
+    payload.append("interviewLocation", clientForm.interviewLocation.trim());
+    payload.append("alternatePhone", clientForm.alternatePhone.trim() ? `+91${toIndianPhoneDigits(clientForm.alternatePhone)}` : "");
+    payload.append("alternateEmail", clientForm.alternateEmail.trim());
+    payload.append("specialNotes", clientForm.specialNotes.trim());
     if (qrToken) {
       payload.append("qrToken", qrToken);
     }
@@ -486,26 +500,37 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showDownloadModal]);
 
+  const isCandidateSuccessView = view === "thanks";
+  const isClientSuccessView = view === "client-thanks";
+  const downloadModalContent = isCandidateSuccessView
+    ? {
+        ariaLabel: "Track Your Match",
+        title: "Track Your Match",
+        description: "Download App & Connect with your growth.",
+        primaryLabel: "Download Maven App",
+        secondaryLabel: "",
+      }
+    : isClientSuccessView
+    ? {
+        ariaLabel: "Make Your Great Team",
+        title: "Make Your Great Team",
+        description: "Download App & Grow with Maven",
+        primaryLabel: "Download Maven App",
+        secondaryLabel: "",
+      }
+    : {
+        ariaLabel: "Download MavenJobs App",
+        title: "Download MavenJobs App",
+        description: "Track your application status and updates live from the app.",
+        primaryLabel: "Download Now",
+        secondaryLabel: "Continue on Web",
+      };
+
   return (
     <main className="landing-shell">
       <img src={logo} alt="Maven Jobs" className="brand-logo brand-logo-fixed" />
-      
-      {view === "role" && (
-        <div className="hero-section">
-          <h1 className="headline">Find Jobs. Build Teams.</h1>
-          <p className="sub-copy">Your Next Job or Hire Starts Here</p>
-          <p className="trust-copy">Trusted by thousands of candidates and companies</p>
-        </div>
-      )}
 
       <section className={view === "role" ? "role-selection-wrapper" : "landing-card"}>
-        {view !== "role" && (
-          <header className="landing-head">
-            <h1 className="headline" style={{ margin: 0 }}>Find Jobs. Build Teams.</h1>
-            <p className="sub-copy">Your Next Job or Hire Starts Here</p>
-          </header>
-        )}
-
         {view === "role" ? (
           <>
             <div className="role-grid">
@@ -520,7 +545,7 @@ export default function App() {
               >
                 <span className="role-chip">For Candidates</span>
                 <h2>Discover jobs that match your skills <br/> and apply for job opportunities</h2>
-                <span className="role-card-btn">Apply for Jobs</span>
+                <span className="role-card-btn">Candidate Login</span>
               </button>
 
               <button
@@ -534,7 +559,7 @@ export default function App() {
               >
                 <span className="role-chip role-chip-muted">For Employers</span>
                 <h2>Need to build a great team? <br/> Connect with Maven</h2>
-                <span className="role-card-btn">Start Hiring</span>
+                <span className="role-card-btn">Employer Login</span>
               </button>
             </div>
           </>
@@ -542,7 +567,16 @@ export default function App() {
 
         {view === "candidate" ? (
           <>
-            <h1 className="headline">JOB APPLY HERE</h1>
+            <div className="match-flow-head">
+              <h1 className="headline">Match Here</h1>
+              <p className="match-flow-copy" aria-label="Location, CTC, Overall Growth">
+                <span className="match-flow-token match-flow-token-location">Location</span>
+                <span className="match-flow-divider">|</span>
+                <span className="match-flow-token match-flow-token-ctc">CTC</span>
+                <span className="match-flow-divider">|</span>
+                <span className="match-flow-token match-flow-token-growth">Overall Growth</span>
+              </p>
+            </div>
 
             {candidateFeedback.message ? (
               <div className={`feedback ${candidateFeedback.type === "error" ? "feedback-error" : "feedback-info"}`}>
@@ -665,12 +699,14 @@ export default function App() {
 
         {view === "client" ? (
           <>
-            <h1 className="headline">Client / Employer Registration</h1>
-            <p className="sub-copy">
-              {clientStep === 1
-                ? "Step 1 of 2: Company details."
-                : "Step 2 of 2: Add role manually or upload JD files."}
-            </p>
+            <div className="match-flow-head">
+              <h1 className="headline">Build Great Team</h1>
+              <p className="match-flow-copy" aria-label="Skill versus Budget Match, Fit to Role">
+                <span className="match-flow-token match-flow-token-ctc">Skill vs Budget Match</span>
+                <span className="match-flow-divider">|</span>
+                <span className="match-flow-token match-flow-token-growth">Fit to Role</span>
+              </p>
+            </div>
 
             {clientFeedback.message ? (
               <div className={`feedback ${clientFeedback.type === "error" ? "feedback-error" : "feedback-info"}`}>
@@ -740,9 +776,6 @@ export default function App() {
                   </label>
 
                   <div className="form-actions">
-                    <button type="button" className="button button-secondary" onClick={resetClientFlow}>
-                      Back
-                    </button>
                     <button type="submit" className="button button-primary" disabled={isClientSubmitting}>
                       {isClientSubmitting ? <LuLoaderCircle className="spin" /> : "Next"}
                     </button>
@@ -751,12 +784,12 @@ export default function App() {
               ) : (
                 <>
                   <label className="form-field">
-                    <span className="field-label">Company Tagline</span>
+                    <span className="field-label">GST Registration</span>
                     <input
                       type="text"
-                      value={clientForm.tagline}
-                      onChange={updateClientField("tagline")}
-                      placeholder="e.g. Innovating HR Tech"
+                      value={clientForm.gstRegistration}
+                      onChange={updateClientField("gstRegistration")}
+                      placeholder="GST registration number"
                     />
                   </label>
 
@@ -777,13 +810,41 @@ export default function App() {
                     </select>
                   </label>
 
-                  <label className="form-field form-field-full">
-                    <span className="field-label">LinkedIn Page URL</span>
+                  <label className="form-field">
+                    <span className="field-label">Interview Location</span>
                     <input
-                      type="url"
-                      value={clientForm.linkedIn}
-                      onChange={updateClientField("linkedIn")}
-                      placeholder="https://linkedin.com/company/..."
+                      type="text"
+                      value={clientForm.interviewLocation}
+                      onChange={updateClientField("interviewLocation")}
+                      placeholder="e.g. Gurgaon, Remote, Hybrid"
+                    />
+                  </label>
+
+                  <label className="form-field">
+                    <span className="field-label">Alternate Contact Number</span>
+                    <div className="phone-input-row">
+                      <span className="country-code-pill">+91</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]{10}"
+                        maxLength={10}
+                        value={clientForm.alternatePhone}
+                        onChange={(event) =>
+                          setClientForm((prev) => ({ ...prev, alternatePhone: toIndianPhoneDigits(event.target.value) }))
+                        }
+                        placeholder="9876543210"
+                      />
+                    </div>
+                  </label>
+
+                  <label className="form-field">
+                    <span className="field-label">Alternate Email Address</span>
+                    <input
+                      type="email"
+                      value={clientForm.alternateEmail}
+                      onChange={updateClientField("alternateEmail")}
+                      placeholder="hiring@company.com"
                     />
                   </label>
 
@@ -799,26 +860,16 @@ export default function App() {
                   </label>
 
                   <label className="form-field form-field-full">
-                    <span className="field-label">Role Description (optional)</span>
+                    <span className="field-label">Special Notes</span>
                     <textarea
-                      value={clientForm.roleDescription}
-                      onChange={updateClientField("roleDescription")}
-                      placeholder="Describe responsibilities, skills, and hiring context."
+                      value={clientForm.specialNotes}
+                      onChange={updateClientField("specialNotes")}
+                      placeholder="Need White Collar, Manager, VP, Want Bulk Hiring, Fast Hiring..."
                       style={{ minHeight: "100px" }}
                     />
                   </label>
 
                   <div className="form-actions">
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      onClick={() => {
-                        setClientStep(1);
-                        setClientFeedback({ type: "", message: "" });
-                      }}
-                    >
-                      Back
-                    </button>
                     <button type="submit" className="button button-primary" disabled={isClientSubmitting}>
                       {isClientSubmitting ? <LuLoaderCircle className="spin" /> : "Connect with Maven"}
                     </button>
@@ -846,7 +897,7 @@ export default function App() {
                 className="button button-primary"
                 onClick={() => setShowDownloadModal(true)}
               >
-                Download MavenJobs App
+                Track Your Match
               </button>
               <button type="button" className="button button-secondary" onClick={resetCandidateFlow}>
                 Submit Another Candidate
@@ -872,7 +923,7 @@ export default function App() {
                 className="button button-primary"
                 onClick={() => setShowDownloadModal(true)}
               >
-                Download MavenJobs App
+                Make Your Great Team
               </button>
               <button
                 type="button"
@@ -898,21 +949,23 @@ export default function App() {
               className="download-modal"
               role="dialog"
               aria-modal="true"
-              aria-label="Download MavenJobs App"
+              aria-label={downloadModalContent.ariaLabel}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="download-modal-head">
                 <img src={logo} alt="Maven Jobs" className="download-modal-logo" />
-                <h2>Download MavenJobs App</h2>
-                <p>Track your application status and updates live from the app.</p>
+                <h2>{downloadModalContent.title}</h2>
+                <p>{downloadModalContent.description}</p>
               </div>
               <div className="download-modal-actions">
                 <a className="button button-primary" href={appDownloadUrl} target="_blank" rel="noreferrer">
-                  Download Now
+                  {downloadModalContent.primaryLabel}
                 </a>
-                <button type="button" className="button button-secondary" onClick={() => setShowDownloadModal(false)}>
-                  Continue on Web
-                </button>
+                {downloadModalContent.secondaryLabel ? (
+                  <button type="button" className="button button-secondary" onClick={() => setShowDownloadModal(false)}>
+                    {downloadModalContent.secondaryLabel}
+                  </button>
+                ) : null}
               </div>
             </section>
           </div>
