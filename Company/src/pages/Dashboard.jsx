@@ -10,7 +10,6 @@ import {
   LuQrCode,
   LuRepeat2,
   LuShieldAlert,
-  LuShieldCheck,
   LuUsers,
   LuChevronRight,
   LuSparkles,
@@ -177,12 +176,6 @@ export default function Dashboard() {
 
   const metrics = useMemo(
     () => [
-      {
-        label: "Pending approvals",
-        value: Number(tracking.pendingApprovals || 0),
-        icon: LuShieldCheck,
-        tone: "amber",
-      },
       {
         label: "Applications",
         value: Number(tracking.totalApplications || 0),
@@ -387,7 +380,7 @@ export default function Dashboard() {
       {packageActionError ? <div className="status-banner">{packageActionError}</div> : null}
 
       {activeTab === "overview" && (
-        <div className="company-stack-y company-fade-in">
+        <div className="company-stack-y company-fade-in company-overview-layout">
           <section className="company-metric-grid">
             {metrics.map((metric) => (
               <article key={metric.label} className="company-metric-card">

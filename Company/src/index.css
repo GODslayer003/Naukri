@@ -315,6 +315,10 @@ a {
   gap: 18px;
 }
 
+.company-overview-layout {
+  width: min(980px, 100%);
+}
+
 .company-tabs-nav {
   display: flex;
   align-items: center;
@@ -562,7 +566,7 @@ a {
 
 .company-metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -652,7 +656,7 @@ a {
 }
 
 .company-main-grid-modern {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.65fr);
 }
 
 .company-package-grid {
