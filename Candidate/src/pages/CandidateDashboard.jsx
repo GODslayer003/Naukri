@@ -97,9 +97,10 @@ export default function CandidateDashboard() {
     : "";
 
   return (
-    <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
+    <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="flex-1 space-y-6 lg:max-w-[calc(100%-280px)] xl:max-w-[calc(100%-320px)]">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
           label="Applications"
           value={formatNumber(summary.totalApplications)}
           icon={LuScrollText}
@@ -122,12 +123,6 @@ export default function CandidateDashboard() {
           value={formatNumber(summary.companiesApplied || 0)}
           icon={LuBriefcase}
           tone="emerald"
-        />
-        <MetricCard
-          label="Unread Alerts"
-          value={formatNumber(summary.unreadAlerts)}
-          icon={LuBellRing}
-          tone="lime"
         />
       </section>
 
@@ -350,6 +345,14 @@ export default function CandidateDashboard() {
           </PanelCard>
         </div>
       </section>
+      </div>
+
+      <aside className="hidden w-full shrink-0 space-y-6 lg:block lg:w-[280px] xl:w-[320px]">
+        {/* Ads space placeholder */}
+        <div className="sticky top-6 flex h-[400px] w-full flex-col items-center justify-center rounded-[24px] border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400">
+          <span className="text-sm font-semibold uppercase tracking-widest text-slate-400">Advertisement</span>
+        </div>
+      </aside>
     </div>
   );
 }

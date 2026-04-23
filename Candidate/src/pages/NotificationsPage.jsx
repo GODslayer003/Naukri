@@ -9,6 +9,8 @@ export default function NotificationsPage() {
     error: "",
     data: [],
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const notificationsPerPage = 10;
 
   const loadNotifications = async () => {
     try {
@@ -63,6 +65,23 @@ export default function NotificationsPage() {
     );
   }
 
+  const indexOfLastNotification = currentPage * notificationsPerPage;
+  const indexOfFirstNotification = indexOfLastNotification - notificationsPerPage;
+  const currentNotifications = state.data.slice(indexOfFirstNotification, indexOfLastNotification);
+  const totalPages = Math.ceil(state.data.length / notificationsPerPage);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage((prev) => prev + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage((prev) => prev - 1);
+    }
+  };
+
   return (
     <PanelCard>
       <SectionHeading
@@ -72,7 +91,7 @@ export default function NotificationsPage() {
       />
 
       <div className="mt-6 space-y-4">
-        {state.data.map((notification) => (
+        {currentNotifications.map((notification) => (
           <div
             key={notification.id}
             className="rounded-[24px] border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:border-lime-300 hover:bg-white"
@@ -106,6 +125,29 @@ export default function NotificationsPage() {
           </div>
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-6">
+          <button
+            onClick={handlePrevPage}
+            disabled={currentPage === 1}
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-lime-300 hover:bg-lime-50 hover:text-[#163060] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-700"
+          >
+            Previous
+          </button>
+          <span className="text-sm font-medium text-slate-500">
+            Page <span className="font-bold text-slate-900">{currentPage}</span> of{" "}
+            <span className="font-bold text-slate-900">{totalPages}</span>
+          </span>
+          <button
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-lime-300 hover:bg-lime-50 hover:text-[#163060] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-700"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </PanelCard>
   );
 }
