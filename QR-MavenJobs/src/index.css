@@ -397,7 +397,9 @@ textarea {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(11, 30, 59, 0.45);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
   padding: 20px;

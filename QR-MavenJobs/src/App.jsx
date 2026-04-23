@@ -158,12 +158,14 @@ export default function App() {
     roleTitle: "",
     budget: "",
     companySize: "",
-    gstRegistration: "",
     interviewLocation: "",
     alternatePhone: "",
     alternateEmail: "",
     specialNotes: "",
+    organisationType: "",
+    designation: "",
   });
+  const [gstCertificateFile, setGstCertificateFile] = useState(null);
   const [clientStep, setClientStep] = useState(1);
 
   const candidateRegisterUrl = useMemo(resolveCandidateRegisterUrl, []);
@@ -207,12 +209,14 @@ export default function App() {
       roleTitle: "",
       budget: "",
       companySize: "",
-      gstRegistration: "",
       interviewLocation: "",
       alternatePhone: "",
       alternateEmail: "",
       specialNotes: "",
+      organisationType: "",
+      designation: "",
     });
+    setGstCertificateFile(null);
     setClientFeedback({ type: "", message: "" });
     setClientReferenceId("");
     setClientCompanyName("");
@@ -449,11 +453,15 @@ export default function App() {
     payload.append("roleTitle", clientForm.roleTitle.trim());
     payload.append("budget", clientForm.budget.trim());
     payload.append("companySize", clientForm.companySize);
-    payload.append("gstRegistration", clientForm.gstRegistration.trim());
     payload.append("interviewLocation", clientForm.interviewLocation.trim());
     payload.append("alternatePhone", clientForm.alternatePhone.trim() ? `+91${toIndianPhoneDigits(clientForm.alternatePhone)}` : "");
     payload.append("alternateEmail", clientForm.alternateEmail.trim());
     payload.append("specialNotes", clientForm.specialNotes.trim());
+    payload.append("organisationType", clientForm.organisationType);
+    payload.append("designation", clientForm.designation.trim());
+    if (gstCertificateFile) {
+      payload.append("gstCertificate", gstCertificateFile);
+    }
     if (qrToken) {
       payload.append("qrToken", qrToken);
     }
@@ -701,10 +709,10 @@ export default function App() {
           <>
             <div className="match-flow-head">
               <h1 className="headline">Build Great Team</h1>
-              <p className="match-flow-copy" aria-label="Skill versus Budget Match, Fit to Role">
-                <span className="match-flow-token match-flow-token-ctc">Skill vs Budget Match</span>
-                <span className="match-flow-divider">|</span>
+              <p className="match-flow-copy" aria-label="Fit to Role, Skill versus Budget Match">
                 <span className="match-flow-token match-flow-token-growth">Fit to Role</span>
+                <span className="match-flow-divider">|</span>
+                <span className="match-flow-token match-flow-token-ctc">Skill vs Budget Match</span>
               </p>
             </div>
 
@@ -734,6 +742,23 @@ export default function App() {
                   </label>
 
                   <label className="form-field">
+                    <span className="field-label">Organisation Type</span>
+                    <select
+                      className="input custom-select"
+                      style={{ height: "42px", appearance: "auto" }}
+                      value={clientForm.organisationType}
+                      onChange={updateClientField("organisationType")}
+                    >
+                      <option value="">Select Type...</option>
+                      {["Sole Proprietorship", "Partnership Firm", "Limited Liability Partnership (LLP)", "Private Limited Company (Pvt Ltd)", "Public Limited Company", "One Person Company (OPC)", "Cooperative Society"].map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="form-field">
                     <span className="field-label">
                       Company Email <span className="required-asterisk">*</span>
                     </span>
@@ -742,6 +767,16 @@ export default function App() {
                       value={clientForm.email}
                       onChange={updateClientField("email")}
                       placeholder="hr@company.com"
+                    />
+                  </label>
+
+                  <label className="form-field">
+                    <span className="field-label">Alternate Email Address</span>
+                    <input
+                      type="email"
+                      value={clientForm.alternateEmail}
+                      onChange={updateClientField("alternateEmail")}
+                      placeholder="hiring@company.com"
                     />
                   </label>
 
@@ -766,6 +801,16 @@ export default function App() {
                   </label>
 
                   <label className="form-field">
+                    <span className="field-label">Your Designation</span>
+                    <input
+                      type="text"
+                      value={clientForm.designation}
+                      onChange={updateClientField("designation")}
+                      placeholder="e.g. Owner, HR, Administrative"
+                    />
+                  </label>
+
+                  <label className="form-field">
                     <span className="field-label">Budget / CTC (optional)</span>
                     <input
                       type="text"
@@ -784,12 +829,11 @@ export default function App() {
               ) : (
                 <>
                   <label className="form-field">
-                    <span className="field-label">GST Registration</span>
+                    <span className="field-label">GST Certificate Upload (optional)</span>
                     <input
-                      type="text"
-                      value={clientForm.gstRegistration}
-                      onChange={updateClientField("gstRegistration")}
-                      placeholder="GST registration number"
+                      type="file"
+                      accept=".pdf,application/pdf,image/*"
+                      onChange={(event) => setGstCertificateFile(event.target.files?.[0] || null)}
                     />
                   </label>
 
@@ -838,15 +882,7 @@ export default function App() {
                     </div>
                   </label>
 
-                  <label className="form-field">
-                    <span className="field-label">Alternate Email Address</span>
-                    <input
-                      type="email"
-                      value={clientForm.alternateEmail}
-                      onChange={updateClientField("alternateEmail")}
-                      placeholder="hiring@company.com"
-                    />
-                  </label>
+
 
                   <label className="form-field form-field-full">
                     <span className="field-label">Role Title <span className="required-asterisk">*</span></span>
@@ -860,7 +896,9 @@ export default function App() {
                   </label>
 
                   <label className="form-field form-field-full">
-                    <span className="field-label">Special Notes</span>
+                    <span className="field-label">
+                      Special Notes <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#5f7598' }}>(anything you want to share with us to build a great team)</span>
+                    </span>
                     <textarea
                       value={clientForm.specialNotes}
                       onChange={updateClientField("specialNotes")}
@@ -885,6 +923,9 @@ export default function App() {
             <h1 className="headline">THANK YOU{candidateName ? `, ${candidateName}` : ""}</h1>
             <p className="sub-copy">
               Your application has been submitted successfully.
+            </p>
+            <p className="sub-copy" style={{ marginTop: '8px', fontWeight: '600', color: '#18458a' }}>
+              Team will connect soon within 2-3 working days.
             </p>
             {candidateReferenceId ? (
               <p className="reference-copy">
@@ -934,7 +975,7 @@ export default function App() {
                   setView("client");
                 }}
               >
-                Submit Another Role
+                Refer to another Associated Company or Person
               </button>
               <button type="button" className="button button-secondary" onClick={resetClientFlow}>
                 Back to Role Selection
