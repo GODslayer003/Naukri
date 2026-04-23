@@ -488,10 +488,37 @@ textarea {
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
-  padding: 24px;
+  padding: 32px 24px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+  border-radius: 18px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.role-card:hover {
+  transform: translateY(-4px);
+  border-color: #88afed;
+  box-shadow: 0 16px 36px rgba(24, 69, 138, 0.12);
+}
+
+.gradient-heading {
+  font-size: 1.8rem;
+  line-height: 1.25;
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(135deg, #18458a 0%, #7cb518 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+.role-card p {
+  color: #5f7598;
+  font-size: 1rem;
+  margin: 4px 0 20px;
+  font-weight: 500;
 }
 
 .role-card h2 {
@@ -504,12 +531,22 @@ textarea {
 
 .role-card-btn {
   margin-top: auto;
-  background: #1e40af;
+  background: linear-gradient(135deg, #18458a, #1f437f);
   color: white;
-  padding: 8px 20px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  padding: 12px 28px;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-shadow: 0 4px 14px rgba(24, 69, 138, 0.2);
+  transition: all 0.2s ease;
+}
+
+.role-card:hover .role-card-btn {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(24, 69, 138, 0.3);
+  background: linear-gradient(135deg, #1f437f, #18458a);
 }

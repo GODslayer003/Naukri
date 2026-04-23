@@ -543,8 +543,8 @@ export default function App() {
                   setView("candidate");
                 }}
               >
-                <span className="role-chip">For Candidates</span>
-                <h2>Discover jobs that match your skills <br/> and apply for job opportunities</h2>
+                <h2 className="gradient-heading">Match your desired role</h2>
+                <p>As per Location, CTC, Overall Growth</p>
                 <span className="role-card-btn">Candidate Login</span>
               </button>
 
@@ -557,8 +557,8 @@ export default function App() {
                   setView("client");
                 }}
               >
-                <span className="role-chip role-chip-muted">For Employers</span>
-                <h2>Need to build a great team? <br/> Connect with Maven</h2>
+                <h2 className="gradient-heading">Need a great team?</h2>
+                <p>Build with Maven Join. Connect. Grow.</p>
                 <span className="role-card-btn">Employer Login</span>
               </button>
             </div>
