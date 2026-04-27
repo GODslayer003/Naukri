@@ -10,7 +10,7 @@ const STATUS_OPTIONS = [
   "New",
 ];
 
-const toDateTimeLocalInput = (value) => {
+const toDateInput = (value) => {
   if (!value) {
     return "";
   }
@@ -18,8 +18,7 @@ const toDateTimeLocalInput = (value) => {
   if (Number.isNaN(parsed.getTime())) {
     return "";
   }
-  const timezoneOffsetMs = parsed.getTimezoneOffset() * 60000;
-  return new Date(parsed.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
+  return parsed.toISOString().slice(0, 10);
 };
 
 export default function LogActivityModal({ lead, initialData, onClose, onSubmit, isSubmitting }) {
@@ -33,7 +32,7 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
       setOutcome(initialData.outcome || "");
       setNotes(initialData.notes || "");
       setSubStatus(initialData.subStatus || "");
-      setNextFollowUpAt(toDateTimeLocalInput(initialData.nextFollowUpAt));
+      setNextFollowUpAt(toDateInput(initialData.nextFollowUpAt));
       return;
     }
 
@@ -113,7 +112,7 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
             <label className="form-label" htmlFor="activity-next-followup">NEXT FOLLOW-UP</label>
             <input
               id="activity-next-followup"
-              type="datetime-local"
+              type="date"
               value={nextFollowUpAt}
               onChange={(event) => setNextFollowUpAt(event.target.value)}
               className="form-input"

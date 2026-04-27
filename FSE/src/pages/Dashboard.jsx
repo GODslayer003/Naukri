@@ -86,7 +86,11 @@ function MiniBarChart({ data, valueKey, color, label }) {
           <div key={i} className="fse-bar-col">
             <div
               className="fse-bar"
-              style={{ height: `${Math.max(pct, 4)}%`, background: color }}
+              style={{ 
+                height: pct > 0 ? `${Math.max(pct, 8)}%` : "2px", 
+                background: pct > 0 ? color : "#e2e8f0",
+                opacity: pct > 0 ? 1 : 0.4
+              }}
               title={`${item.label}: ${item[valueKey] || 0}`}
             />
             <span className="fse-bar-label">{item.label?.split(" ")[0]}</span>
@@ -377,7 +381,7 @@ export default function Dashboard() {
           sub="Follow-up field visits"
           accent="#8b5cf6"
           chart={monthly}
-          chartKey="totalVisit"
+          chartKey="repeatVisit"
           chartColor="#8b5cf6"
         />
       </div>
