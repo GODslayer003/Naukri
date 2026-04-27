@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LuBuilding2,
   LuCalendar,
+  LuChevronLeft,
+  LuChevronRight,
   LuCircleAlert,
   LuCircleCheck,
   LuMapPin,
@@ -56,6 +58,9 @@ export default function ValidationQueue() {
   const [date, setDate] = useState("");
   const [status, setStatus] = useState("");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   useEffect(() => {
     try {
       const sessionRaw = sessionStorage.getItem("crm_panel_session");
@@ -108,6 +113,22 @@ export default function ValidationQueue() {
       setLoading(false);
     }
   };
+
+  const totalPages = Math.ceil(leads.length / itemsPerPage);
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return leads.slice(start, start + itemsPerPage);
+  }, [leads, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [leads.length, totalPages, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, location, date, status]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -386,7 +407,7 @@ export default function ValidationQueue() {
                 </tr>
               </thead>
               <tbody>
-                {leads.map((lead) => {
+                {paginatedLeads.map((lead) => {
                   const normalizedStatus = String(lead.status || "").toUpperCase();
                   const isTerminal = TERMINAL_STATUSES.includes(normalizedStatus);
                   const isAssignedToStateManager = lead.assignedRole === "STATE_MANAGER";
@@ -494,6 +515,36 @@ export default function ValidationQueue() {
                 })}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="pagination-wrap">
+                <div className="pagination-info">
+                  Showing <strong>{(currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
+                  <strong>{Math.min(currentPage * itemsPerPage, leads.length)}</strong> of{" "}
+                  <strong>{leads.length}</strong> zone leads
+                </div>
+                <div className="pagination-actions">
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <LuChevronLeft size={16} />
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                    <LuChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}

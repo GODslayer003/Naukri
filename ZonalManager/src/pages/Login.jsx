@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import { toast } from "sonner";
-import logo from "../assets/maven-logo.svg";
 
 const resolveRootApiBaseUrl = () => {
   const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -70,36 +69,11 @@ export default function Login() {
       setIsSubmitting(false);
     }
   };
-
   return (
-    <div className="login-shell">
-      <div className="login-card">
-        <div className="login-brand">
-          <img src={logo} alt="Maven Jobs" className="login-brand-logo" />
-          <h1 className="login-brand-title">Zonal Manager Portal</h1>
-          <p className="login-brand-sub">
-            Access your zone control center to monitor state managers, lead pipeline, and conversion outcomes.
-          </p>
-          <ul className="login-feature-list">
-            {[
-              "Track zone-level leads and performance",
-              "Assign leads to State Managers with full traceability",
-              "Review activity logs and follow-ups in real-time",
-            ].map((item) => (
-              <li key={item} className="login-feature-item">
-                <span className="login-feature-dot" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="login-form-wrap">
-          <p className="login-eyebrow">Zonal Manager Access</p>
-          <h2 className="login-form-title">Sign in to your account</h2>
-          <p className="login-form-sub">
-            Use your CRM credentials and assigned zone.
-          </p>
+    <div className="login-shell login-shell-compact">
+      <div className="login-card login-card-compact">
+        <div className="login-form-wrap login-form-wrap-compact">
+          <h1 className="login-panel-title">Zonal Manager Panel</h1>
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="login-field">

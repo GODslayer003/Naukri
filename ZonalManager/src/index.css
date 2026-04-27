@@ -1479,6 +1479,44 @@ a {
   cursor: not-allowed;
 }
 
+.login-shell.login-shell-compact {
+  background:
+    radial-gradient(circle at top left, rgba(167, 217, 51, 0.14), transparent 28%),
+    linear-gradient(180deg, #f8fafc 0%, #eef4ff 100%);
+}
+
+.login-card.login-card-compact {
+  display: block;
+  width: min(460px, 100%);
+  max-width: 460px;
+  border-radius: 28px;
+  background: #ffffff;
+  box-shadow: 0 30px 90px rgba(15, 30, 60, 0.12);
+}
+
+.login-card.login-card-compact .login-brand {
+  display: none;
+}
+
+.login-form-wrap.login-form-wrap-compact {
+  min-height: auto;
+  padding: 36px 32px;
+}
+
+.login-panel-title {
+  margin: 0 0 24px;
+  text-align: center;
+  font-size: 2.1rem;
+  line-height: 1.15;
+  color: #163060;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.login-form-wrap.login-form-wrap-compact .login-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
 @media (max-width: 640px) {
   .login-card {
     grid-template-columns: 1fr;
@@ -1494,6 +1532,14 @@ a {
 
   .login-feature-list {
     display: none;
+  }
+
+  .login-form-wrap.login-form-wrap-compact {
+    padding: 28px 22px;
+  }
+
+  .login-panel-title {
+    font-size: 1.75rem;
   }
 }
 
@@ -2141,4 +2187,58 @@ a {
   text-align: center;
   color: #94a3b8;
   padding: 20px 24px;
+}
+
+/* Pagination Styles */
+.pagination-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-top: 1px solid #e6edf5;
+  background: #fff;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+.pagination-info {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.pagination-info strong {
+  color: #1e3a8a;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pagination-btn {
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f3f7fc;
+  border-color: #18458a;
+  color: #18458a;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f8fafc;
+  color: #94a3b8;
 }

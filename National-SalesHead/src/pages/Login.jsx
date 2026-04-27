@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import { loginNSH } from "../api/nshApi";
-// Importing logo - we will ensure this exists later or use a placeholder
-import logo from "../assets/maven-logo.svg";
 
 const SESSION_KEY = "crm_panel_session";
 
@@ -41,39 +39,10 @@ export default function Login() {
   };
 
   return (
-    <div className="login-shell">
-      <div className="login-card">
-        {/* Left panel */}
-        <div className="login-brand">
-          <img src={logo} alt="Maven Jobs" className="login-brand-logo" style={{ width: "160px", marginBottom: "32px" }} />
-          <h1 className="login-brand-title">
-            National Sales Head
-          </h1>
-          <p className="login-brand-sub">
-            Overall control of sales operations across India. Monitor performance, approve strategic deals, and define policies.
-          </p>
-          <ul className="login-feature-list">
-            {[
-              "View zone-wise performance metrics",
-              "Monitor complete sales funnel",
-              "Approve high-value strategic deals",
-              "Track revenue and growth trends",
-            ].map((item) => (
-              <li key={item} className="login-feature-item">
-                <span className="login-feature-dot" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Right panel */}
-        <div className="login-form-wrap">
-          <p className="login-eyebrow">National Access Portal</p>
-          <h2 className="login-form-title">Sign in to your dashboard</h2>
-          <p className="login-form-sub">
-            Use your NSH credentials to access the national control panel.
-          </p>
+    <div className="login-shell login-shell-compact">
+      <div className="login-card login-card-compact">
+        <div className="login-form-wrap login-form-wrap-compact">
+          <h1 className="login-panel-title">National Sales Head</h1>
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="login-field">
@@ -119,7 +88,7 @@ export default function Login() {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "rgba(255, 255, 255, 0.5)",
+                    color: "#64748b",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center"
@@ -132,7 +101,7 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="login-error" role="alert" style={{ color: "#ef4444", fontSize: "0.875rem", marginBottom: "16px" }}>
+              <div className="login-error" role="alert">
                 {error}
               </div>
             )}
@@ -141,7 +110,6 @@ export default function Login() {
               type="submit"
               disabled={isSubmitting}
               className="login-btn"
-              style={{ padding: "14px", fontSize: "1rem", fontWeight: "600" }}
             >
               {isSubmitting ? "Accessing Dashboard…" : "Sign In to Dashboard"}
             </button>

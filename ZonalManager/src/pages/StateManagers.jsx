@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LuBadgeCheck,
+  LuChevronLeft,
+  LuChevronRight,
   LuCircleOff,
   LuClock3,
   LuMail,
@@ -60,6 +62,9 @@ export default function StateManagers() {
   const [zone, setZone] = useState("");
   const [createMeta, setCreateMeta] = useState({ zone: "", availableStates: [] });
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
@@ -78,6 +83,18 @@ export default function StateManagers() {
     () => registry.filter((item) => item.accountStatus === "PENDING_APPROVAL").length,
     [registry],
   );
+
+  const totalPages = Math.ceil(registry.length / itemsPerPage);
+  const paginatedRegistry = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return registry.slice(start, start + itemsPerPage);
+  }, [registry, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [registry.length, totalPages, currentPage]);
 
   const loadRegistry = useCallback(async () => {
     try {
@@ -321,7 +338,7 @@ export default function StateManagers() {
                 </tr>
               </thead>
               <tbody>
-                {registry.map((item) => {
+                {paginatedRegistry.map((item) => {
                   const styleConfig = statusStyleMap[item.accountStatus] || statusStyleMap.ACTIVE;
                   const StatusIcon = styleConfig.icon;
 
@@ -403,6 +420,36 @@ export default function StateManagers() {
                 })}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="pagination-wrap">
+                <div className="pagination-info">
+                  Showing <strong>{(currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
+                  <strong>{Math.min(currentPage * itemsPerPage, registry.length)}</strong> of{" "}
+                  <strong>{registry.length}</strong> state managers
+                </div>
+                <div className="pagination-actions">
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <LuChevronLeft size={16} />
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                    <LuChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>
