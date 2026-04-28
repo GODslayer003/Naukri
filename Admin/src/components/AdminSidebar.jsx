@@ -3,7 +3,11 @@ import logo from "../assets/maven-logo.svg";
 import { adminMenu } from "../config/adminMenuConfig";
 import { getStoredAdmin } from "../services/adminApi";
 
-export default function AdminSidebar({ isOpen, closeSidebar }) {
+export default function AdminSidebar({
+  isOpen,
+  closeSidebar,
+  shouldCloseOnNavigate = false,
+}) {
   const admin = getStoredAdmin();
 
   return (
@@ -16,7 +20,7 @@ export default function AdminSidebar({ isOpen, closeSidebar }) {
       />
 
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen w-72 flex-col bg-[#163060] text-white shadow-2xl transition-transform duration-300 md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-40 flex h-screen w-72 flex-col bg-[#163060] text-white shadow-2xl transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -32,7 +36,7 @@ export default function AdminSidebar({ isOpen, closeSidebar }) {
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={closeSidebar}
+                onClick={shouldCloseOnNavigate ? closeSidebar : undefined}
                 className={({ isActive }) =>
                   `group flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     isActive
@@ -50,6 +54,7 @@ export default function AdminSidebar({ isOpen, closeSidebar }) {
             );
           })}
         </nav>
+
 
         <div className="p-4">
           <div className="rounded-3xl border border-white/10 bg-white/10 p-4">

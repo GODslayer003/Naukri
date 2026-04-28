@@ -86,8 +86,8 @@ function MiniBarChart({ data, valueKey, color, label }) {
           <div key={i} className="fse-bar-col">
             <div
               className="fse-bar"
-              style={{ 
-                height: pct > 0 ? `${Math.max(pct, 8)}%` : "2px", 
+              style={{
+                height: pct > 0 ? `${Math.max(pct, 8)}%` : "2px",
                 background: pct > 0 ? color : "#e2e8f0",
                 opacity: pct > 0 ? 1 : 0.4
               }}
@@ -479,12 +479,12 @@ export default function Dashboard() {
                     <td>
                       {lead.updatedAt
                         ? new Date(lead.updatedAt).toLocaleString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
                         : "—"}
                     </td>
                   </tr>
