@@ -8,6 +8,7 @@ import {
   LuMapPin,
   LuPencil,
   LuPhone,
+  LuSend,
   LuTrash2,
   LuUserRound,
   LuX,
@@ -51,6 +52,8 @@ export default function LeadDetailModal({
   onLogActivity,
   onEditActivity,
   onDeleteActivity,
+  onEditLead,
+  onTransferToSM,
 }) {
   if (!lead) return null;
 
@@ -73,7 +76,25 @@ export default function LeadDetailModal({
               <p>{lead.leadCode || lead.id} | Status: {lead.status}</p>
             </div>
           </div>
-          <button className="close-btn" onClick={onClose}><LuX /></button>
+          <div className="header-actions" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            {lead.status === "CONVERTED" && (
+              <button 
+                className="button button-primary" 
+                style={{ background: "#1e40af", color: "#fff", padding: "8px 12px", fontSize: "0.85rem" }}
+                onClick={() => onTransferToSM(lead)}
+              >
+                <LuSend /> Transfer to SM
+              </button>
+            )}
+            <button 
+              className="button button-secondary" 
+              style={{ padding: "8px 12px", fontSize: "0.85rem" }}
+              onClick={() => onEditLead(lead)}
+            >
+              <LuPencil /> Edit Details
+            </button>
+            <button className="close-btn" onClick={onClose}><LuX /></button>
+          </div>
         </header>
 
         <div className="modal-body">
@@ -173,7 +194,27 @@ export default function LeadDetailModal({
                 {activities.map((activity, index) => (
                   <div key={`${activity.date || "activity"}-${index}`} className="activity-card">
                     <div className="activity-header">
-                      <span className="activity-outcome">{activity.outcome || "Follow-up"}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className="activity-outcome">{activity.outcome || "Follow-up"}</span>
+                        {activity.interactionMode && (
+                          <span 
+                            className="activity-mode-badge" 
+                            style={{ 
+                              fontSize: "0.7rem", 
+                              padding: "2px 6px", 
+                              background: "#f1f5f9", 
+                              borderRadius: "4px", 
+                              color: "#475569",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px"
+                            }}
+                          >
+                            {activity.interactionMode === "Call" ? <LuPhone size={10} /> : <LuMapPin size={10} />}
+                            {activity.interactionMode}
+                          </span>
+                        )}
+                      </div>
                       <div className="activity-header-right">
                         <span className="activity-date">{formatDate(activity.date)}</span>
                         <div className="activity-actions">

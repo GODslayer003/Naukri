@@ -254,6 +254,7 @@ const formatLead = (lead) => ({
     ? lead.activities.map((item) => ({
         outcome: item.outcome,
         notes: item.notes,
+        interactionMode: item.interactionMode || "Call",
         nextFollowUpAt: item.nextFollowUpAt || null,
         date: item.date,
       }))

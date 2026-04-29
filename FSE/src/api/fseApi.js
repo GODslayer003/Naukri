@@ -110,6 +110,16 @@ export async function createFseLead(payload) {
   return data.data;
 }
 
+export async function updateFseLead(leadId, payload) {
+  const { data } = await http.patch(`/leads/${leadId}`, payload);
+  return data.data;
+}
+
+export async function transferFseLeadToStateManager(leadId) {
+  const { data } = await http.patch(`/leads/${leadId}/transfer-to-sm`);
+  return data.data;
+}
+
 export async function fetchFseLeads(params = {}) {
   const { data } = await http.get("/leads", { params });
   return data.data;
@@ -132,6 +142,21 @@ export async function logFseLeadActivity(leadId, payload) {
 
 export async function deleteFseLeadActivity(leadId, index) {
   const { data } = await http.delete(`/leads/${leadId}/activity/${index}`);
+  return data.data;
+}
+
+export async function fetchFseNonVisitDays() {
+  const { data } = await http.get("/non-visit-days");
+  return data.data;
+}
+
+export async function addFseNonVisitDay(payload) {
+  const { data } = await http.post("/non-visit-days", payload);
+  return data.data;
+}
+
+export async function deleteFseNonVisitDay(id) {
+  const { data } = await http.delete(`/non-visit-days/${id}`);
   return data.data;
 }
 

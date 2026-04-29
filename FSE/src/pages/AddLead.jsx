@@ -5,18 +5,21 @@ import {
   LuCalendarDays,
   LuChartNoAxesCombined,
   LuFileText,
+  LuGlobe,
   LuLoaderCircle,
   LuMail,
   LuMapPin,
   LuPhone,
   LuPlus,
+  LuTag,
   LuTrash2,
   LuUserRound,
+  LuUsers,
 } from "react-icons/lu";
 import { createFseLead, fetchFseMeta } from "../api/fseApi";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const DEFAULT_BUSINESS_CATEGORY_OPTIONS = [
+export const DEFAULT_BUSINESS_CATEGORY_OPTIONS = [
   "IT & Technology",
   "Manufacturing",
   "Retail",
@@ -25,7 +28,7 @@ const DEFAULT_BUSINESS_CATEGORY_OPTIONS = [
   "Finance",
 ];
 
-const DEFAULT_LEAD_SOURCE_OPTIONS = [
+export const DEFAULT_LEAD_SOURCE_OPTIONS = [
   "Cold Call",
   "Referral",
   "Field Visit",
@@ -33,7 +36,27 @@ const DEFAULT_LEAD_SOURCE_OPTIONS = [
   "Inbound Inquiry",
 ];
 
-const PROJECTION_OPTIONS = ["WP > 50", "WP < 50", "MP < 50", "MP > 50"];
+export const PROJECTION_OPTIONS = ["WP > 50", "WP < 50", "MP < 50", "MP > 50"];
+
+export const STATE_OPTIONS = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand",
+  "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+  "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands",
+  "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir",
+  "Ladakh", "Lakshadweep", "Puducherry"
+];
+
+export const EMPLOYEE_COUNT_OPTIONS = [
+  "1-10",
+  "11-50",
+  "51-200",
+  "201-500",
+  "501-1000",
+  "1000+"
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const createEmptyContact = () => ({
@@ -48,6 +71,9 @@ const initialForm = {
   businessCategory: "",
   leadSource: "",
   address: "",
+  state: "",
+  employeeCount: "",
+  reference: "",
   sourcingDate: "",
   projection: "",
   notes: "",
@@ -193,6 +219,9 @@ export default function AddLead() {
         businessCategory: form.businessCategory,
         leadSource: form.leadSource,
         address: form.address.trim(),
+        state: form.state,
+        employeeCount: form.employeeCount,
+        reference: form.reference.trim(),
         sourcingDate: form.sourcingDate || null,
         projection: form.projection || "",
         notes: form.notes.trim(),
@@ -260,11 +289,48 @@ export default function AddLead() {
                     ))}
                   </select>
                 </Field>
+
+                <Field label="State">
+                  <div className="input-shell input-shell-left">
+                    <LuGlobe className="input-icon" />
+                    <select
+                      className="input add-lead-input add-lead-select"
+                      name="state"
+                      value={form.state}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="" disabled>Select State…</option>
+                      {STATE_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                </Field>
+
+                <Field label="Employee Count">
+                  <div className="input-shell input-shell-left">
+                    <LuUsers className="input-icon" />
+                    <select
+                      className="input add-lead-input add-lead-select"
+                      name="employeeCount"
+                      value={form.employeeCount}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="" disabled>Employee Count…</option>
+                      {EMPLOYEE_COUNT_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                </Field>
               </div>
 
               <div className="lead-block-grid one-col" style={{ marginTop: "12px" }}>
                 <Field label="Location / Address">
-                  <div className="input-shell">
+                  <div className="input-shell input-shell-left">
+                    <LuMapPin className="input-icon" />
                     <input
                       className="input add-lead-input"
                       name="address"
@@ -273,7 +339,6 @@ export default function AddLead() {
                       placeholder="Location / Address"
                       required
                     />
-                    <LuMapPin className="input-icon" />
                   </div>
                 </Field>
               </div>
@@ -328,7 +393,8 @@ export default function AddLead() {
                       </Field>
 
                       <Field label={`Contact ${index + 1} Phone Number`}>
-                        <div className="input-shell">
+                        <div className="input-shell input-shell-left">
+                          <LuPhone className="input-icon" />
                           <input
                             className="input add-lead-input"
                             value={contact.phone}
@@ -336,14 +402,14 @@ export default function AddLead() {
                             placeholder="Phone Number"
                             required
                           />
-                          <LuPhone className="input-icon" />
                         </div>
                       </Field>
                     </div>
 
                     <div className="lead-block-grid two-col contact-grid" style={{ marginTop: "10px" }}>
                       <Field label={`Contact ${index + 1} Email Address`}>
-                        <div className="input-shell">
+                        <div className="input-shell input-shell-left">
+                          <LuMail className="input-icon" />
                           <input
                             className="input add-lead-input"
                             type="email"
@@ -351,7 +417,6 @@ export default function AddLead() {
                             onChange={(e) => handleContactChange(index, "email", e.target.value)}
                             placeholder="Email Address (optional)"
                           />
-                          <LuMail className="input-icon" />
                         </div>
                       </Field>
 
@@ -392,8 +457,24 @@ export default function AddLead() {
                   </select>
                 </Field>
 
+                <Field label="Reference">
+                  <div className="input-shell input-shell-left">
+                    <LuTag className="input-icon" />
+                    <input
+                      className="input add-lead-input"
+                      name="reference"
+                      value={form.reference}
+                      onChange={handleChange}
+                      placeholder="Reference / Referred By"
+                    />
+                  </div>
+                </Field>
+              </div>
+
+              <div className="lead-block-grid two-col lead-source-grid" style={{ marginTop: "12px" }}>
                 <Field label="Sourcing Date">
-                  <div className="input-shell">
+                  <div className="input-shell input-shell-left">
+                    <LuCalendarDays className="input-icon" />
                     <input
                       type="date"
                       className="input add-lead-input"
@@ -401,7 +482,6 @@ export default function AddLead() {
                       value={form.sourcingDate}
                       onChange={handleChange}
                     />
-                    <LuCalendarDays className="input-icon" />
                   </div>
                 </Field>
               </div>
@@ -465,7 +545,8 @@ export default function AddLead() {
                 </Field>
 
                 <Field label="Next Follow-up Date">
-                  <div className="input-shell">
+                  <div className="input-shell input-shell-left">
+                    <LuCalendarDays className="input-icon" />
                     <input
                       type="date"
                       className="input add-lead-input"
@@ -473,7 +554,6 @@ export default function AddLead() {
                       value={form.nextFollowUpAt}
                       onChange={handleChange}
                     />
-                    <LuCalendarDays className="input-icon" />
                   </div>
                 </Field>
               </div>

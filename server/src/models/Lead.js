@@ -289,6 +289,7 @@ const leadSchema = new mongoose.Schema(
         outcome: { type: String, required: true },
         notes: { type: String, required: true },
         subStatus: { type: String, trim: true, default: "" },
+        interactionMode: { type: String, enum: ["Call", "Visit"], default: "Call" },
         nextFollowUpAt: { type: Date },
         contact: {
           type: activityContactSchema,

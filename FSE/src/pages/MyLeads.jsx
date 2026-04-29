@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { LuBuilding2, LuListFilter, LuMapPin, LuSearch } from "react-icons/lu";
+import LeadDetailModal from "../components/LeadDetailModal";
+import LogActivityModal from "../components/LogActivityModal";
+import ActionConfirmModal from "../components/ActionConfirmModal";
+import EditLeadModal from "../components/EditLeadModal";
 import {
   deleteFseLeadActivity,
   fetchFseLeads,
   logFseLeadActivity,
+  transferFseLeadToStateManager,
   updateFseLeadStatus,
 } from "../api/fseApi";
-import LeadDetailModal from "../components/LeadDetailModal";
-import LogActivityModal from "../components/LogActivityModal";
-import ActionConfirmModal from "../components/ActionConfirmModal";
 
 const STATUS_OPTIONS = ["ASSIGNED", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", "LOST", "REJECTED"];
 
@@ -51,6 +53,8 @@ export default function MyLeads() {
   const [activitySubmitting, setActivitySubmitting] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [transferring, setTransferring] = useState(false);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => setDebouncedSearch(search), 250);
@@ -179,6 +183,22 @@ export default function MyLeads() {
       await loadLeads(selectedLead.id);
     } catch (requestError) {
       alert(requestError?.response?.data?.message || "Failed to delete activity.");
+    }
+  };
+
+  const handleTransferToSM = async (lead) => {
+    const confirmed = window.confirm(`Transfer ${lead.companyName} to State Manager?`);
+    if (!confirmed) return;
+
+    try {
+      setTransferring(true);
+      await transferFseLeadToStateManager(lead.id);
+      alert("Lead transferred to State Manager successfully.");
+      await loadLeads(lead.id);
+    } catch (requestError) {
+      alert(requestError?.response?.data?.message || "Failed to transfer lead.");
+    } finally {
+      setTransferring(false);
     }
   };
 
@@ -334,6 +354,16 @@ export default function MyLeads() {
             setShowActivityModal(true);
           }}
           onDeleteActivity={handleDeleteActivity}
+          onEditLead={() => setShowEditModal(true)}
+          onTransferToSM={handleTransferToSM}
+        />
+      ) : null}
+
+      {showEditModal && selectedLead ? (
+        <EditLeadModal
+          lead={selectedLead}
+          onClose={() => setShowEditModal(false)}
+          onSave={() => loadLeads(selectedLead.id)}
         />
       ) : null}
 

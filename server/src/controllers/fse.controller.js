@@ -4,6 +4,7 @@ const createHttpError = require("http-errors");
 const asyncHandler = require("../middleware/async.middleware");
 const CrmUser = require("../models/CrmUser");
 const Lead = require("../models/Lead");
+const NonVisitDay = require("../models/NonVisitDay");
 const {
   LEAD_STATUSES,
   LEAD_SOURCES,
@@ -121,9 +122,11 @@ const normalizeCreateLeadInput = (payload = {}, user = {}) => {
     leadSource: String(payload.leadSource || "").trim(),
     priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
     city: String(payload.city || "").trim() || "Unknown",
-    state: normalizedUserState || normalizedPayloadState || "Unknown",
+    state: normalizedPayloadState || normalizedUserState || "Unknown",
     address: String(payload.address || payload.location || "").trim(),
     pincode: String(payload.pincode || "").trim(),
+    employeeCount: String(payload.employeeCount || "").trim(),
+    reference: String(payload.reference || "").trim(),
     notes: String(payload.notes || "").trim(),
     sourcingDate: payload.sourcingDate || null,
     projection,
@@ -218,6 +221,7 @@ const formatLead = (lead) => ({
     outcome: activity.outcome,
     notes: activity.notes,
     subStatus: activity.subStatus || "",
+    interactionMode: activity.interactionMode || "Call",
     nextFollowUpAt: activity.nextFollowUpAt,
     date: activity.date,
     contact: activity.contact,
@@ -827,7 +831,7 @@ exports.updateLeadProjection = asyncHandler(async (req, res) => {
 
 exports.logLeadActivity = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { outcome, notes, subStatus, nextFollowUpAt, activityIndex } = req.body;
+  const { outcome, notes, subStatus, nextFollowUpAt, activityIndex, date, interactionMode } = req.body;
 
   if (!outcome || !notes) {
     throw createHttpError(400, "Outcome and notes are required fields");
@@ -846,8 +850,9 @@ exports.logLeadActivity = asyncHandler(async (req, res) => {
     outcome: String(outcome).trim(),
     notes: String(notes).trim(),
     subStatus: subStatus ? String(subStatus).trim() : "",
+    interactionMode: interactionMode || "Call",
     nextFollowUpAt: nextFollowUpAt || null,
-    date: new Date(),
+    date: date ? new Date(date) : new Date(),
   };
 
   if (activityIndex !== undefined && activityIndex !== null) {
@@ -952,5 +957,170 @@ exports.updateProfile = asyncHandler(async (req, res) => {
       department: user.department || "Field Sales",
       profileImage: user.profileImageUrl || "",
     },
+  });
+});
+
+exports.updateLead = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const input = normalizeCreateLeadInput(req.body, req.user);
+
+  const lead = await Lead.findById(id);
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  if (String(lead.assignedTo) !== String(req.user._id)) {
+    throw createHttpError(403, "You can only update leads assigned to you.");
+  }
+
+  // Update fields
+  lead.contactName = input.contactName;
+  lead.companyName = input.companyName;
+  lead.phone = input.phone;
+  lead.alternatePhone = input.alternatePhone;
+  lead.email = input.email;
+  lead.contacts = input.contacts;
+  lead.businessCategory = input.businessCategory;
+  lead.leadSource = input.leadSource;
+  lead.priority = input.priority;
+  lead.city = input.city;
+  lead.state = input.state;
+  lead.address = input.address;
+  lead.pincode = input.pincode;
+  lead.employeeCount = input.employeeCount;
+  lead.reference = input.reference;
+  lead.notes = input.notes;
+  lead.sourcingDate = input.sourcingDate;
+  lead.projection = input.projection;
+  lead.nextFollowUpAt = input.nextFollowUpAt;
+  lead.updatedBy = req.user._id;
+
+  await lead.save();
+
+  const updatedLead = await Lead.findById(lead._id)
+    .populate("createdBy", "fullName role territory profileImageUrl")
+    .populate("assignedBy", "fullName role")
+    .populate("assignedTo", "fullName role profileImageUrl");
+
+  res.status(200).json({
+    success: true,
+    message: "Lead updated successfully",
+    data: formatLead(updatedLead),
+  });
+});
+
+exports.transferLeadToSM = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const lead = await Lead.findById(id).populate("createdBy", "territory");
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  if (String(lead.assignedTo) !== String(req.user._id)) {
+    throw createHttpError(403, "You can only transfer leads assigned to you.");
+  }
+
+  if (lead.status !== "CONVERTED") {
+    throw createHttpError(400, "Only converted leads can be transferred to State Manager.");
+  }
+
+  const leadZone = inferZoneFromTerritory(lead.createdBy?.territory);
+  const leadState = lead.state;
+
+  if (!leadZone || !leadState) {
+    throw createHttpError(400, "Lead zone or state is missing.");
+  }
+
+  const stateManager = await CrmUser.findOne({
+    role: "STATE_MANAGER",
+    territory: leadZone,
+    state: leadState,
+    isActive: true,
+  });
+
+  if (!stateManager) {
+    throw createHttpError(404, `No active State Manager found for ${leadState} in ${leadZone} zone.`);
+  }
+
+  lead.isForwardedToSM = true;
+  lead.approvalStatus = "PENDING";
+  lead.approvalLevel = "STATE_MANAGER";
+  lead.approvalRequestedBy = req.user._id;
+  lead.approvalRequestedAt = new Date();
+  lead.assignedBy = req.user._id;
+  lead.assignedTo = stateManager._id;
+  lead.updatedBy = req.user._id;
+
+  await lead.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Lead transferred to State Manager successfully",
+    data: formatLead(lead),
+  });
+});
+
+exports.getNonVisitDays = asyncHandler(async (req, res) => {
+  const days = await NonVisitDay.find({ fse: req.user._id }).sort({ date: 1 });
+
+  res.status(200).json({
+    success: true,
+    data: days,
+  });
+});
+
+exports.addNonVisitDay = asyncHandler(async (req, res) => {
+  const { date, type, remarks } = req.body;
+
+  if (!date || !remarks) {
+    throw createHttpError(400, "Date and remarks are required.");
+  }
+
+  // Normalize date to start of day
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+
+  // Check for existing entry
+  const existing = await NonVisitDay.findOne({
+    fse: req.user._id,
+    date: normalizedDate,
+  });
+
+  if (existing) {
+    throw createHttpError(400, "A non-visit day entry already exists for this date.");
+  }
+
+  const nonVisitDay = await NonVisitDay.create({
+    fse: req.user._id,
+    date: normalizedDate,
+    type: type || "FULL_DAY",
+    remarks: String(remarks).trim(),
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "Non-visit day added successfully.",
+    data: nonVisitDay,
+  });
+});
+
+exports.deleteNonVisitDay = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const day = await NonVisitDay.findById(id);
+  if (!day) {
+    throw createHttpError(404, "Entry not found.");
+  }
+
+  if (String(day.fse) !== String(req.user._id)) {
+    throw createHttpError(403, "You can only delete your own entries.");
+  }
+
+  await day.deleteOne();
+
+  res.status(200).json({
+    success: true,
+    message: "Entry deleted successfully.",
   });
 });

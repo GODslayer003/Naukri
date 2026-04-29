@@ -12,6 +12,7 @@ import {
   LuUser,
   LuMenu,
   LuX,
+  LuCalendarOff,
 } from "react-icons/lu";
 import logo from "./assets/maven-logo.svg";
 import Login from "./pages/Login";
@@ -21,6 +22,7 @@ import MyLeads from "./pages/MyLeads";
 import Profile from "./pages/Profile";
 import ClientAccounts from "./pages/ClientAccounts";
 import QRManagement from "./pages/QRManagement";
+import NonVisitDays from "./pages/NonVisitDays";
 
 const SESSION_KEY = "crm_panel_session";
 
@@ -137,6 +139,13 @@ export default function App() {
                     Assigned Leads
                   </NavLink>
                   <NavLink
+                    to="/non-visit-days"
+                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
+                  >
+                    <LuCalendarOff />
+                    Non-Visit Days
+                  </NavLink>
+                  <NavLink
                     to="/profile"
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
@@ -217,6 +226,7 @@ export default function App() {
                   <Route path="/qr-management" element={<QRManagement />} />
                   <Route path="/my-leads" element={<MyLeads />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/non-visit-days" element={<NonVisitDays />} />
                 </Routes>
               </main>
             </div>

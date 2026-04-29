@@ -506,6 +506,7 @@ const formatLead = (lead) => ({
       outcome: activity?.outcome || "",
       notes: activity?.notes || "",
       subStatus: activity?.subStatus || "",
+      interactionMode: activity?.interactionMode || "Call",
       franchiseStatus: activity?.franchiseStatus || "",
       nextFollowUpAt: activity?.nextFollowUpAt || null,
       date: activity?.date || null,

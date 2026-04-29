@@ -26,6 +26,8 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
   const [notes, setNotes] = useState("");
   const [subStatus, setSubStatus] = useState("");
   const [nextFollowUpAt, setNextFollowUpAt] = useState("");
+  const [interactionMode, setInteractionMode] = useState("Call");
+  const [date, setDate] = useState(toDateInput(new Date()));
 
   useEffect(() => {
     if (initialData) {
@@ -33,6 +35,8 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
       setNotes(initialData.notes || "");
       setSubStatus(initialData.subStatus || "");
       setNextFollowUpAt(toDateInput(initialData.nextFollowUpAt));
+      setInteractionMode(initialData.interactionMode || "Call");
+      setDate(toDateInput(initialData.date || new Date()));
       return;
     }
 
@@ -40,6 +44,8 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
     setNotes("");
     setSubStatus("");
     setNextFollowUpAt("");
+    setInteractionMode("Call");
+    setDate(toDateInput(new Date()));
   }, [initialData]);
 
   const handleSubmit = (event) => {
@@ -49,6 +55,8 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
       notes,
       subStatus,
       nextFollowUpAt: nextFollowUpAt || null,
+      interactionMode,
+      date: date || null,
     });
   };
 
@@ -94,6 +102,37 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
               onChange={(event) => setSubStatus(event.target.value)}
               placeholder="e.g. Call Picked, Switch Off"
             />
+          </div>
+
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="activity-mode">INTERACTION MODE</label>
+              <div className="select-container">
+                <select
+                  id="activity-mode"
+                  value={interactionMode}
+                  onChange={(event) => setInteractionMode(event.target.value)}
+                  className="form-select"
+                  required
+                >
+                  <option value="Call">Call</option>
+                  <option value="Visit">Visit</option>
+                </select>
+                <LuChevronDown className="select-icon" />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="activity-date">ACTIVITY DATE</label>
+              <input
+                id="activity-date"
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="form-input"
+                required
+              />
+            </div>
           </div>
 
           <div className="form-group">
