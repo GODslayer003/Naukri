@@ -18,6 +18,7 @@ router.post("/leads", controller.createLead);
 router.get("/leads", controller.getLeads);
 router.patch("/leads/:id", controller.updateLead);
 router.patch("/leads/:id/status", controller.updateLeadStatus);
+router.get("/transfer-candidate/:id", controller.getTransferCandidate);
 router.patch("/leads/:id/projection", controller.updateLeadProjection);
 router.patch("/leads/:id/transfer-to-sm", controller.transferLeadToSM);
 router.post("/leads/:id/activity", controller.logLeadActivity);

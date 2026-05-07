@@ -14,7 +14,8 @@ import {
 import logo from "./assets/maven-logo.svg";
 import Dashboard from "./pages/Dashboard";
 import AddLead from "./pages/AddLead";
-import ValidationQueue from "./pages/ValidationQueue";
+import LeadgenQueue from "./pages/LeadgenQueue";
+import FsePipeline from "./pages/FsePipeline";
 import TeamManagement from "./pages/TeamManagement";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
@@ -103,11 +104,19 @@ export default function App() {
                   </NavLink>
 
                   <NavLink
-                    to="/validation-queue"
+                    to="/leadgen-queue"
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
                     <LuList />
-                    Validation Queue
+                    Leadgen Queue
+                  </NavLink>
+
+                  <NavLink
+                    to="/fse-pipeline"
+                    className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
+                  >
+                    <LuList />
+                    FSE Onboard Clients
                   </NavLink>
 
                   <NavLink
@@ -115,7 +124,7 @@ export default function App() {
                     className={({ isActive }) => `sidebar-link ${isActive ? "is-active" : ""}`}
                   >
                     <LuUsers />
-                    Team Management
+                    Team Control
                   </NavLink>
 
                   <NavLink
@@ -194,7 +203,8 @@ export default function App() {
 
                 <Routes>
                   <Route index element={<Dashboard />} />
-                  <Route path="/validation-queue" element={<ValidationQueue />} />
+                  <Route path="/leadgen-queue" element={<LeadgenQueue />} />
+                  <Route path="/fse-pipeline" element={<FsePipeline />} />
                   <Route path="/team-management" element={<TeamManagement />} />
                   <Route path="/profile" element={<Profile />} />
                 </Routes>

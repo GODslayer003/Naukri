@@ -112,6 +112,9 @@ const normalizeCreateLeadInput = (payload = {}, user = {}) => {
   const projectionRaw = String(payload.projection || "").trim();
   const projection = PROJECTION_VALUES.includes(projectionRaw) ? projectionRaw : "";
 
+  const statusRaw = String(payload.status || "").trim().toUpperCase();
+  const status = LEAD_STATUSES.includes(statusRaw) ? statusRaw : "ASSIGNED";
+
   return {
     contactName: resolvedContactName,
     companyName: String(payload.companyName || "").trim(),
@@ -120,6 +123,7 @@ const normalizeCreateLeadInput = (payload = {}, user = {}) => {
     email: resolvedEmail,
     businessCategory: String(payload.businessCategory || "").trim(),
     leadSource: String(payload.leadSource || "").trim(),
+    status,
     priority: parseEnum(payload.priority, LEAD_PRIORITIES, "MEDIUM"),
     city: String(payload.city || "").trim() || "Unknown",
     state: normalizedPayloadState || normalizedUserState || "Unknown",
@@ -130,6 +134,8 @@ const normalizeCreateLeadInput = (payload = {}, user = {}) => {
     notes: String(payload.notes || "").trim(),
     sourcingDate: payload.sourcingDate || null,
     projection,
+    clientType: String(payload.clientType || "Standard").trim(),
+    sourcedBy: String(payload.sourcedBy || "").trim(),
     contacts: normalizedContacts,
     nextFollowUpAt: payload.nextFollowUpAt || null,
   };
@@ -212,7 +218,10 @@ const formatLead = (lead) => ({
   leadSource: lead.leadSource,
   businessCategory: lead.businessCategory,
   notes: lead.notes || "",
+  tnc: lead.tnc || "",
   projection: lead.projection || "",
+  clientType: lead.clientType || "Standard",
+  sourcedBy: lead.sourcedBy || "",
   sourcingDate: lead.sourcingDate || null,
   contacts: Array.isArray(lead.contacts) ? lead.contacts : [],
   nextFollowUpAt: lead.nextFollowUpAt,
@@ -508,6 +517,8 @@ exports.createLead = asyncHandler(async (req, res) => {
     notes: input.notes,
     sourcingDate: input.sourcingDate || null,
     projection: input.projection || "",
+    clientType: input.clientType || "Standard",
+    sourcedBy: input.sourcedBy || req.user.fullName || "Self",
     nextFollowUpAt: input.nextFollowUpAt,
     createdBy: req.user._id,
     updatedBy: req.user._id,
@@ -701,8 +712,15 @@ exports.getLeads = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
   const skip = (page - 1) * limit;
   const search = String(req.query.search || "").trim();
+  const location = String(req.query.location || "").trim();
+  const category = String(req.query.category || "").trim();
   const status = String(req.query.status || "").trim().toUpperCase();
-  const date = String(req.query.date || "").trim().toLowerCase();
+  const subStatus = String(req.query.subStatus || "").trim();
+  const clientType = String(req.query.clientType || "").trim();
+  const projection = String(req.query.projection || "").trim();
+  const dateRange = String(req.query.date || "").trim().toLowerCase();
+  const startDate = req.query.startDate;
+  const endDate = req.query.endDate;
 
   const query = { assignedTo: req.user._id };
 
@@ -711,6 +729,23 @@ exports.getLeads = asyncHandler(async (req, res) => {
       throw createHttpError(400, "Invalid status filter.");
     }
     query.status = status;
+  }
+
+  if (category) {
+    query.businessCategory = category;
+  }
+
+  if (subStatus) {
+    const subStatusRegex = new RegExp(subStatus.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    query.subStatus = subStatusRegex;
+  }
+
+  if (clientType) {
+    query.clientType = clientType;
+  }
+
+  if (projection) {
+    query.projection = projection;
   }
 
   if (search) {
@@ -723,9 +758,37 @@ exports.getLeads = asyncHandler(async (req, res) => {
     ];
   }
 
-  const createdAtFilter = buildDateFilter(date);
-  if (createdAtFilter) {
-    query.createdAt = createdAtFilter;
+  if (location) {
+    const locRegex = new RegExp(location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    if (query.$or) {
+      query.$and = [
+        { $or: query.$or },
+        { $or: [{ city: locRegex }, { state: locRegex }, { address: locRegex }] }
+      ];
+      delete query.$or;
+    } else {
+      query.$or = [
+        { city: locRegex },
+        { state: locRegex },
+        { address: locRegex },
+      ];
+    }
+  }
+
+  // Custom date range or predefined range
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) query.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt.$lte = end;
+    }
+  } else {
+    const createdAtFilter = buildDateFilter(dateRange);
+    if (createdAtFilter) {
+      query.createdAt = createdAtFilter;
+    }
   }
 
   const [leads, total] = await Promise.all([
@@ -872,6 +935,9 @@ exports.logLeadActivity = asyncHandler(async (req, res) => {
   if (nextFollowUpAt) {
     lead.nextFollowUpAt = nextFollowUpAt;
   }
+  if (subStatus) {
+    lead.subStatus = String(subStatus).trim();
+  }
   lead.lastContactedAt = new Date();
   lead.updatedBy = req.user._id;
 
@@ -974,6 +1040,8 @@ exports.updateLead = asyncHandler(async (req, res) => {
   }
 
   // Update fields
+  const previousStatus = lead.status;
+  
   lead.contactName = input.contactName;
   lead.companyName = input.companyName;
   lead.phone = input.phone;
@@ -992,8 +1060,19 @@ exports.updateLead = asyncHandler(async (req, res) => {
   lead.notes = input.notes;
   lead.sourcingDate = input.sourcingDate;
   lead.projection = input.projection;
+  lead.clientType = input.clientType;
+  lead.sourcedBy = input.sourcedBy;
   lead.nextFollowUpAt = input.nextFollowUpAt;
   lead.updatedBy = req.user._id;
+
+  // Handle status update if provided and different
+  if (input.status && input.status !== previousStatus) {
+    lead.status = input.status;
+    lead.lastContactedAt = new Date();
+    if (input.status === "CONVERTED") {
+      lead.convertedAt = new Date();
+    }
+  }
 
   await lead.save();
 
@@ -1006,6 +1085,48 @@ exports.updateLead = asyncHandler(async (req, res) => {
     success: true,
     message: "Lead updated successfully",
     data: formatLead(updatedLead),
+  });
+});
+
+exports.getTransferCandidate = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const lead = await Lead.findById(id).populate("createdBy", "territory");
+  if (!lead) {
+    throw createHttpError(404, "Lead not found");
+  }
+
+  if (String(lead.assignedTo) !== String(req.user._id)) {
+    throw createHttpError(403, "You can only view transfer candidates for leads assigned to you.");
+  }
+
+  const leadZone = inferZoneFromTerritory(lead.createdBy?.territory);
+  const leadState = lead.state;
+
+  if (!leadZone || !leadState) {
+    throw createHttpError(400, "Lead zone or state is missing.");
+  }
+
+  const stateManager = await CrmUser.findOne({
+    role: "STATE_MANAGER",
+    territory: leadZone,
+    state: leadState,
+    isActive: true,
+  });
+
+  if (!stateManager) {
+    throw createHttpError(404, `No active State Manager found for ${leadState} in ${leadZone} zone.`);
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      id: String(stateManager._id),
+      fullName: stateManager.fullName,
+      role: stateManager.role,
+      territory: stateManager.territory,
+      state: stateManager.state,
+    },
   });
 });
 
@@ -1043,6 +1164,8 @@ exports.transferLeadToSM = asyncHandler(async (req, res) => {
     throw createHttpError(404, `No active State Manager found for ${leadState} in ${leadZone} zone.`);
   }
 
+  const { tnc } = req.body;
+
   lead.isForwardedToSM = true;
   lead.approvalStatus = "PENDING";
   lead.approvalLevel = "STATE_MANAGER";
@@ -1051,6 +1174,10 @@ exports.transferLeadToSM = asyncHandler(async (req, res) => {
   lead.assignedBy = req.user._id;
   lead.assignedTo = stateManager._id;
   lead.updatedBy = req.user._id;
+
+  if (tnc) {
+    lead.tnc = String(tnc).trim();
+  }
 
   await lead.save();
 

@@ -146,6 +146,11 @@ const leadSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    tnc: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     notes: {
       type: String,
       trim: true,
@@ -183,6 +188,16 @@ const leadSchema = new mongoose.Schema(
       enum: ["", "WP > 50", "WP < 50", "MP < 50", "MP > 50"],
       default: "",
       trim: true,
+    },
+    clientType: {
+      type: String,
+      enum: ["Standard", "Premium"],
+      default: "Standard",
+    },
+    sourcedBy: {
+      type: String,
+      trim: true,
+      default: "",
     },
     employeeCount: {
       type: String,

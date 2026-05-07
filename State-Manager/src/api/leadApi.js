@@ -55,8 +55,8 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
-export async function fetchLeadDashboard() {
-  const { data } = await http.get("/dashboard");
+export async function fetchLeadDashboard(params = {}) {
+  const { data } = await http.get("/dashboard", { params });
   return data.data;
 }
 
@@ -101,6 +101,10 @@ export async function fetchLeads(params = {}) {
 
   if (params.memberId?.trim()) {
     normalizedParams.memberId = params.memberId.trim();
+  }
+
+  if (params.sourceRole?.trim()) {
+    normalizedParams.sourceRole = params.sourceRole.trim();
   }
 
   const { data } = await http.get("/leads", { params: normalizedParams });
@@ -193,4 +197,9 @@ export async function deleteManagedMember(memberId, role) {
   const params = normalizedRole ? { role: normalizedRole } : undefined;
   const { data } = await http.delete(`/team-members/${memberId}`, { params });
   return data;
+}
+
+export async function updateMemberTargets(memberId, targets) {
+  const { data } = await http.patch(`/team-members/${memberId}/targets`, targets);
+  return data.data;
 }

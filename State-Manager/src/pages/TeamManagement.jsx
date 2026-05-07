@@ -12,6 +12,7 @@ import {
   LuTrash2,
   LuUserRound,
   LuUsers,
+  LuTarget
 } from "react-icons/lu";
 import { toast } from "sonner";
 import ActionConfirmModal from "../components/ActionConfirmModal";
@@ -23,6 +24,7 @@ import {
   fetchManagedMemberDetail,
   fetchManagedMembers,
   updateManagedMember,
+  updateMemberTargets
 } from "../api/leadApi";
 
 const PAGE_SIZE = 10;
@@ -127,8 +129,11 @@ export default function TeamManagement() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState("");
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportMember, setReportMember] = useState(null);
+  const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
+  const [targetMember, setTargetMember] = useState(null);
+  const [targetForm, setTargetForm] = useState({ leadGeneration: 0, conversions: 0, meetings: 0 });
+  const [targetSubmitting, setTargetSubmitting] = useState(false);
 
   const currentPage = pageByRole[activeRole] || 1;
 
@@ -422,6 +427,31 @@ export default function TeamManagement() {
     }
   };
 
+  const openTargetModal = (member) => {
+    setTargetMember(member);
+    setTargetForm({
+      leadGeneration: member.targets?.leadGeneration || 0,
+      conversions: member.targets?.conversions || 0,
+      meetings: member.targets?.meetings || 0,
+    });
+    setIsTargetModalOpen(true);
+  };
+
+  const handleUpdateTargets = async (e) => {
+    e.preventDefault();
+    try {
+      setTargetSubmitting(true);
+      await updateMemberTargets(targetMember.id, targetForm);
+      toast.success("Targets updated successfully");
+      setIsTargetModalOpen(false);
+      setRefreshKey(prev => prev + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update targets");
+    } finally {
+      setTargetSubmitting(false);
+    }
+  };
+
   return (
     <div className="page-section my-leads-page">
       <section className="my-leads-heading">
@@ -497,13 +527,14 @@ export default function TeamManagement() {
                   <th>Converted</th>
                   <th>Assigned</th>
                   <th>CVR</th>
+                  <th>Targets</th>
                   <th>Report</th>
                 </tr>
               </thead>
               <tbody>
                 {rolePerformanceLoading ? (
                   <tr>
-                    <td colSpan="6" className="empty-cell">
+                    <td colSpan="7" className="empty-cell">
                       Loading FSE performance...
                     </td>
                   </tr>
@@ -517,6 +548,14 @@ export default function TeamManagement() {
                       <td className="team-performance-cvr">{formatRate(member.conversionRate)}</td>
                       <td style={{ padding: "8px" }}>
                         <button 
+                          onClick={() => openTargetModal(member)}
+                          style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
+                        >
+                          <LuTarget size={16} />
+                        </button>
+                      </td>
+                      <td style={{ padding: "8px" }}>
+                        <button 
                           onClick={() => handleViewReport(member)}
                           style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
                         >
@@ -527,7 +566,7 @@ export default function TeamManagement() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="empty-cell">
+                    <td colSpan="7" className="empty-cell">
                       {rolePerformanceError || "No FSE performance records yet."}
                     </td>
                   </tr>
@@ -566,13 +605,14 @@ export default function TeamManagement() {
                   <th>Forwarded</th>
                   <th>Converted</th>
                   <th>CVR</th>
+                  <th>Targets</th>
                   <th>Report</th>
                 </tr>
               </thead>
               <tbody>
                 {rolePerformanceLoading ? (
                   <tr>
-                    <td colSpan="6" className="empty-cell">
+                    <td colSpan="7" className="empty-cell">
                       Loading Lead Generator performance...
                     </td>
                   </tr>
@@ -584,6 +624,14 @@ export default function TeamManagement() {
                       <td>{member.forwardedLeads ?? 0}</td>
                       <td>{member.convertedLeads ?? 0}</td>
                       <td className="team-performance-cvr">{formatRate(member.conversionRate)}</td>
+                      <td>
+                        <button 
+                          onClick={() => openTargetModal(member)}
+                          style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}
+                        >
+                          <LuTarget size={16} />
+                        </button>
+                      </td>
                       <td style={{ padding: "8px" }}>
                         <button 
                           onClick={() => handleViewReport(member)}
@@ -596,7 +644,7 @@ export default function TeamManagement() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="empty-cell">
+                    <td colSpan="7" className="empty-cell">
                       {rolePerformanceError || "No Lead Generator performance records yet."}
                     </td>
                   </tr>
@@ -1065,6 +1113,57 @@ export default function TeamManagement() {
         onClose={() => setIsReportModalOpen(false)}
         member={reportMember}
       />
+
+      {isTargetModalOpen && (
+        <div className="modal-overlay" onClick={() => !targetSubmitting && setIsTargetModalOpen(false)}>
+          <section className="modal-content" style={{ maxWidth: "400px" }} onClick={(e) => e.stopPropagation()}>
+            <header className="modal-header">
+              <div className="header-info">
+                <h2>Set Performance Targets</h2>
+                <p>Set monthly goals for {targetMember?.name}</p>
+              </div>
+              <button className="close-btn" onClick={() => setIsTargetModalOpen(false)}>&times;</button>
+            </header>
+            <form className="modal-body" onSubmit={handleUpdateTargets}>
+              <div style={{ display: "grid", gap: "16px" }}>
+                <div>
+                  <label className="form-label">Lead Generation Target</label>
+                  <input 
+                    type="number" 
+                    className="form-input"
+                    value={targetForm.leadGeneration}
+                    onChange={(e) => setTargetForm({ ...targetForm, leadGeneration: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Conversions Target</label>
+                  <input 
+                    type="number" 
+                    className="form-input"
+                    value={targetForm.conversions}
+                    onChange={(e) => setTargetForm({ ...targetForm, conversions: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Meetings/Meetings Target</label>
+                  <input 
+                    type="number" 
+                    className="form-input"
+                    value={targetForm.meetings}
+                    onChange={(e) => setTargetForm({ ...targetForm, meetings: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div style={{ marginTop: "24px", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+                <button type="button" className="secondary-btn" onClick={() => setIsTargetModalOpen(false)}>Cancel</button>
+                <button type="submit" className="primary-btn" disabled={targetSubmitting}>
+                  {targetSubmitting ? "Updating..." : "Save Targets"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

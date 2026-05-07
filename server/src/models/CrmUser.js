@@ -64,6 +64,11 @@ const crmUserSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    targets: {
+      leadGeneration: { type: Number, default: 0 },
+      conversions: { type: Number, default: 0 },
+      meetings: { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );

@@ -115,15 +115,20 @@ export async function updateFseLead(leadId, payload) {
   return data.data;
 }
 
-export async function transferFseLeadToStateManager(leadId) {
-  const { data } = await http.patch(`/leads/${leadId}/transfer-to-sm`);
+export const transferFseLeadToStateManager = async (leadId, tnc) => {
+  const { data } = await http.patch(`/leads/${leadId}/transfer-to-sm`, { tnc });
   return data.data;
-}
+};
 
-export async function fetchFseLeads(params = {}) {
+export const fetchFseLeads = async (params = {}) => {
   const { data } = await http.get("/leads", { params });
   return data.data;
-}
+};
+
+export const fetchTransferCandidate = async (leadId) => {
+  const { data } = await http.get(`/leads/${leadId}/transfer-candidate`);
+  return data.data;
+};
 
 export async function updateFseLeadStatus(leadId, status) {
   const { data } = await http.patch(`/leads/${leadId}/status`, { status });

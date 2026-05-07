@@ -6,7 +6,9 @@ import {
   LuMapPin, 
   LuCalendar,
   LuCircleCheck,
-  LuLoader
+  LuLoader,
+  LuTrendingUp,
+  LuTarget
 } from "react-icons/lu";
 import { fetchLeads } from "../api/leadApi";
 
@@ -45,9 +47,26 @@ export default function MemberReportModal({ isOpen, onClose, member }) {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="modal-header" style={{ padding: '24px', borderBottom: '1px solid #e2e8f0', background: 'linear-gradient(to right, #ffffff, #f8fafc)' }}>
-          <div className="header-info">
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e3a8a', margin: 0 }}>Work Report: {member?.fullName}</h2>
-            <p style={{ color: '#64748b', margin: '4px 0 0 0' }}>Detailed lead history and performance metrics</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+            <div className="header-info">
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e3a8a', margin: 0 }}>Work Report: {member?.fullName || member?.name}</h2>
+              <p style={{ color: '#64748b', margin: '4px 0 0 0' }}>Detailed lead history and performance metrics</p>
+            </div>
+            {member?.targets && (
+              <div style={{ display: 'flex', gap: '16px', marginRight: '40px' }}>
+                <div style={{ textAlign: 'right' }}>
+                  <small style={{ color: '#64748b', fontWeight: 600, display: 'block' }}>TARGETS</small>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1e3a8a', background: '#eff6ff', padding: '2px 8px', borderRadius: '4px' }}>
+                      Gen: {member.targets.leadGeneration || 0}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#047857', background: '#ecfdf5', padding: '2px 8px', borderRadius: '4px' }}>
+                      Conv: {member.targets.conversions || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <button type="button" className="close-btn" onClick={onClose} style={{ top: '24px', right: '24px' }}>
             <LuX size={24} />
@@ -78,6 +97,27 @@ export default function MemberReportModal({ isOpen, onClose, member }) {
             <option value="REJECTED">Rejected</option>
             <option value="LOST">Lost</option>
           </select>
+        </div>
+
+        <div style={{ padding: '12px 24px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: '#fff', borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <small style={{ color: '#64748b', fontWeight: 600, display: 'block' }}>TOTAL LEADS</small>
+            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>{leads.length}</span>
+          </div>
+          <div style={{ padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <small style={{ color: '#64748b', fontWeight: 600, display: 'block' }}>CONVERTED</small>
+            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#10b981' }}>{leads.filter(l => l.status === 'CONVERTED').length}</span>
+          </div>
+          <div style={{ padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <small style={{ color: '#64748b', fontWeight: 600, display: 'block' }}>PENDING</small>
+            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f59e0b' }}>{leads.filter(l => ['NEW', 'FORWARDED', 'ASSIGNED'].includes(l.status)).length}</span>
+          </div>
+          <div style={{ padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <small style={{ color: '#64748b', fontWeight: 600, display: 'block' }}>CVR</small>
+            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#3b82f6' }}>
+              {leads.length > 0 ? Math.round((leads.filter(l => l.status === 'CONVERTED').length / leads.length) * 100) : 0}%
+            </span>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>

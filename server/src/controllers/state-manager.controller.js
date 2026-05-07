@@ -485,81 +485,63 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res) => {
 
 // Get Leads for State Manager
 exports.getLeads = asyncHandler(async (req, res) => {
-  const { search, location, date, page = 1, limit = 50 } = req.query;
+  const { search, location, date, page = 1, limit = 50, sourceRole } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
-  // State Manager can only see leads forwarded by Lead Generators in their Zone
   let targetZone = req.user.role === "STATE_MANAGER" ? getUserZone(req.user) : "";
   const managerState = getUserState(req.user);
-  if (!targetZone) {
-    throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
-  }
-  if (!managerState) {
-    throw createHttpError(403, "Unable to resolve state for this State Manager account.");
+  if (!targetZone || !managerState) {
+    throw createHttpError(403, "Unable to resolve zone/state for this State Manager account.");
   }
 
-  if (location && location !== "All Zones") {
-    const requestedZone = normalizeZoneInput(location.replace(" Zone", "").trim());
-    if (!requestedZone) {
-      throw createHttpError(400, "Invalid zone filter.");
-    }
-
-    // If the user is a STATE_MANAGER, they can only query their own zone
-    if (req.user.role === "STATE_MANAGER" && targetZone !== requestedZone) {
-      return res.status(200).json({
-        success: true,
-        count: 0,
-        total: 0,
-        pagination: { page: Number(page), limit: Number(limit), totalPages: 0 },
-        data: []
-      });
-    }
-    targetZone = requestedZone;
+  // Determine which members to filter by
+  let memberIds = [];
+  if (sourceRole) {
+    const roleQuery = {
+      ...buildManagedRoleQuery(sourceRole),
+      ...buildTerritoryFilter(targetZone),
+      state: managerState,
+    };
+    const members = await CrmUser.find(roleQuery).select("_id");
+    memberIds = members.map(u => u._id);
+  } else {
+    // Default: Show leads from both Leadgens and FSEs in the state
+    const teamQuery = {
+      ...buildAnyManagedRoleQuery(),
+      ...buildTerritoryFilter(targetZone),
+      state: managerState,
+    };
+    const team = await CrmUser.find(teamQuery).select("_id");
+    memberIds = team.map(u => u._id);
   }
 
-  const zoneQuery = {
-    ...buildManagedRoleQuery("LEAD_GENERATOR"),
-    ...buildTerritoryFilter(targetZone),
-    state: managerState,
-  };
-
-  // Find all lead generators matching the zone constraint
-  const zoneLGUsers = await CrmUser.find(zoneQuery).select("_id");
-  const generatorIds = zoneLGUsers.map(u => u._id);
-
-  // Build Query
   const query = {
     state: managerState,
+    $or: [
+      { createdBy: { $in: memberIds } },
+      { assignedTo: { $in: memberIds } }
+    ]
   };
 
-  const memberId = req.query.memberId;
-  if (memberId) {
-    query.$or = [{ createdBy: memberId }, { assignedTo: memberId }];
+  if (req.query.status) {
+    query.status = req.query.status;
   } else {
-    query.createdBy = { $in: generatorIds };
-    query.status = { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST"] };
-  }
-
-  if (req.user.role === "STATE_MANAGER") {
-    query.$and = [buildManagerOwnershipFilter(req.user._id)];
+    // Filter out purely "NEW" leads if they haven't been forwarded or touched by an FSE
+    // unless explicitly requested
+    query.status = { $in: ["FORWARDED", "ASSIGNED", "CONVERTED", "REJECTED", "LOST", "CONTACTED", "FOLLOW_UP", "QUALIFIED"] };
   }
 
   if (search) {
     const searchRegex = { $regex: search, $options: "i" };
-    const searchFilter = {
+    query.$and = query.$and || [];
+    query.$and.push({
       $or: [
         { companyName: searchRegex },
         { contactName: searchRegex },
         { phone: searchRegex },
         { leadCode: searchRegex },
       ],
-    };
-
-    if (Array.isArray(query.$and)) {
-      query.$and.push(searchFilter);
-    } else {
-      query.$or = searchFilter.$or;
-    }
+    });
   }
 
   if (date && date !== "All Dates") {
@@ -584,7 +566,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
     Lead.find(query)
       .populate("createdBy", "fullName territory email")
       .populate("assignedTo", "fullName email territory profileImageUrl")
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
     Lead.countDocuments(query)
@@ -1294,11 +1276,17 @@ exports.assignLead = asyncHandler(async (req, res) => {
 exports.getDashboard = asyncHandler(async (req, res) => {
   const myZone = getUserZone(req.user);
   const myState = getUserState(req.user);
-  if (!myZone) {
-    throw createHttpError(403, "Unable to resolve zone for this State Manager account.");
+  const { startDate, endDate, memberId } = req.query;
+
+  if (!myZone || !myState) {
+    throw createHttpError(403, "Unable to resolve zone/state for this State Manager account.");
   }
-  if (!myState) {
-    throw createHttpError(403, "Unable to resolve state for this State Manager account.");
+
+  const dateFilter = {};
+  if (startDate || endDate) {
+    dateFilter.createdAt = {};
+    if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
+    if (endDate) dateFilter.createdAt.$lte = new Date(endDate);
   }
 
   const [zoneLGUsers, zoneFSEUsers] = await Promise.all([
@@ -1308,37 +1296,34 @@ exports.getDashboard = asyncHandler(async (req, res) => {
       state: myState,
       isActive: true,
       accessStatus: { $ne: "RESTRICTED" },
-    })
-      .sort({ updatedAt: -1, createdAt: -1 })
-      .select("_id fullName email territory state profileImageUrl"),
+    }).select("_id fullName email territory state profileImageUrl targets"),
     CrmUser.find({
       ...buildManagedRoleQuery("FSE"),
       ...buildTerritoryFilter(myZone),
       state: myState,
       isActive: true,
       accessStatus: { $ne: "RESTRICTED" },
-    })
-      .sort({ updatedAt: -1, createdAt: -1 })
-      .select("_id fullName email territory state profileImageUrl"),
+    }).select("_id fullName email territory state profileImageUrl targets"),
   ]);
 
-  const generatorIds = zoneLGUsers.map((user) => user._id);
-  const fseIds = zoneFSEUsers.map((user) => user._id);
+  const generatorIds = memberId ? [memberId] : zoneLGUsers.map((user) => user._id);
+  const fseIds = memberId ? [memberId] : zoneFSEUsers.map((user) => user._id);
 
   const [scopedLeads, fsePerformanceRows, generatorPerformanceRows, recentAssigned] = await Promise.all([
     generatorIds.length
       ? Lead.find({
           createdBy: { $in: generatorIds },
           state: myState,
+          ...dateFilter
         }).sort({ updatedAt: -1 })
       : Promise.resolve([]),
-    fseIds.length && generatorIds.length
+    fseIds.length
       ? Lead.aggregate([
           {
             $match: {
               assignedTo: { $in: fseIds },
-              createdBy: { $in: generatorIds },
               state: myState,
+              ...dateFilter
             },
           },
           {
@@ -1366,6 +1351,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
             $match: {
               createdBy: { $in: generatorIds },
               state: myState,
+              ...dateFilter
             },
           },
           {
@@ -1393,12 +1379,12 @@ exports.getDashboard = asyncHandler(async (req, res) => {
           },
         ])
       : Promise.resolve([]),
-    fseIds.length && generatorIds.length
+    fseIds.length
       ? Lead.find({
-          createdBy: { $in: generatorIds },
           state: myState,
           assignedTo: { $in: fseIds },
           status: { $in: ["ASSIGNED", "CONVERTED", "LOST", "REJECTED", "FORWARDED"] },
+          ...dateFilter
         })
           .populate("assignedTo", "fullName profileImageUrl")
           .sort({ updatedAt: -1 })
@@ -1433,6 +1419,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
   );
 
   const fseMembers = zoneFSEUsers
+    .filter(fse => !memberId || String(fse._id) === memberId)
     .map((fse) => {
       const stats = fsePerformanceMap.get(String(fse._id)) || {};
       const totalAssignedLeads = Number(stats.totalAssignedLeads || 0);
@@ -1453,21 +1440,13 @@ exports.getDashboard = asyncHandler(async (req, res) => {
         lastUpdatedAt: stats.lastUpdatedAt || null,
         status: "Active",
         profileImage: fse.profileImageUrl || "",
+        targets: fse.targets || { leadGeneration: 0, conversions: 0, meetings: 0 }
       };
     })
-    .sort((left, right) => {
-      if (right.convertedLeads !== left.convertedLeads) {
-        return right.convertedLeads - left.convertedLeads;
-      }
-
-      if (right.activeLeads !== left.activeLeads) {
-        return right.activeLeads - left.activeLeads;
-      }
-
-      return left.name.localeCompare(right.name);
-    });
+    .sort((left, right) => (right.convertedLeads - left.convertedLeads));
 
   const leadGeneratorMembers = zoneLGUsers
+    .filter(lg => !memberId || String(lg._id) === memberId)
     .map((leadGenerator) => {
       const stats = leadGeneratorPerformanceMap.get(String(leadGenerator._id)) || {};
       const totalGeneratedLeads = Number(stats.totalGeneratedLeads || 0);
@@ -1491,83 +1470,16 @@ exports.getDashboard = asyncHandler(async (req, res) => {
         lastUpdatedAt: stats.lastUpdatedAt || null,
         status: "Active",
         profileImage: leadGenerator.profileImageUrl || "",
+        targets: leadGenerator.targets || { leadGeneration: 0, conversions: 0, meetings: 0 }
       };
     })
-    .sort((left, right) => {
-      if (right.totalGeneratedLeads !== left.totalGeneratedLeads) {
-        return right.totalGeneratedLeads - left.totalGeneratedLeads;
-      }
-
-      if (right.forwardedLeads !== left.forwardedLeads) {
-        return right.forwardedLeads - left.forwardedLeads;
-      }
-
-      return left.name.localeCompare(right.name);
-    });
+    .sort((left, right) => (right.totalGeneratedLeads - left.totalGeneratedLeads));
 
   const pendingValidation = scopedLeads.filter((lead) => lead.status === "FORWARDED").length;
   const totalAssigned = scopedLeads.filter((lead) => lead.status === "ASSIGNED").length;
   const converted = scopedLeads.filter((lead) => lead.status === "CONVERTED").length;
-  const conversionRate = totalAssigned + converted > 0
-    ? Math.round((converted / (totalAssigned + converted)) * 100)
-    : 0;
-
-  const totalFseActiveLeads = fseMembers.reduce(
-    (accumulator, item) => accumulator + Number(item.activeLeads || 0),
-    0,
-  );
-  const totalFseConvertedLeads = fseMembers.reduce(
-    (accumulator, item) => accumulator + Number(item.convertedLeads || 0),
-    0,
-  );
-  const totalFseAssignedLeads = fseMembers.reduce(
-    (accumulator, item) => accumulator + Number(item.totalAssignedLeads || 0),
-    0,
-  );
-  const activeFsePerformers = fseMembers.filter((item) => Number(item.totalAssignedLeads || 0) > 0).length;
-
-  const totalGeneratedByLeadGenerators = leadGeneratorMembers.reduce(
-    (accumulator, item) => accumulator + Number(item.totalGeneratedLeads || 0),
-    0,
-  );
-  const totalForwardedByLeadGenerators = leadGeneratorMembers.reduce(
-    (accumulator, item) => accumulator + Number(item.forwardedLeads || 0),
-    0,
-  );
-  const totalConvertedByLeadGenerators = leadGeneratorMembers.reduce(
-    (accumulator, item) => accumulator + Number(item.convertedLeads || 0),
-    0,
-  );
-  const activeLeadGeneratorPerformers = leadGeneratorMembers.filter(
-    (item) => Number(item.totalGeneratedLeads || 0) > 0,
-  ).length;
-
-  const teamOverview = fseMembers.map((item) => ({
-    id: item.id,
-    initials: item.initials,
-    name: item.name,
-    location: item.state || myState,
-    activeLeads: item.activeLeads,
-    status: item.status,
-    profileImage: item.profileImage,
-  }));
-
-  const recentActivity = recentAssigned.map((lead) => ({
-    id: String(lead._id),
-    type:
-      lead.status === "CONVERTED"
-        ? "success"
-        : lead.status === "REJECTED" || lead.status === "LOST"
-          ? "danger"
-          : "primary",
-    text: `Lead ${lead.leadCode || "#"} ${String(lead.status || "").toLowerCase()} by ${lead.assignedTo?.fullName || "FSE"}`,
-    time: new Date(lead.updatedAt).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-  }));
+  const totalLeads = totalAssigned + converted;
+  const conversionRate = totalLeads > 0 ? Math.round((converted / totalLeads) * 100) : 0;
 
   res.status(200).json({
     success: true,
@@ -1576,34 +1488,32 @@ exports.getDashboard = asyncHandler(async (req, res) => {
       activeFses: fseMembers.length,
       activeLeadGenerators: leadGeneratorMembers.length,
       totalAssigned,
+      totalLeadsGenerated: leadGeneratorMembers.reduce((acc, m) => acc + m.totalGeneratedLeads, 0),
       conversionRate: `${conversionRate}%`,
-      conversionGrowth: "0%",
-      teamOverview,
-      recentActivity,
       rolePerformance: {
         fse: {
           summary: {
             totalMembers: fseMembers.length,
-            activePerformers: activeFsePerformers,
-            totalAssignedLeads: totalFseAssignedLeads,
-            activeLeads: totalFseActiveLeads,
-            convertedLeads: totalFseConvertedLeads,
-            conversionRate: `${toPercent(totalFseConvertedLeads, totalFseAssignedLeads)}%`,
+            convertedLeads: fseMembers.reduce((acc, m) => acc + m.convertedLeads, 0),
+            totalAssignedLeads: fseMembers.reduce((acc, m) => acc + m.totalAssignedLeads, 0),
           },
           members: fseMembers,
         },
         leadGenerator: {
           summary: {
             totalMembers: leadGeneratorMembers.length,
-            activePerformers: activeLeadGeneratorPerformers,
-            totalGeneratedLeads: totalGeneratedByLeadGenerators,
-            forwardedLeads: totalForwardedByLeadGenerators,
-            convertedLeads: totalConvertedByLeadGenerators,
-            conversionRate: `${toPercent(totalConvertedByLeadGenerators, totalGeneratedByLeadGenerators)}%`,
+            totalGeneratedLeads: leadGeneratorMembers.reduce((acc, m) => acc + m.totalGeneratedLeads, 0),
+            forwardedLeads: leadGeneratorMembers.reduce((acc, m) => acc + m.forwardedLeads, 0),
           },
           members: leadGeneratorMembers,
         },
       },
+      recentActivity: recentAssigned.map(lead => ({
+        id: String(lead._id),
+        type: lead.status === "CONVERTED" ? "success" : "primary",
+        text: `Lead ${lead.leadCode} ${lead.status.toLowerCase()} by ${lead.assignedTo?.fullName || "FSE"}`,
+        time: lead.updatedAt
+      }))
     },
   });
 });
@@ -1665,5 +1575,38 @@ exports.updateLeadStatus = asyncHandler(async (req, res) => {
     success: true,
     message: "Lead status updated",
     data: lead
+  });
+});
+
+exports.updateMemberTargets = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { leadGeneration, conversions, meetings } = req.body;
+
+  const managerZone = getUserZone(req.user);
+  const managerState = getUserState(req.user);
+
+  const member = await CrmUser.findOne({
+    _id: id,
+    ...buildAnyManagedRoleQuery(),
+    ...buildTerritoryFilter(managerZone),
+    state: managerState,
+  });
+
+  if (!member) {
+    throw createHttpError(404, "Team member not found in your state.");
+  }
+
+  member.targets = {
+    leadGeneration: Number(leadGeneration) || 0,
+    conversions: Number(conversions) || 0,
+    meetings: Number(meetings) || 0,
+  };
+
+  await member.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Targets updated successfully",
+    data: member.targets,
   });
 });

@@ -10,6 +10,46 @@ const STATUS_OPTIONS = [
   "New",
 ];
 
+const SUB_STATUS_MAP = {
+  "Interested": [
+    "Need Demo",
+    "Package Explained",
+    "Meeting Scheduled",
+    "Positive Response",
+    "Callback Requested"
+  ],
+  "Not Interested": [
+    "Already Using",
+    "Budget Issue",
+    "Not Relevant",
+    "No Requirement",
+    "Refused to talk"
+  ],
+  "Not Picked": [
+    "Switch Off",
+    "Busy / Declined",
+    "Call Disconnected",
+    "Ringing No Response",
+    "Wrong Number"
+  ],
+  "Onboard": [
+    "Document Collected",
+    "Payment Pending",
+    "Onboarded Successfully",
+    "Forwarded to SM"
+  ],
+  "Call Later": [
+    "Next Week",
+    "After 2 Days",
+    "Call in Evening",
+    "Busy right now"
+  ],
+  "New": [
+    "Untouched",
+    "Data Verified"
+  ]
+};
+
 const toDateInput = (value) => {
   if (!value) {
     return "";
@@ -80,7 +120,10 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
               <select
                 id="activity-outcome"
                 value={outcome}
-                onChange={(event) => setOutcome(event.target.value)}
+                onChange={(event) => {
+                  setOutcome(event.target.value);
+                  setSubStatus(""); // Reset sub-status when main status changes
+                }}
                 className="form-select"
                 required
               >
@@ -95,13 +138,21 @@ export default function LogActivityModal({ lead, initialData, onClose, onSubmit,
 
           <div className="form-group">
             <label className="form-label" htmlFor="activity-substatus">SUB STATUS</label>
-            <input
-              id="activity-substatus"
-              className="form-input"
-              value={subStatus}
-              onChange={(event) => setSubStatus(event.target.value)}
-              placeholder="e.g. Call Picked, Switch Off"
-            />
+            <div className="select-container">
+              <select
+                id="activity-substatus"
+                value={subStatus}
+                onChange={(event) => setSubStatus(event.target.value)}
+                className="form-select"
+                disabled={!outcome}
+              >
+                <option value="">Select Sub Status...</option>
+                {outcome && SUB_STATUS_MAP[outcome]?.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              <LuChevronDown className="select-icon" />
+            </div>
           </div>
 
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>

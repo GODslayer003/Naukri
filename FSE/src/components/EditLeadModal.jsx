@@ -56,6 +56,8 @@ export default function EditLeadModal({ lead, onClose, onSave }) {
     reference: lead?.reference || "",
     sourcingDate: lead?.sourcingDate ? new Date(lead.sourcingDate).toISOString().split("T")[0] : "",
     projection: lead?.projection || "",
+    clientType: lead?.clientType || "Standard",
+    status: lead?.status || "ASSIGNED",
     notes: lead?.notes || "",
     nextFollowUpAt: lead?.nextFollowUpAt ? new Date(lead.nextFollowUpAt).toISOString().split("T")[0] : "",
     contacts: Array.isArray(lead?.contacts) && lead.contacts.length 
@@ -401,6 +403,41 @@ export default function EditLeadModal({ lead, onClose, onSave }) {
                         value={form.sourcingDate}
                         onChange={handleChange}
                       />
+                    </div>
+                  </Field>
+                  <Field label="Client Type">
+                    <div className="input-shell input-shell-left">
+                      <LuTag className="input-icon" />
+                      <select
+                        className="input add-lead-input add-lead-select"
+                        name="clientType"
+                        value={form.clientType}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="Standard">Standard</option>
+                        <option value="Premium">Premium</option>
+                      </select>
+                    </div>
+                  </Field>
+                  <Field label="Lead Status">
+                    <div className="input-shell input-shell-left">
+                      <LuTag className="input-icon" />
+                      <select
+                        className="input add-lead-input add-lead-select"
+                        name="status"
+                        value={form.status}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="ASSIGNED">ASSIGNED</option>
+                        <option value="CONTACTED">CONTACTED</option>
+                        <option value="QUALIFIED">QUALIFIED</option>
+                        <option value="FOLLOW_UP">FOLLOW_UP</option>
+                        <option value="CONVERTED">CONVERTED (Customer)</option>
+                        <option value="LOST">LOST</option>
+                        <option value="REJECTED">REJECTED</option>
+                      </select>
                     </div>
                   </Field>
                 </div>

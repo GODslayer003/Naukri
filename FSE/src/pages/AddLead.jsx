@@ -76,6 +76,7 @@ const initialForm = {
   reference: "",
   sourcingDate: "",
   projection: "",
+  clientType: "Standard",
   notes: "",
   nextFollowUpAt: "",
   contacts: [createEmptyContact()],
@@ -224,6 +225,7 @@ export default function AddLead() {
         reference: form.reference.trim(),
         sourcingDate: form.sourcingDate || null,
         projection: form.projection || "",
+        clientType: form.clientType || "Standard",
         notes: form.notes.trim(),
         nextFollowUpAt: form.nextFollowUpAt || null,
       };
@@ -482,6 +484,22 @@ export default function AddLead() {
                       value={form.sourcingDate}
                       onChange={handleChange}
                     />
+                  </div>
+                </Field>
+
+                <Field label="Client Type">
+                  <div className="input-shell input-shell-left">
+                    <LuTag className="input-icon" />
+                    <select
+                      className="input add-lead-input add-lead-select"
+                      name="clientType"
+                      value={form.clientType}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="Standard">Standard</option>
+                      <option value="Premium">Premium</option>
+                    </select>
                   </div>
                 </Field>
               </div>
