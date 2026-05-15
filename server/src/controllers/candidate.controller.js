@@ -402,14 +402,12 @@ const sendCsv = (res, fileName, headers, rows) => {
 
 exports.register = asyncHandler(async (req, res) => {
   const requestBody = req.body && typeof req.body === "object" ? req.body : {};
-  const {
-    name = "",
-    designation = "",
-    phone = "",
-    email = "",
-    password = "",
-    qrToken = "",
-  } = requestBody;
+  const name = String(requestBody.name || "").trim();
+  const designation = String(requestBody.designation || "").trim();
+  const phone = String(requestBody.phone || "").trim();
+  const email = String(requestBody.email || "").trim();
+  const password = String(requestBody.password || "").trim();
+  const qrToken = String(requestBody.qrToken || "").trim();
 
   if (!Object.keys(requestBody).length) {
     throw createHttpError(
@@ -418,7 +416,7 @@ exports.register = asyncHandler(async (req, res) => {
     );
   }
 
-  if (!name.trim() || !designation.trim() || !phone.trim() || !email.trim()) {
+  if (!name || !designation || !phone || !email) {
     throw createHttpError(
       400,
       "Name, preferred position, phone number, and email are required.",
@@ -434,7 +432,7 @@ exports.register = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Only PDF resume files are supported.");
   }
  
-  const normalizedEmail = String(email).trim().toLowerCase();
+  const normalizedEmail = email.toLowerCase();
   const existingUser = await User.findOne({ email: normalizedEmail });
 
   if (existingUser) {
@@ -549,14 +547,15 @@ exports.register = asyncHandler(async (req, res) => {
 
 exports.login = asyncHandler(async (req, res) => {
   const requestBody = req.body && typeof req.body === "object" ? req.body : {};
-  const { email = "", password = "" } = requestBody;
+  const email = String(requestBody.email || "").trim();
+  const password = String(requestBody.password || "").trim();
 
-  if (!email.trim() || !password.trim()) {
+  if (!email || !password) {
     throw createHttpError(400, "Email and password are required");
   }
 
   const user = await User.findOne({
-    email: email.trim().toLowerCase(),
+    email: email.toLowerCase(),
     role: "CANDIDATE",
   });
 
