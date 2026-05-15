@@ -1,0 +1,342 @@
+import React, { useState, useEffect } from 'react';
+import {
+  FiSearch, FiMapPin, FiBriefcase, FiUsers, FiClock, FiStar,
+  FiChevronRight, FiChevronLeft, FiFilter, FiCheckCircle, FiBell,
+  FiTrendingUp, FiSettings, FiFileText, FiArrowRight, FiX, FiAward, FiZap, FiGlobe, FiLayers, FiBox
+} from 'react-icons/fi';
+import { Link, useNavigate } from 'react-router-dom';
+import mavenLogo from '../../../assets/maven-logo-BdiSsfJk.svg';
+import './CompaniesPage.css';
+
+const CompaniesPage = () => {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [sortBy, setSortBy] = useState('Most Popular');
+  const [activePage, setActivePage] = useState(1);
+  const [activeFilters, setActiveFilters] = useState({});
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  const toggleFilter = (group, value) => {
+    setActiveFilters(prev => {
+      const groupFilters = prev[group] || [];
+      return {
+        ...prev,
+        [group]: groupFilters.includes(value)
+          ? groupFilters.filter(v => v !== value)
+          : [...groupFilters, value],
+      };
+    });
+  };
+
+  const clearAll = () => setActiveFilters({});
+
+  const initialCompanies = [
+    { id: 1, name: 'Skylark IT', rating: 3.6, reviews: 42, tags: ['Financial Services', 'Founded: 2013'], logo: 'S', color: '#1E5EFF', popularity: 88 },
+    { id: 2, name: 'Bren', rating: 4.0, reviews: 100, tags: ['Corporate', 'Real Estate', 'Founded: 1973'], logo: 'B', color: '#7C3AED', popularity: 95 },
+    { id: 3, name: 'Aforeserve', rating: 3.4, reviews: '1.4k', tags: ['Corporate', 'IT Services'], logo: 'A', color: '#F59E0B', popularity: 76 },
+    { id: 4, name: 'Capital Numbers', rating: 4.1, reviews: 580, tags: ['Indian MNC', 'Consulting'], logo: 'C', color: '#0DBF7B', popularity: 92 },
+    { id: 5, name: '3Di Systems', rating: 3.4, reviews: 61, tags: ['Corporate', 'Software'], logo: '3', color: '#EF4444', popularity: 65 },
+    { id: 6, name: 'Experience Commerce', rating: 2.7, reviews: 49, tags: ['Advertising', 'Marketing'], logo: 'E', color: '#0F2040', popularity: 50 },
+    { id: 7, name: 'Ovaledge', rating: 4.0, reviews: 38, tags: ['IT Consulting'], logo: 'O', color: '#8B5CF6', popularity: 70 },
+    { id: 8, name: 'Simplilearn', rating: 3.8, reviews: 877, tags: ['Foreign MNC', 'EdTech'], logo: 'S', color: '#0EA5E9', popularity: 85 },
+    { id: 9, name: 'Tychon Solutions', rating: 4.0, reviews: 47, tags: ['Corporate', 'IT Services'], logo: 'T', color: '#4F46E5', popularity: 68 },
+    { id: 10, name: 'Now100', rating: 2.4, reviews: 10, tags: ['Foreign MNC', 'IT Services'], logo: 'N', color: '#1E40AF', popularity: 40 },
+  ];
+
+  const getSortedCompanies = () => {
+    let sorted = [...initialCompanies];
+    if (sortBy === 'Highest Rated') sorted.sort((a, b) => b.rating - a.rating);
+    else if (sortBy === 'Most Popular') sorted.sort((a, b) => b.popularity - a.popularity);
+    else if (sortBy === 'Recently Added') sorted.sort((a, b) => b.id - a.id);
+    return sorted;
+  };
+
+  const companies = getSortedCompanies();
+
+  const categories = [
+    { name: 'MNCs', count: '2.3K+ Companies', icon: <FiGlobe />, accent: '#1E5EFF' },
+    { name: 'Internet', count: '247 Companies', icon: <FiZap />, accent: '#7C3AED' },
+    { name: 'Manufacturing', count: '1.1K+ Companies', icon: <FiLayers />, accent: '#0DBF7B' },
+    { name: 'Fortune 500', count: '164 Companies', icon: <FiAward />, accent: '#F59E0B' },
+    { name: 'Product', count: '1.3K+ Companies', icon: <FiBox />, accent: '#EF4444' },
+  ];
+
+  const filterGroups = {
+    'Company Type': ['Corporate', 'Foreign MNC', 'Startup', 'Indian MNC'],
+    'Location': ['Bengaluru', 'Pune', 'Mumbai', 'Noida'],
+    'Industry': ['IT Services', 'E-Learning', 'Finance', 'Healthcare'],
+  };
+
+  const totalActiveFilters = Object.values(activeFilters).reduce((sum, arr) => sum + arr.length, 0);
+
+  const getRatingColor = (rating) => {
+    if (rating >= 4.0) return '#0DBF7B';
+    if (rating >= 3.5) return '#F59E0B';
+    return '#EF4444';
+  };
+
+  return (
+    <div className="cp-root">
+      {/* Navbar */}
+      <nav className="cp-nav">
+        <div className="cp-nav-inner">
+          <Link to="/" className="cp-logo">
+            <img src={mavenLogo} alt="MavenJobs" style={{ height: '100%' }} />
+          </Link>
+
+          <div className="cp-nav-links">
+            <Link to="/jobs" className="cp-nav-link">Jobs</Link>
+            <Link to="/companies" className="cp-nav-link active">Companies</Link>
+            <Link to="/services" className="cp-nav-link">Services</Link>
+          </div>
+
+          <div className="cp-nav-search">
+            <FiSearch className="cp-search-icon" size={16} />
+            <input
+              type="text"
+              placeholder="Search companies, industries or roles..."
+              className="cp-search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="cp-nav-actions">
+            <div className="cp-bell" onClick={() => setShowNotifications(true)}>
+              <FiBell size={18} />
+              <span className="cp-bell-dot"></span>
+            </div>
+            <Link to="/profile">
+              <img
+                src="https://i.pinimg.com/736x/26/89/19/268919fb14ab9fb609647d7011140ab7.jpg"
+                alt="User"
+                className="cp-avatar"
+              />
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      <main className="cp-main">
+        {/* Hero */}
+        <div className="cp-hero">
+          <div className="cp-hero-left">
+            <div className="cp-eyebrow">
+              <span className="cp-eyebrow-dot"></span>
+              Discover Excellence
+            </div>
+            <h1 className="cp-title">Top companies hiring <span className="cp-title-accent">right now</span></h1>
+            <p className="cp-subtitle">Explore 9,936+ companies across industries and find your next career move.</p>
+          </div>
+        </div>
+
+        {/* Category Grid Aligned with Main Layout */}
+        <div className="cp-cat-grid-layout">
+          {/* First card aligns with Sidebar */}
+          <div className="cp-cat-pill" style={{ '--accent': categories[0].accent, width: '100%' }}>
+            <span className="cp-cat-icon" style={{ color: categories[0].accent }}>{categories[0].icon}</span>
+            <div>
+              <div className="cp-cat-name">{categories[0].name}</div>
+              <div className="cp-cat-count">{categories[0].count}</div>
+            </div>
+            <FiArrowRight size={14} className="cp-cat-arrow" />
+          </div>
+
+          {/* Other cards align with Main Content Area */}
+          <div className="cp-cat-right-row">
+            {categories.slice(1).map((cat, i) => (
+              <div key={i} className="cp-cat-pill" style={{ '--accent': cat.accent, flex: 1 }}>
+                <span className="cp-cat-icon" style={{ color: cat.accent }}>{cat.icon}</span>
+                <div>
+                  <div className="cp-cat-name">{cat.name}</div>
+                  <div className="cp-cat-count">{cat.count}</div>
+                </div>
+                <FiArrowRight size={14} className="cp-cat-arrow" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="cp-layout">
+          {/* Sidebar */}
+          <aside className="cp-sidebar">
+            <div className="cp-filter-card">
+              <div className="cp-filter-header">
+                <div className="cp-filter-title-row">
+                  <FiFilter size={15} className="cp-filter-icon" />
+                  <h2 className="cp-filter-heading">Filters</h2>
+                  {totalActiveFilters > 0 && (
+                    <span className="cp-filter-badge">{totalActiveFilters}</span>
+                  )}
+                </div>
+                {totalActiveFilters > 0 && (
+                  <button className="cp-clear-btn" onClick={clearAll}>Clear all</button>
+                )}
+              </div>
+
+              {Object.entries(filterGroups).map(([group, items]) => (
+                <div key={group} className="cp-filter-group">
+                  <h4 className="cp-filter-group-label">{group}</h4>
+                  {group === 'Location' && (
+                    <div className="cp-filter-search-wrap">
+                      <FiSearch size={13} className="cp-filter-search-icon" />
+                      <input
+                        type="text"
+                        placeholder="Search city..."
+                        className="cp-filter-search-input"
+                      />
+                    </div>
+                  )}
+                  {items.map(item => {
+                    const isChecked = (activeFilters[group] || []).includes(item);
+                    return (
+                      <label
+                        key={item}
+                        className={`cp-checkbox-item ${isChecked ? 'checked' : ''}`}
+                        onClick={() => toggleFilter(group, item)}
+                      >
+                        <div className={`cp-checkbox ${isChecked ? 'checked' : ''}`}>
+                          {isChecked && <FiCheckCircle size={11} />}
+                        </div>
+                        <span className="cp-checkbox-label">{item}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          {/* Content */}
+          <div className="cp-content">
+            <div className="cp-results-bar">
+              <div className="cp-results-info">
+                <span className="cp-results-count">9,936</span>
+                <span className="cp-results-text"> elite companies found</span>
+              </div>
+              <div className="cp-sort-wrap">
+                <span className="cp-sort-label">Sort by</span>
+                <select
+                  className="cp-sort-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option>Most Popular</option>
+                  <option>Highest Rated</option>
+                  <option>Recently Added</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="cp-grid">
+              {companies.map(company => (
+                <div
+                  key={company.id}
+                  className="cp-company-card"
+                  onClick={() => navigate(`/company/${company.id}`)}
+                >
+                  <div className="cp-comp-logo-wrap">
+                    <div
+                      className="cp-comp-logo"
+                      style={{ background: company.color }}
+                    >
+                      {company.logo}
+                    </div>
+                  </div>
+
+                  <div className="cp-comp-body">
+                    <div className="cp-comp-header">
+                      <span className="cp-comp-name">{company.name}</span>
+                      <div
+                        className="cp-rating-badge"
+                        style={{ background: getRatingColor(company.rating) }}
+                      >
+                        <FiStar size={9} style={{ fill: 'white', stroke: 'white' }} />
+                        {company.rating}
+                      </div>
+                    </div>
+
+                    <div className="cp-comp-reviews">
+                      {company.reviews} Reviews
+                    </div>
+
+                    <div className="cp-comp-tags">
+                      {company.tags.map(tag => (
+                        <span key={tag} className="cp-comp-tag">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="cp-comp-caret">
+                    <FiChevronRight size={16} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            <div className="cp-pagination">
+              <button className="cp-page-btn cp-page-nav">
+                <FiChevronLeft size={16} />
+              </button>
+              {[1, 2, 3, '...', 12].map((p, i) => (
+                <button
+                  key={i}
+                  className={`cp-page-btn ${activePage === p ? 'active' : ''} ${p === '...' ? 'dots' : ''}`}
+                  onClick={() => typeof p === 'number' && setActivePage(p)}
+                  disabled={p === '...'}
+                >
+                  {p}
+                </button>
+              ))}
+              <button className="cp-page-btn cp-page-nav">
+                <FiChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="cp-footer">
+        <div className="cp-footer-inner">
+          <img src={mavenLogo} alt="MavenJobs" className="cp-footer-logo" />
+          <div className="cp-foot-links">
+            <Link to="#" className="cp-foot-link">Privacy Policy</Link>
+            <Link to="#" className="cp-foot-link">Terms of Service</Link>
+            <Link to="#" className="cp-foot-link">Help Center</Link>
+            <Link to="#" className="cp-foot-link">Cookies</Link>
+          </div>
+          <p className="cp-footer-copy">© 2026 MavenJobs Intelligence Portal. All rights reserved.</p>
+        </div>
+      </footer>
+
+      {/* Notification Modal */}
+      {showNotifications && (
+        <div className="cp-modal-overlay" onClick={() => setShowNotifications(false)}>
+          <div className="cp-modal" onClick={e => e.stopPropagation()}>
+            <div className="cp-modal-header">
+              <h3 className="cp-modal-title">Notifications</h3>
+              <button className="cp-modal-close" onClick={() => setShowNotifications(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="cp-modal-body">
+              <div className="cp-notif-empty">
+                <div className="cp-notif-icon"><FiBell size={22} /></div>
+                <p>You're all caught up</p>
+                <span>No new notifications at this time</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CompaniesPage;

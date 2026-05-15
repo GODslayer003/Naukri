@@ -1,0 +1,104 @@
+import { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import NaukriLandingPage from "./pages/candidates/NaukriLandingPage";
+import EmployerLandingPage from "./pages/candidates/EmployerLandingPage";
+import JobListingPage from "./pages/candidates/JobListingPage";
+import JobDetailsPage from "./pages/candidates/JobDetailsPage";
+import Buyonline from "./pages/employer/Buyonline";
+import ProfileDashboard from "./pages/candidates/ProfileDashboard";
+import CompaniesPage from "./pages/candidates/CompaniesPage";
+import Jobprofile from "./pages/candidates/Jobprofile";
+import ExpertAssist from "./pages/employer/Artist";
+import Services from "./pages/candidates/Services";
+import MavenPro from "./pages/candidates/MavenPro";
+import Premium from "./pages/candidates/Premium";
+import Info from "./pages/candidates/Info";
+import Blogs from "./pages/candidates/Blogs";
+import BlogAIRex from "./pages/candidates/Blogsx";
+import DailyQuiz from "./pages/candidates/DailyQuiz";
+import SavedJobs from "./pages/candidates/SavedJobs";
+import Leave from "./pages/candidates/Leave";
+import DailyQuizNotification from "./components/DailyQuizNotification";
+import PostJob from "./pages/employer/PostJob";
+import EmployerHelp from "./pages/employer/Help";
+import Talent from "./pages/employer/Talent";
+import Branding from "./pages/employer/Branding";
+import JobPosting from "./pages/employer/JobPosting";
+import ResumeDatabase from "./pages/employer/ResumeDatabase";
+import HiringAutomation from "./pages/employer/HiringAutomation";
+import EmployerDashboard from "./pages/employer/Dashboards";
+import Premium3D from "./components/Premium3D";
+import { AuthProvider, useAuth } from "./AuthContext";
+import ScrollToTop from "./components/ScrollToTop";
+
+function AppContent() {
+  const [showQuizPopup, setShowQuizPopup] = useState(false);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    // Trigger only once per login session
+    const isLoggedIn = user || localStorage.getItem("user");
+    const alreadyShown = sessionStorage.getItem("dailyQuizShown");
+
+    if (isLoggedIn && !alreadyShown) {
+      const timer = setTimeout(() => {
+        setShowQuizPopup(true);
+        sessionStorage.setItem("dailyQuizShown", "true");
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  return (
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<NaukriLandingPage />} />
+        <Route path="/employer-login" element={<EmployerLandingPage />} />
+        <Route path="/jobs" element={<JobListingPage />} />
+        <Route path="/job/:id" element={<JobDetailsPage />} />
+        <Route path="/buy-online" element={<Buyonline />} />
+        <Route path="/profile" element={<ProfileDashboard />} />
+        <Route path="/companies" element={<CompaniesPage />} />
+        <Route path="/company/:id" element={<Jobprofile />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/pro" element={<MavenPro />} />
+        <Route path="/premium" element={<Premium />} />
+        <Route path="/expert-assist" element={<ExpertAssist />} />
+        <Route path="/info" element={<Info />} />
+        <Route path="/blogs" element={<Blogs />} />
+        <Route path="/blog-article" element={<BlogAIRex />} />
+        <Route path="/daily-quiz" element={<DailyQuiz />} />
+        <Route path="/saved-jobs" element={<SavedJobs />} />
+        <Route path="/leave" element={<Leave />} />
+        <Route path="/post-job" element={<PostJob />} />
+        <Route path="/employer-help" element={<EmployerHelp />} />
+        <Route path="/talent-pulse" element={<Talent />} />
+        <Route path="/branding" element={<Branding />} />
+        <Route path="/job-posting" element={<JobPosting />} />
+        <Route path="/resume-database" element={<ResumeDatabase />} />
+        <Route path="/hiring-automation" element={<HiringAutomation />} />
+        <Route path="/employer-dashboard" element={<EmployerDashboard />} />
+      </Routes>
+
+      <DailyQuizNotification
+        isOpen={showQuizPopup}
+        duration={20}
+        onClose={() => setShowQuizPopup(false)}
+        onTakeQuiz={() => navigate("/daily-quiz")}
+      />
+      <Premium3D />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </AuthProvider>
+  );
+}
