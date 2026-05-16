@@ -35,6 +35,12 @@ router.post(
   upload.single("resume"),
   candidateController.uploadResume,
 );
+router.post(
+  "/profile/image",
+  protectCandidate,
+  upload.single("image"),
+  candidateController.uploadProfileImage,
+);
 router.get("/notifications", protectCandidate, candidateController.getNotifications);
 router.patch(
   "/notifications/:id/read",

@@ -10,6 +10,7 @@ const CandidateProfile = require("../models/CandidateProfile");
 const CandidateProfileHistory = require("../models/CandidateProfileHistory");
 const CandidateNotification = require("../models/CandidateNotification");
 const { uploadResumeFile } = require("../services/resume-storage.service");
+const { replaceCandidateImage } = require("../services/candidate-image-storage.service");
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -101,12 +102,21 @@ const computeProfileCompletion = (profile, user) => {
     profile.summary,
     profile.totalExperience,
     profile.currentCity,
-    profile.skills?.length,
-    profile.preferredRoles?.length,
+    profile.skills?.length > 0,
+    profile.preferredRoles?.length > 0,
+    profile.preferredLocations?.length > 0,
+    profile.expectedSalary,
     profile.resume?.url,
+    profile.profilePic?.url,
+    profile.coverPic?.url,
   ];
 
-  return Math.round((checkpoints.filter(Boolean).length / checkpoints.length) * 100);
+  const filledCount = checkpoints.filter((item) => {
+    if (typeof item === 'boolean') return item;
+    return Boolean(item);
+  }).length;
+
+  return Math.round((filledCount / checkpoints.length) * 100);
 };
 
 const formatCandidateUser = (user = null) => ({
@@ -148,6 +158,8 @@ const formatProfile = (profile = {}, user = null) => ({
     uploadedAt: profile?.resume?.uploadedAt || null,
   },
   profileCompletion: computeProfileCompletion(profile || {}, user || {}),
+  profilePic: profile?.profilePic || { url: "", publicId: "" },
+  coverPic: profile?.coverPic || { url: "", publicId: "" },
   updatedAt: profile?.updatedAt,
   lastUpdated: formatRelativeTime(profile?.updatedAt),
 });
@@ -408,6 +420,8 @@ exports.register = asyncHandler(async (req, res) => {
   const email = String(requestBody.email || "").trim();
   const password = String(requestBody.password || "").trim();
   const qrToken = String(requestBody.qrToken || "").trim();
+  const preferredLocation = String(requestBody.preferredLocation || "").trim();
+  const expectedSalary = String(requestBody.expectedSalary || "").trim();
 
   if (!Object.keys(requestBody).length) {
     throw createHttpError(
@@ -464,6 +478,8 @@ exports.register = asyncHandler(async (req, res) => {
       phone: normalizedPhone,
       currentTitle: designation.trim(),
       lastScannedQrToken: qrToken.trim(),
+      preferredLocations: preferredLocation ? [preferredLocation] : [],
+      expectedSalary: expectedSalary || "",
     };
 
     if (uploadedResume) {
@@ -502,6 +518,24 @@ exports.register = asyncHandler(async (req, res) => {
         field: "lastScannedQrToken",
         previousValue: "",
         nextValue: qrToken.trim(),
+      });
+    }
+
+    if (preferredLocation) {
+      changedFields.push("preferredLocations");
+      changes.push({
+        field: "preferredLocations",
+        previousValue: [],
+        nextValue: [preferredLocation],
+      });
+    }
+
+    if (expectedSalary) {
+      changedFields.push("expectedSalary");
+      changes.push({
+        field: "expectedSalary",
+        previousValue: "",
+        nextValue: expectedSalary,
       });
     }
 
@@ -1147,4 +1181,35 @@ exports.exportCandidateResumes = asyncHandler(async (req, res) => {
         ];
       }),
   );
+});
+
+exports.uploadProfileImage = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw createHttpError(400, "Please upload an image file.");
+  }
+
+  const type = req.body.type === "cover" ? "cover" : "profile";
+  const profile = await ensureCandidateProfile(req.user);
+  const previousPublicId = type === "cover" ? profile.coverPic?.publicId : profile.profilePic?.publicId;
+
+  const uploaded = await replaceCandidateImage(req.file, {
+    userId: req.user._id,
+    type,
+    previousPublicId,
+  });
+
+  if (type === "cover") {
+    profile.coverPic = uploaded;
+  } else {
+    profile.profilePic = uploaded;
+  }
+
+  await profile.save();
+
+  res.status(200).json({
+    success: true,
+    message: `${type === "cover" ? "Cover" : "Profile"} image updated successfully.`,
+    data: uploaded,
+    profileCompletion: computeProfileCompletion(profile, req.user),
+  });
 });

@@ -28,6 +28,24 @@ const authService = {
     } catch (error) {
       throw error.response?.data || { message: 'Failed to fetch user data' };
     }
+  },
+  
+  updateProfile: async (profileData) => {
+    try {
+      const response = await api.patch('/candidate/profile', profileData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Profile update failed' };
+    }
+  },
+
+  uploadImage: async (formData) => {
+    try {
+      const response = await api.post('/candidate/profile/image', formData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Image upload failed' };
+    }
   }
 };
 

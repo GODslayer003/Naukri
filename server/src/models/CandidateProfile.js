@@ -36,6 +36,14 @@ const candidateProfileSchema = new mongoose.Schema(
     portfolioUrl: { type: String, default: "" },
     expectedSalary: { type: String, default: "" },
     lastScannedQrToken: { type: String, default: "" },
+    profilePic: {
+      url: { type: String, default: "" },
+      publicId: { type: String, default: "" },
+    },
+    coverPic: {
+      url: { type: String, default: "" },
+      publicId: { type: String, default: "" },
+    },
     resume: {
       fileName: { type: String, default: "" },
       url: { type: String, default: "" },

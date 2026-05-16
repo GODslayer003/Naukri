@@ -35,8 +35,11 @@ export const AuthProvider = ({ children }) => {
       const data = await authService.login(email, password);
       const userData = {
         ...data.user,
-        profilePic: "https://i.pinimg.com/736x/26/89/19/268919fb14ab9fb609647d7011140ab7.jpg",
-        headline: data.profile?.headline || "Software Engineer",
+        ...data.profile,
+        profilePic: data.profile?.profilePic?.url || "",
+        coverPic: data.profile?.coverPic?.url || "",
+        headline: data.profile?.headline || "",
+        profileCompletion: data.profile?.profileCompletion || 0,
       };
       setUser(userData);
       localStorage.setItem("user", JSON.stringify(userData));
@@ -57,8 +60,11 @@ export const AuthProvider = ({ children }) => {
       const data = await authService.register(userData);
       const userObj = {
         ...data.user,
-        profilePic: "https://i.pinimg.com/736x/26/89/19/268919fb14ab9fb609647d7011140ab7.jpg",
-        headline: data.profile?.headline || userData.designation || "Professional",
+        ...data.profile,
+        profilePic: data.profile?.profilePic?.url || "",
+        coverPic: data.profile?.coverPic?.url || "",
+        headline: data.profile?.headline || "",
+        profileCompletion: data.profile?.profileCompletion || 0,
       };
       setUser(userObj);
       localStorage.setItem("user", JSON.stringify(userObj));
@@ -88,8 +94,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async (profileData) => {
+    try {
+      const response = await authService.updateProfile(profileData);
+      if (response.success) {
+        // Update local user with new profile info
+        updateUser({
+          ...response.user,
+          ...response.profile,
+          headline: response.profile?.headline || "",
+          profilePic: response.profile?.profilePic?.url || "",
+          coverPic: response.profile?.coverPic?.url || "",
+          profileCompletion: response.profile?.profileCompletion,
+        });
+        return { success: true, profile: response.profile };
+      }
+    } catch (error) {
+      console.error("Profile update failed:", error);
+      return { success: false, message: error.message || "Failed to update profile" };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, updateUser, openLogin, openRegister, closeModals, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, updateUser, updateProfile, openLogin, openRegister, closeModals, loading }}>
       {children}
       {isLoginModalOpen && <Login isOpen={isLoginModalOpen} onClose={closeModals} openSignUp={openRegister} />}
       {isRegisterModalOpen && <SignUp isOpen={isRegisterModalOpen} onClose={closeModals} openLogin={openLogin} />}

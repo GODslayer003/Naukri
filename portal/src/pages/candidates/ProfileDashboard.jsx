@@ -20,6 +20,8 @@ import mavenLogo from '../../../assets/maven-logo-BdiSsfJk.svg';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import ResumeTemplate from '../../components/ResumeTemplate';
+import ProfileEditModal from '../../components/ProfileModals';
+import authService from '../../services/authService';
 
 const FaqItem = ({ index, question, answer }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -40,8 +42,9 @@ export default function ProfileDashboard() {
   const navigate = useNavigate();
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState(user?.name || '');
-  const [activeTab, setActiveTab] = useState('Profile (18)');
-  const [coverImage, setCoverImage] = useState("https://i.pinimg.com/736x/15/8e/a9/158ea9c22bfbb6e5003b693b91d30e48.jpg");
+  const [activeTab, setActiveTab] = useState('Profile');
+  const [coverImage, setCoverImage] = useState(user?.coverPic || "");
+  const [showCompletionModal, setShowCompletionModal] = useState(user?.profileCompletion < 100);
   const [showPreview, setShowPreview] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [activeNavDropdown, setActiveNavDropdown] = useState(null);
@@ -54,7 +57,7 @@ export default function ProfileDashboard() {
   const blogScrollRef = useRef(null);
   const pfpInputRef = useRef(null);
   const coverInputRef = useRef(null);
-  const [skills, setSkills] = useState(['React.js', 'Node.js', 'UI/UX Design', 'TypeScript', 'MongoDB']);
+  const [skills, setSkills] = useState(user?.skills || []);
   const [isAddingSkill, setIsAddingSkill] = useState(false);
   const [newSkillValue, setNewSkillValue] = useState('');
   const [activeTip, setActiveTip] = useState(null); // 'experience', 'summary', 'skills'
@@ -67,6 +70,23 @@ export default function ProfileDashboard() {
   const [showQuickAnswer, setShowQuickAnswer] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const { updateProfile } = useAuth();
+
+  const handleSaveProfile = async (formData) => {
+    setIsSaving(true);
+    try {
+      const result = await updateProfile(formData);
+      if (result.success) {
+        setActiveEditSection(null);
+        if (formData.skills) setSkills(formData.skills);
+      }
+    } catch (err) {
+      console.error("Save failed:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const resumeRef = useRef(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -126,18 +146,45 @@ export default function ProfileDashboard() {
   const handleNameSave = () => { updateUser({ name: editNameValue }); setIsEditingName(false); };
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleNameSave(); if (e.key === 'Escape') setIsEditingName(false); };
 
-  const handlePfpChange = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => updateUser({ profilePic: ev.target.result });
-    reader.readAsDataURL(file); e.target.value = '';
+  const handlePfpChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setIsLoading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("type", "profile");
+
+    try {
+      const res = await authService.uploadImage(formData);
+      updateUser({ profilePic: res.data.url, profileCompletion: res.profileCompletion });
+    } catch (err) {
+      console.error("PFP Upload failed:", err);
+    } finally {
+      setIsLoading(false);
+    }
+    e.target.value = '';
   };
 
-  const handleCoverChange = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setCoverImage(ev.target.result);
-    reader.readAsDataURL(file); e.target.value = '';
+  const handleCoverChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("type", "cover");
+
+    try {
+      const res = await authService.uploadImage(formData);
+      setCoverImage(res.data.url);
+      updateUser({ coverPic: res.data.url, profileCompletion: res.profileCompletion });
+    } catch (err) {
+      console.error("Cover Upload failed:", err);
+    } finally {
+      setIsLoading(false);
+    }
+    e.target.value = '';
   };
 
   const addSkill = () => {
@@ -230,7 +277,7 @@ export default function ProfileDashboard() {
         <div className="pd-identity-inner">
           <div className="pd-avatar-wrap">
             <img
-              src={user.profilePic || "https://i.pinimg.com/736x/26/89/19/268919fb14ab9fb609647d7011140ab7.jpg"}
+              src={user.profilePic || "https://cdn-icons-png.flaticon.com/512/149/149071.png"}
               alt="Profile" className="pd-big-avatar"
             />
             <button className="pd-avatar-edit" onClick={() => pfpInputRef.current.click()}>
@@ -261,23 +308,23 @@ export default function ProfileDashboard() {
               </span>
             </div>
 
-            <p className="pd-headline">{user.headline || 'MERN Stack Developer · Software Engineer'}</p>
-            <p className="pd-location"><FiMapPin size={12} /> Bengaluru, Karnataka, India</p>
+            <p className="pd-headline">{user.headline || 'Update your headline'}</p>
+            <p className="pd-location"><FiMapPin size={12} /> {user.currentCity || "Update your location"}</p>
 
             <div className="pd-quick-stats">
               <div className="pd-qs-item">
                 <FiEye size={15} />
-                <div><strong>130</strong><span>Profile views</span></div>
+                <div><strong>0</strong><span>Profile views</span></div>
               </div>
               <div className="pd-qs-divider" />
               <div className="pd-qs-item">
                 <FiUsers size={15} />
-                <div><strong>6</strong><span>Recruiter actions</span></div>
+                <div><strong>0</strong><span>Recruiter actions</span></div>
               </div>
               <div className="pd-qs-divider" />
               <div className="pd-qs-item">
                 <FiTrendingUp size={15} />
-                <div><strong>18</strong><span>Job matches</span></div>
+                <div><strong>0</strong><span>Job matches</span></div>
               </div>
             </div>
           </div>
@@ -310,18 +357,18 @@ export default function ProfileDashboard() {
             <div className="pd-completion-top">
               <div>
                 <div className="pd-completion-label">Profile Strength</div>
-                <div className="pd-completion-pct">72% Complete</div>
+                <div className="pd-completion-pct">{user.profileCompletion || 0}% Complete</div>
               </div>
               <div className="pd-completion-ring">
                 <svg viewBox="0 0 44 44">
                   <circle cx="22" cy="22" r="18" />
-                  <circle cx="22" cy="22" r="18" style={{ strokeDashoffset: `calc(113 - (113 * 72) / 100)` }} />
+                  <circle cx="22" cy="22" r="18" style={{ strokeDashoffset: `calc(113 - (113 * ${user.profileCompletion || 0}) / 100)` }} />
                 </svg>
-                <span>72</span>
+                <span>{user.profileCompletion || 0}</span>
               </div>
             </div>
             <div className="pd-completion-bar-track">
-              <div className="pd-completion-bar" style={{ width: '72%' }} />
+              <div className="pd-completion-bar" style={{ width: `${user.profileCompletion || 0}%` }} />
             </div>
             <div className="pd-completion-tips">
               {[
@@ -350,11 +397,11 @@ export default function ProfileDashboard() {
             <div className="pd-perf-title">Performance <FiTrendingUp size={15} /></div>
             <div className="pd-perf-grid">
               <div className="pd-perf-stat">
-                <span className="pd-perf-val">130</span>
+                <span className="pd-perf-val">0</span>
                 <span className="pd-perf-label">Search appearances</span>
               </div>
               <div className="pd-perf-stat">
-                <span className="pd-perf-val">6</span>
+                <span className="pd-perf-val">0</span>
                 <span className="pd-perf-label">Recruiter actions</span>
               </div>
             </div>
@@ -674,23 +721,23 @@ export default function ProfileDashboard() {
               <div className="ppm-card ppm-header-card">
                 <div className="ppm-header-row">
                   <div className="ppm-avatar-wrap">
-                    <img src={user.profilePic || "https://i.pinimg.com/736x/26/89/19/268919fb14ab9fb609647d7011140ab7.jpg"} alt="Profile" />
-                    <div className="ppm-score">100%</div>
+                    <img src={user.profilePic || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} alt="Profile" />
+                    <div className="ppm-score">{user.profileCompletion || 0}%</div>
                   </div>
                   <div className="ppm-header-info">
-                    <h2>{user.name} <FiEdit2 size={14} className="ppm-inline-edit" /></h2>
-                    <p className="ppm-role">MERN Stack Developer</p>
-                    <p className="ppm-company-at">at Dr Design Private Limited</p>
-                    <span className="ppm-updated">Last updated · Yesterday</span>
+                    <h2>{user.name} <FiEdit2 size={14} className="ppm-inline-edit" onClick={() => setActiveEditSection('Basic Details')} /></h2>
+                    <p className="ppm-role">{user.headline || "Add a professional headline"}</p>
+                    <p className="ppm-company-at">{user.currentCompany ? `at ${user.currentCompany}` : "No company listed"}</p>
+                    <span className="ppm-updated">Last updated · {user.lastUpdated || "Just now"}</span>
                   </div>
                 </div>
                 <div className="ppm-meta-grid">
-                  <div className="ppm-meta-item"><FiMapPin size={14} /> Dehradun, INDIA</div>
-                  <div className="ppm-meta-item"><FiPhone size={14} /> 8126977256 <FiCheckCircle size={13} color="#10b981" /></div>
-                  <div className="ppm-meta-item"><FiBriefcase size={14} /> 0 Yr 8 Months</div>
-                  <div className="ppm-meta-item"><FiMail size={14} /> {user.email || 'user@example.com'} <FiCheckCircle size={13} color="#10b981" /></div>
-                  <div className="ppm-meta-item">₹ 2,00,000</div>
-                  <div className="ppm-meta-item"><FiClock size={14} /> 15 Days notice period</div>
+                  <div className="ppm-meta-item"><FiMapPin size={14} /> {user.currentCity || "Add City"}</div>
+                  <div className="ppm-meta-item"><FiPhone size={14} /> {user.phone || "Add Phone"} {user.phone && <FiCheckCircle size={13} color="#10b981" />}</div>
+                  <div className="ppm-meta-item"><FiBriefcase size={14} /> {user.totalExperience || "Add Experience"}</div>
+                  <div className="ppm-meta-item"><FiMail size={14} /> {user.email} <FiCheckCircle size={13} color="#10b981" /></div>
+                  <div className="ppm-meta-item">{user.expectedSalary ? `₹ ${user.expectedSalary}` : "Add Expected Salary"}</div>
+                  <div className="ppm-meta-item"><FiClock size={14} /> {user.noticePeriod || "Add Notice Period"}</div>
                 </div>
               </div>
 
@@ -700,12 +747,14 @@ export default function ProfileDashboard() {
                     <h3>Quick links</h3>
                     {['Resume', 'Resume headline', 'Key skills', 'Employment', 'Education', 'IT skills', 'Projects', 'Profile summary', 'Career profile'].map(link => {
                       const isFilled = (
-                        (link === 'Resume' && true) ||
-                        (link === 'Resume headline' && user.headline) ||
-                        (link === 'Key skills' && skills.length > 0) ||
-                        (link === 'Employment' && true) ||
-                        (link === 'Education' && true) ||
-                        (link === 'Projects' && true)
+                        (link === 'Resume' && !!user.resume?.url) ||
+                        (link === 'Resume headline' && !!user.headline) ||
+                        (link === 'Key skills' && user.skills?.length > 0) ||
+                        (link === 'Employment' && (!!user.currentTitle || !!user.currentCompany)) ||
+                        (link === 'Education' && !!user.education) ||
+                        (link === 'Projects' && !!user.projectTitle) ||
+                        (link === 'Profile summary' && !!user.summary) ||
+                        (link === 'Career profile' && !!user.expectedSalary)
                       );
 
                       return (
@@ -725,162 +774,128 @@ export default function ProfileDashboard() {
                   </div>
                 </div>
                 <div className="ppm-right-col">
-                  <div className="ppm-pro-banner">
-                    <div className="ppm-pro-label">MavenJobs<span>Pro</span> <GiCrown className="ppm-crown" /></div>
-                    <div className="ppm-pro-pitch">Up to <strong>4× profile views</strong></div>
-                    <button className="ppm-pro-btn" onClick={() => navigate('/pro')}>Become Pro · 25% off</button>
-                  </div>
-                  {[
-                    {
-                      title: 'Resume', content: (
-                        <div>
-                          <div className="ppm-resume-row">
-                            <FiFileText size={20} color="#64748b" />
-                            <div><div className="ppm-fname">Pranjal_Resume.pdf</div><div className="ppm-fdate">Uploaded May 07, 2026</div></div>
-                            <div className="ppm-file-actions"><FiDownload size={16} /><FiSettings size={16} /></div>
-                          </div>
-                          <div className="ppm-upload-zone"><button className="ppm-upload-btn">Update resume</button><p>doc, docx, rtf, pdf — max 2MB</p></div>
-                        </div>
-                      )
-                    },
-                    { title: 'Resume headline', content: <p className="ppm-body-text">{user.headline || "MERN Stack Developer building scalable apps..."}</p> },
-                    {
-                      title: 'Key skills', content: (
-                        <div className="ppm-skills-wrap">
-                          {skills.map(s => (
-                            <span key={s} className="ppm-skill-chip">{s}</span>
-                          ))}
-                        </div>
-                      )
-                    },
-                    {
-                      title: 'Employment', content: (
-                        <div className="ppm-exp-item">
-                          <div className="ppm-exp-title">MERN Stack Developer <FiEdit2 size={13} /></div>
-                          <div className="ppm-exp-co">Dr Design Private Limited</div>
-                          <div className="ppm-exp-meta">Full-time · Oct 2025 – Present · 7 months</div>
-                          <p className="ppm-body-text">Results-driven MERN Stack Developer building scalable, production-grade web applications. <span className="ppm-readmore">Read More</span></p>
-                        </div>
-                      )
-                    },
-                  ].map(sec => (
-                    <div className="ppm-card" key={sec.title}>
-                      <div className="ppm-sec-header"><h3>{sec.title}</h3></div>
-                      {sec.content}
+                  {activeEditSection ? (
+                    <div className="ppm-edit-container">
+                      <div className="ppm-edit-header">
+                         <button className="ppm-back-btn" onClick={() => setActiveEditSection(null)}>
+                            <FiChevronLeft /> Back to Profile
+                         </button>
+                         <h3>Edit {activeEditSection}</h3>
+                      </div>
+                      <ProfileEditModal
+                        section={activeEditSection}
+                        data={user}
+                        isLoading={isSaving}
+                        onSave={handleSaveProfile}
+                        onClose={() => setActiveEditSection(null)}
+                      />
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      <div className="ppm-pro-banner">
+                        <div className="ppm-pro-label">MavenJobs<span>Pro</span> <GiCrown className="ppm-crown" /></div>
+                        <div className="ppm-pro-pitch">Up to <strong>4× profile views</strong></div>
+                        <button className="ppm-pro-btn" onClick={() => navigate('/pro')}>Become Pro · 25% off</button>
+                      </div>
+                      {[
+                        {
+                          title: 'Resume', content: (
+                            <div>
+                              {user.resume?.url ? (
+                                <div className="ppm-resume-row">
+                                  <FiFileText size={20} color="#64748b" />
+                                  <div>
+                                    <div className="ppm-fname">{user.resume.fileName}</div>
+                                    <div className="ppm-fdate">Uploaded {new Date(user.resume.uploadedAt).toLocaleDateString()}</div>
+                                  </div>
+                                  <div className="ppm-file-actions">
+                                    <a href={user.resume.url} target="_blank" rel="noopener noreferrer"><FiDownload size={16} /></a>
+                                    <FiSettings size={16} />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="ppm-empty-state">No resume uploaded yet.</div>
+                              )}
+                              <div className="ppm-upload-zone">
+                                <button className="ppm-upload-btn" onClick={() => setActiveEditSection('Resume')}>Update resume</button>
+                                <p>doc, docx, rtf, pdf — max 2MB</p>
+                              </div>
+                            </div>
+                          )
+                        },
+                        { title: 'Resume headline', content: <p className="ppm-body-text">{user.headline || "Add a professional headline..."}</p> },
+                        {
+                          title: 'Key skills', content: (
+                            <div className="ppm-skills-wrap">
+                              {user.skills?.length > 0 ? (
+                                user.skills.map(s => (
+                                  <span key={s} className="ppm-skill-chip">{s}</span>
+                                ))
+                              ) : (
+                                <p className="ppm-empty-state">Add your key skills here.</p>
+                              )}
+                            </div>
+                          )
+                        },
+                        {
+                          title: 'Employment', content: (
+                            user.currentTitle ? (
+                              <div className="ppm-exp-item">
+                                <div className="ppm-exp-title">{user.currentTitle} <FiEdit2 size={13} /></div>
+                                <div className="ppm-exp-co">{user.currentCompany}</div>
+                                <div className="ppm-exp-meta">{user.totalExperience} · {user.noticePeriod} notice</div>
+                                <p className="ppm-body-text">{user.summary?.slice(0, 150)}...</p>
+                              </div>
+                            ) : (
+                              <p className="ppm-empty-state">Add your employment details.</p>
+                            )
+                          )
+                        },
+                      ].map(sec => {
+                        const isComplete = sec.title === 'Key skills' ? user.skills?.length > 0 : 
+                                         sec.title === 'Resume headline' ? !!user.headline :
+                                         sec.title === 'Resume' ? !!user.resume?.url : 
+                                         sec.title === 'Employment' ? !!user.currentTitle : false;
+                        return (
+                          <div className="ppm-card" key={sec.title}>
+                            <div className="ppm-sec-header" onClick={() => setActiveEditSection(sec.title)}>
+                              <h3>{sec.title}</h3>
+                              {isComplete && <FiCheckCircle color="#10b981" size={16} />}
+                              <FiEdit2 size={14} className="ppm-sec-edit-icon" />
+                            </div>
+                            {sec.content}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* ─── SIDE MODAL ─── */}
-              <div className={`ppm-side-modal ${activeEditSection ? 'show' : ''}`}>
-                <div className="psm-head">
-                  <h3>Edit {activeEditSection}</h3>
-                  <button className="psm-close" onClick={() => setActiveEditSection(null)}><FiX size={20} /></button>
-                </div>
-                <div className="psm-body">
-                  {activeEditSection === 'Resume headline' && (
-                    <div className="psm-form">
-                      <label>Headline</label>
-                      <textarea
-                        value={user.headline}
-                        onChange={(e) => updateUser({ headline: e.target.value })}
-                        placeholder="Enter your professional headline..."
-                        rows={5}
-                      />
-                      <p className="psm-hint">Summarize your professional identity in 1-2 sentences. This is the first thing recruiters see.</p>
-                      <button className="psm-save-btn" onClick={() => setActiveEditSection(null)}>Save Headline</button>
-                    </div>
-                  )}
-                  {activeEditSection === 'Key skills' && (
-                    <div className="psm-form">
-                      <label>Skills</label>
-                      <div className="psm-skills-edit">
-                        {skills.map(s => (
-                          <span key={s} className="psm-skill-pill">
-                            {s} <FiX size={12} onClick={() => removeSkill(s)} />
-                          </span>
-                        ))}
-                      </div>
-                      <div className="psm-input-row">
-                        <input
-                          type="text"
-                          placeholder="Add new skill..."
-                          value={newSkillValue}
-                          onChange={(e) => setNewSkillValue(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && addSkill()}
-                        />
-                        <button onClick={addSkill}>Add</button>
-                      </div>
-                      <button className="psm-save-btn" onClick={() => setActiveEditSection(null)}>Done</button>
-                    </div>
-                  )}
-                  {activeEditSection === 'Employment' && (
-                    <div className="psm-form">
-                      <label>Designation</label>
-                      <input type="text" placeholder="e.g. Frontend Developer" />
-                      <label>Organization</label>
-                      <input type="text" placeholder="e.g. Google India" />
-                      <div className="psm-row">
-                        <div className="psm-col">
-                          <label>Started</label>
-                          <input type="month" />
-                        </div>
-                        <div className="psm-col">
-                          <label>Ended</label>
-                          <input type="month" />
-                        </div>
-                      </div>
-                      <button className="psm-save-btn" onClick={() => setActiveEditSection(null)}>Save Experience</button>
-                    </div>
-                  )}
-                  {activeEditSection === 'Education' && (
-                    <div className="psm-form">
-                      <label>Course</label>
-                      <input type="text" placeholder="e.g. B.Tech Computer Science" />
-                      <label>University/Institute</label>
-                      <input type="text" placeholder="e.g. IIT Delhi" />
-                      <label>Year of Graduation</label>
-                      <input type="number" placeholder="2025" />
-                      <button className="psm-save-btn" onClick={() => setActiveEditSection(null)}>Save Education</button>
-                    </div>
-                  )}
-                  {activeEditSection === 'Projects' && (
-                    <div className="psm-form">
-                      <label>Project Title</label>
-                      <input type="text" placeholder="e.g. AI Talent Agent" />
-                      <label>Project Link</label>
-                      <input type="url" placeholder="https://github.com/..." />
-                      <label>Description</label>
-                      <textarea placeholder="What did you build? What technologies did you use?" rows={5} />
-                      <button className="psm-save-btn" onClick={() => setActiveEditSection(null)}>Save Project</button>
-                    </div>
-                  )}
-                  {activeEditSection === 'Profile summary' && (
-                    <div className="psm-form">
-                      <label>About You</label>
-                      <textarea
-                        placeholder="Tell recruiters about your career path, goals, and achievements..."
-                        rows={8}
-                      />
-                      <p className="psm-hint">A well-written summary can increase your profile views by 40%.</p>
-                      <button className="psm-save-btn" onClick={() => setActiveEditSection(null)}>Save Summary</button>
-                    </div>
-                  )}
-                  {!['Resume headline', 'Key skills', 'Employment', 'Education', 'Projects', 'Profile summary'].includes(activeEditSection) && activeEditSection && (
-                    <div className="psm-empty">
-                      <FiZap size={40} color="var(--blue)" />
-                      <h4>{activeEditSection}</h4>
-                      <p>This section is being synchronized with your MavenJobs Pro account. Please try again in a few moments.</p>
-                      <button className="psm-save-btn" onClick={() => setActiveEditSection(null)}>Dismiss</button>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* ─── Initial Completion Modal ─── */}
+      {showCompletionModal && (
+        <div className="ppm-overlay" style={{ zIndex: 10001 }}>
+          <div className="ppm-content" style={{ maxWidth: '500px', textAlign: 'center', padding: '40px', borderRadius: '28px' }}>
+             <img src={mavenLogo} alt="Maven" style={{ height: '32px', marginBottom: '24px' }} />
+             <h2 style={{ fontSize: '26px', color: '#143f86', marginBottom: '12px', fontWeight: 800 }}>Complete Your Profile</h2>
+             <p style={{ color: '#64748b', marginBottom: '32px', lineHeight: 1.6, fontSize: '15px' }}>
+               Your profile is the first thing recruiters see. Complete it now to get <strong>3x more visibility</strong> and better job matches.
+             </p>
+             <button className="pd-btn-black" style={{ width: '100%', justifyContent: 'center', height: '54px', fontSize: '16px', borderRadius: '14px' }} onClick={() => { setShowCompletionModal(false); setShowPreview(true); }}>
+                View Details
+             </button>
+             <button className="pd-text-btn" style={{ marginTop: '16px', color: '#94a3b8', fontSize: '14px', fontWeight: 600 }} onClick={() => setShowCompletionModal(false)}>
+                Maybe Later
+             </button>
+          </div>
+        </div>
+      )}
+
 
       {/* ─── Notification Sidebar ─── */}
       <div className={`pd-notif-overlay ${showNotifications ? 'show' : ''}`} onClick={() => setShowNotifications(false)} />

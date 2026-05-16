@@ -135,6 +135,8 @@ export default function TeamManagement() {
   const [targetForm, setTargetForm] = useState({ leadGeneration: 0, conversions: 0, meetings: 0 });
   const [targetSubmitting, setTargetSubmitting] = useState(false);
 
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
   const currentPage = pageByRole[activeRole] || 1;
 
   useEffect(() => {

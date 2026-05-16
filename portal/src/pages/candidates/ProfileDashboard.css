@@ -4347,3 +4347,121 @@
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
+
+/* ═══════════════════════════════
+   MODAL EDIT TRANSITION & DYNAMIC CONTENT
+═══════════════════════════════ */
+.ppm-edit-container {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 8px;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.ppm-edit-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--slate-3);
+}
+
+.ppm-edit-header h3 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0;
+}
+
+.ppm-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--slate-1);
+  border: 1px solid var(--slate-3);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ppm-back-btn:hover {
+  background: var(--slate-2);
+  color: var(--navy);
+}
+
+.ppm-empty-state {
+  padding: 24px;
+  text-align: center;
+  background: var(--slate-1);
+  border: 1.5px dashed var(--slate-3);
+  border-radius: 12px;
+  color: var(--text-3);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+  font-style: italic;
+}
+
+.ppm-sec-header {
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 4px 8px;
+  margin: -4px -8px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ppm-sec-header:hover {
+  background: var(--blue-lt);
+}
+
+.ppm-sec-edit-icon {
+  margin-left: auto;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+  color: var(--blue);
+}
+
+.ppm-sec-header:hover .ppm-sec-edit-icon {
+  opacity: 1;
+}
+
+.ppm-link-label-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ppm-link-check {
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.ppm-inline-edit {
+  color: var(--text-4);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.ppm-inline-edit:hover {
+  color: var(--blue);
+}
+
+/* Ensure ProfileModals forms look good inline */
+.psm-container {
+  width: 100%;
+}
+
+.psm-body {
+  padding: 0;
+}
