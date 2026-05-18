@@ -71,6 +71,7 @@ export default function ProfileDashboard() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { updateProfile } = useAuth();
 
   const handleSaveProfile = async (formData) => {
@@ -752,6 +753,7 @@ export default function ProfileDashboard() {
                         (link === 'Key skills' && user.skills?.length > 0) ||
                         (link === 'Employment' && (!!user.currentTitle || !!user.currentCompany)) ||
                         (link === 'Education' && !!user.education) ||
+                        (link === 'IT skills' && !!user.itSkills) ||
                         (link === 'Projects' && !!user.projectTitle) ||
                         (link === 'Profile summary' && !!user.summary) ||
                         (link === 'Career profile' && !!user.expectedSalary)

@@ -39,6 +39,11 @@ export const AuthProvider = ({ children }) => {
         profilePic: data.profile?.profilePic?.url || "",
         coverPic: data.profile?.coverPic?.url || "",
         headline: data.profile?.headline || "",
+        education: data.profile?.education || "",
+        itSkills: data.profile?.itSkills || "",
+        projectTitle: data.profile?.projectTitle || "",
+        projectLink: data.profile?.projectLink || "",
+        projectDescription: data.profile?.projectDescription || "",
         profileCompletion: data.profile?.profileCompletion || 0,
       };
       setUser(userData);
@@ -64,6 +69,11 @@ export const AuthProvider = ({ children }) => {
         profilePic: data.profile?.profilePic?.url || "",
         coverPic: data.profile?.coverPic?.url || "",
         headline: data.profile?.headline || "",
+        education: data.profile?.education || "",
+        itSkills: data.profile?.itSkills || "",
+        projectTitle: data.profile?.projectTitle || "",
+        projectLink: data.profile?.projectLink || "",
+        projectDescription: data.profile?.projectDescription || "",
         profileCompletion: data.profile?.profileCompletion || 0,
       };
       setUser(userObj);
@@ -98,16 +108,22 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authService.updateProfile(profileData);
       if (response.success) {
+        const updatedProfile = response.data;
         // Update local user with new profile info
         updateUser({
-          ...response.user,
-          ...response.profile,
-          headline: response.profile?.headline || "",
-          profilePic: response.profile?.profilePic?.url || "",
-          coverPic: response.profile?.coverPic?.url || "",
-          profileCompletion: response.profile?.profileCompletion,
+          ...updatedProfile.user,
+          ...updatedProfile,
+          headline: updatedProfile.headline || "",
+          education: updatedProfile.education || "",
+          itSkills: updatedProfile.itSkills || "",
+          projectTitle: updatedProfile.projectTitle || "",
+          projectLink: updatedProfile.projectLink || "",
+          projectDescription: updatedProfile.projectDescription || "",
+          profilePic: updatedProfile.profilePic?.url || "",
+          coverPic: updatedProfile.coverPic?.url || "",
+          profileCompletion: updatedProfile.profileCompletion,
         });
-        return { success: true, profile: response.profile };
+        return { success: true, profile: updatedProfile };
       }
     } catch (error) {
       console.error("Profile update failed:", error);

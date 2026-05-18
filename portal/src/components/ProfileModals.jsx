@@ -269,7 +269,7 @@ export default function ProfileEditModal({ section, data, onSave, onClose, isLoa
           </button>
         </div>
       </div>
-      <style jsx>{`
+      <style>{`
         .psm-form { display: flex; flex-direction: column; gap: 20px; }
         .psm-field { display: flex; flex-direction: column; gap: 8px; }
         .psm-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

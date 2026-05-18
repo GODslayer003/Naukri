@@ -106,6 +106,9 @@ const computeProfileCompletion = (profile, user) => {
     profile.preferredRoles?.length > 0,
     profile.preferredLocations?.length > 0,
     profile.expectedSalary,
+    profile.education,
+    profile.itSkills,
+    profile.projectTitle,
     profile.resume?.url,
     profile.profilePic?.url,
     profile.coverPic?.url,
@@ -148,6 +151,11 @@ const formatProfile = (profile = {}, user = null) => ({
   linkedInUrl: profile?.linkedInUrl || "",
   portfolioUrl: profile?.portfolioUrl || "",
   expectedSalary: profile?.expectedSalary || "",
+  education: profile?.education || "",
+  itSkills: profile?.itSkills || "",
+  projectTitle: profile?.projectTitle || "",
+  projectLink: profile?.projectLink || "",
+  projectDescription: profile?.projectDescription || "",
   lastScannedQrToken: profile?.lastScannedQrToken || "",
   resume: {
     fileName: profile?.resume?.fileName || "",
@@ -964,6 +972,11 @@ exports.updateProfile = asyncHandler(async (req, res) => {
   syncField("linkedInUrl", requestBody.linkedInUrl, (value) => String(value).trim());
   syncField("portfolioUrl", requestBody.portfolioUrl, (value) => String(value).trim());
   syncField("expectedSalary", requestBody.expectedSalary, (value) => String(value).trim());
+  syncField("education", requestBody.education, (value) => String(value).trim());
+  syncField("itSkills", requestBody.itSkills, (value) => String(value).trim());
+  syncField("projectTitle", requestBody.projectTitle, (value) => String(value).trim());
+  syncField("projectLink", requestBody.projectLink, (value) => String(value).trim());
+  syncField("projectDescription", requestBody.projectDescription, (value) => String(value).trim());
 
   const nextDesignation = String(requestBody.currentTitle || "").trim();
   if (requestBody.currentTitle !== undefined && req.user.department !== nextDesignation) {

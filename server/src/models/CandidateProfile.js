@@ -35,6 +35,11 @@ const candidateProfileSchema = new mongoose.Schema(
     linkedInUrl: { type: String, default: "" },
     portfolioUrl: { type: String, default: "" },
     expectedSalary: { type: String, default: "" },
+    education: { type: String, default: "" },
+    itSkills: { type: String, default: "" },
+    projectTitle: { type: String, default: "" },
+    projectLink: { type: String, default: "" },
+    projectDescription: { type: String, default: "" },
     lastScannedQrToken: { type: String, default: "" },
     profilePic: {
       url: { type: String, default: "" },
