@@ -272,16 +272,16 @@ const resolveQrContext = async (
   const jobs = await Job.find(
     mappedJobId && !expandToCompanyJobs
       ? {
-          _id: qrCode.jobId,
-          companyId: qrCode.companyId._id,
-          isActive: true,
-          approvalStatus: "APPROVED",
-        }
+        _id: qrCode.jobId,
+        companyId: qrCode.companyId._id,
+        isActive: true,
+        approvalStatus: "APPROVED",
+      }
       : {
-          companyId: qrCode.companyId._id,
-          isActive: true,
-          approvalStatus: "APPROVED",
-        },
+        companyId: qrCode.companyId._id,
+        isActive: true,
+        approvalStatus: "APPROVED",
+      },
   )
     .sort({ updatedAt: -1 })
     .limit(limit)
@@ -337,42 +337,75 @@ const getRecommendedJobs = async (profile, candidateId) => {
     }
   }
 
-  if (!jobs.length) {
-    const preferredRoles = profile.preferredRoles || [];
-    const skills = profile.skills || [];
-
-    const filters = [
-      preferredRoles.length ? { title: { $in: preferredRoles } } : null,
-      preferredRoles.length ? { department: { $in: preferredRoles } } : null,
-      skills.length ? { skills: { $in: skills } } : null,
-    ].filter(Boolean);
-
-    jobs = await Job.find(
-      filters.length
-        ? { isActive: true, approvalStatus: "APPROVED", $or: filters }
-        : { isActive: true, approvalStatus: "APPROVED" },
-    )
-      .sort({ updatedAt: -1 })
-      .limit(6)
-      .populate("companyId", "name");
-  }
+  // Always fetch all active jobs to populate categories
+  const allJobs = await Job.find({ isActive: true, approvalStatus: "APPROVED" })
+    .sort({ updatedAt: -1 })
+    .populate("companyId", "name");
 
   const applicationMap = await buildApplicationMap(
     candidateId,
-    jobs.map((job) => job._id),
+    allJobs.map((job) => job._id),
   );
+
+  const formattedJobs = allJobs.map((job) => formatJob(job, applicationMap));
+
+  const categories = {
+    Profile: [],
+    Applies: [],
+    Preferences: [],
+    'You might like': []
+  };
+
+  const profileSkills = profile.skills || [];
+  const preferredRoles = profile.preferredRoles || [];
+  const preferredLocations = profile.preferredLocations || [];
+
+  formattedJobs.forEach(job => {
+    let categorized = false;
+
+    if (job.hasApplied) {
+      categories.Applies.push(job);
+      categorized = true;
+    }
+
+    // Check Profile (Skills match)
+    const hasSkillMatch = job.skills && job.skills.some(skill => profileSkills.includes(skill));
+    if (hasSkillMatch && !categories.Profile.includes(job)) {
+      categories.Profile.push(job);
+      categorized = true;
+    }
+
+    // Check Preferences (Role or Location match)
+    // We don't have location on the formatted job easily accessible without populated fields, but we can check title vs preferredRoles
+    const hasRoleMatch = preferredRoles.some(role => job.title?.toLowerCase().includes(role.toLowerCase()));
+    if (hasRoleMatch && !categories.Preferences.includes(job)) {
+      categories.Preferences.push(job);
+      categorized = true;
+    }
+
+    if (!categorized) {
+      categories['You might like'].push(job);
+    }
+  });
+
+  const categorizedJobs = {
+    [`Profile (${categories.Profile.length})`]: categories.Profile,
+    [`Applies (${categories.Applies.length})`]: categories.Applies,
+    [`Preferences (${categories.Preferences.length})`]: categories.Preferences,
+    [`You might like (${categories['You might like'].length})`]: categories['You might like']
+  };
 
   return {
     mappedCompany: mappedCompany
       ? {
-          id: String(mappedCompany._id),
-          name: mappedCompany.name,
-          industry: mappedCompany.industry || "General",
-          city: mappedCompany.location?.city || "",
-          region: mappedCompany.location?.region || "",
-        }
+        id: String(mappedCompany._id),
+        name: mappedCompany.name,
+        industry: mappedCompany.industry || "General",
+        city: mappedCompany.location?.city || "",
+        region: mappedCompany.location?.region || "",
+      }
       : null,
-    jobs: jobs.map((job) => formatJob(job, applicationMap)),
+    jobs: categorizedJobs,
   };
 };
 
@@ -453,7 +486,7 @@ exports.register = asyncHandler(async (req, res) => {
   if (req.file && !isPdfResumeUpload(req.file)) {
     throw createHttpError(400, "Only PDF resume files are supported.");
   }
- 
+
   const normalizedEmail = email.toLowerCase();
   const existingUser = await User.findOne({ email: normalizedEmail });
 
@@ -672,7 +705,7 @@ exports.getLanding = asyncHandler(async (req, res) => {
 
 exports.getDashboard = asyncHandler(async (req, res) => {
   const profile = await ensureCandidateProfile(req.user);
-  const [applications, notifications, recommended, applicationStats, companyIds] = await Promise.all([
+  const [applications, notifications, recommended, applicationStats, companyIds, extraJobs] = await Promise.all([
     Application.find({ candidateId: req.user._id })
       .sort({ updatedAt: -1 })
       .limit(DASHBOARD_PIPELINE_LIMIT)
@@ -684,6 +717,10 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     getRecommendedJobs(profile, req.user._id),
     Application.find({ candidateId: req.user._id }).select("status"),
     Application.distinct("companyId", { candidateId: req.user._id }),
+    Job.find({ isActive: true, approvalStatus: "APPROVED" })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate("companyId", "name"),
   ]);
 
   const unreadAlerts = await CandidateNotification.countDocuments({
@@ -708,6 +745,8 @@ exports.getDashboard = asyncHandler(async (req, res) => {
       },
       mappedCompany: recommended.mappedCompany,
       recommendedJobs: recommended.jobs,
+      nvites: extraJobs.slice(0, 3).map((job) => formatJob(job)),
+      earlyAccess: extraJobs.slice(3, 10).map((job) => formatJob(job)),
       recentApplications: applications.map((item) => formatApplication(item)),
       notifications: notifications.map((item) => formatNotification(item)),
     },
@@ -780,12 +819,12 @@ exports.getJobs = asyncHandler(async (req, res) => {
     data: {
       company: company
         ? {
-            id: String(company._id),
-            name: company.name,
-            industry: company.industry || "",
-            city: company.location?.city || "",
-            region: company.location?.region || "",
-          }
+          id: String(company._id),
+          name: company.name,
+          industry: company.industry || "",
+          city: company.location?.city || "",
+          region: company.location?.region || "",
+        }
         : null,
       jobs: jobs.map((job) => formatJob(job, applicationMap)),
     },
@@ -874,9 +913,8 @@ exports.createApplication = asyncHandler(async (req, res) => {
     jobId: job._id,
     applicationId: application._id,
     title: "Application submitted",
-    message: `Your application for ${job.title} at ${
-      job.companyId?.name || "the company"
-    } has been submitted successfully.`,
+    message: `Your application for ${job.title} at ${job.companyId?.name || "the company"
+      } has been submitted successfully.`,
     category: "APPLICATION",
     actionUrl: "/candidate/applications",
   });

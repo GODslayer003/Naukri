@@ -1,68 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FiX, FiBriefcase, FiMapPin, FiZap, FiCheckCircle, 
-  FiInfo, FiStar, FiChevronRight, FiClock, FiSend, FiUsers
+import {
+  FiX, FiBriefcase, FiMapPin, FiZap, FiCheckCircle,
+  FiStar, FiClock, FiSend, FiUsers, FiTrendingUp, FiLock, FiAward
 } from 'react-icons/fi';
 import './EarlyAccessModal.css';
 
-const MOCK_EARLY_ROLES = [
+const FEATURES = [
   {
-    id: 1,
-    title: "Developer",
-    company: "Top Rated Firm in FinTech Sector",
-    rating: 3.5,
-    tags: ["Foreign MNC"],
-    exp: "0-1 Yrs",
-    salary: "3-5 Lacs P.A.",
-    location: "Bangalore/Bengaluru",
-    skills: ["Java", "CSS", "Python", "SQL", "C++", "Javascript", "Database", "HTML"],
-    posted: "5d ago",
-    logos: ['K', 'T', 'E', 'A', 'J', 'P', 'P']
+    icon: <FiAward />,
+    title: 'Discover hidden roles',
+    desc: 'Get access to roles from top companies before they go public on any job platform.',
+    color: '#10b981'
   },
   {
-    id: 2,
-    title: "React Js Developer",
-    company: "Top B2C Company in Retail Domain",
-    rating: 3.5,
-    tags: ["Corporate", "Product", "Highly Rated by Women"],
-    exp: "0-5 Yrs",
-    salary: "4-7 Lacs P.A.",
-    location: "Pune",
-    skills: ["Node.Js", "Angular", "Mern", "PHP", "React.Js", "Java", "CSS", "Node"],
-    posted: "7h ago",
-    logos: ['B', 'F', 'F', 'R', 'B', 'Y', 'S']
+    icon: <FiTrendingUp />,
+    title: 'Share early interest',
+    desc: 'Stay ahead by signaling your interest directly to recruiters running fresh searches.',
+    color: '#3b82f6'
   },
   {
-    id: 3,
-    title: "Python Software Developer",
-    company: "Mid-sized B2B IT & software solutions globally",
-    rating: 3.5,
-    tags: ["Startup", "Service"],
-    exp: "0-3 Yrs",
-    salary: "1-6 Lacs P.A.",
-    location: "Kochi/Cochin, Chennai, Coimbatore, Bangalore...",
-    skills: ["React.Js", "Angular", "Python", "Front End", "Django", "Javascript", "Node.Js", "Flask"],
-    posted: "8h ago",
-    logos: ['M', 'L', 'S', 'G', 'I', 'V', 'D']
+    icon: <FiUsers />,
+    title: 'Get noticed first',
+    desc: "If your profile is a match, you appear at the top of the recruiter's candidate list.",
+    color: '#8b5cf6'
   },
   {
-    id: 4,
-    title: "Fullstack Developer",
-    company: "Firm in IT Services Sector",
-    rating: 2.5,
-    tags: ["Corporate", "Service"],
-    exp: "0-2 Yrs",
-    salary: "1-4 Lacs P.A.",
-    location: "Mumbai, Thane, Pune",
-    skills: ["Rest Api Integration", "Docker", "Postgresql", "Javascript", "AWS", "Backend", "GIT"],
-    posted: "5d ago",
-    logos: ['V', 'O', 'A', 'S', 'L', 'I', 'M']
+    icon: <FiLock />,
+    title: 'Confidential companies',
+    desc: 'Company names are revealed once you are shortlisted for complete privacy assurance.',
+    color: '#f59e0b'
   }
 ];
 
-export default function EarlyAccessModal({ isOpen, onClose }) {
+const colorPalette = [
+  { bg: '#EEF2FF', color: '#4338CA' },
+  { bg: '#FFF7ED', color: '#C2410C' },
+  { bg: '#F0FDF4', color: '#15803D' },
+  { bg: '#EFF6FF', color: '#1D4ED8' },
+  { bg: '#FDF2F8', color: '#9D174D' },
+  { bg: '#FEF3C7', color: '#92400E' },
+  { bg: '#E0E7FF', color: '#3730A3' },
+];
+
+export default function EarlyAccessModal({ isOpen, onClose, jobs = [] }) {
   const [sharedInterests, setSharedInterests] = useState([]);
   const [notification, setNotification] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('All');
 
   useEffect(() => {
     if (notification) {
@@ -71,125 +54,289 @@ export default function EarlyAccessModal({ isOpen, onClose }) {
     }
   }, [notification]);
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleShareInterest = (id) => {
     if (sharedInterests.includes(id)) return;
-    setSharedInterests([...sharedInterests, id]);
-    setNotification("Interest shared successfully");
+    setSharedInterests(prev => [...prev, id]);
+    setNotification("Interest shared! We'll notify you when the recruiter responds.");
   };
 
+  // Normalize raw DB strings like "PART_TIME", "on site", "On Site/Hybrid/ Remote" to clean labels
+  const normalizeLabel = (raw) => {
+    if (!raw) return null;
+    const map = {
+      'full_time': 'Full-Time', 'fulltime': 'Full-Time', 'full-time': 'Full-Time',
+      'part_time': 'Part-Time', 'parttime': 'Part-Time', 'part-time': 'Part-Time',
+      'contract': 'Contract', 'freelance': 'Freelance', 'internship': 'Internship',
+      'remote': 'Remote', 'work from home': 'Remote', 'wfh': 'Remote',
+      'hybrid': 'Hybrid',
+      'onsite': 'On-Site', 'on site': 'On-Site', 'on-site': 'On-Site', 'office': 'On-Site',
+    };
+    const key = raw.toLowerCase().replace(/[/_\s]+/g, ' ').trim();
+    // Check exact map first
+    if (map[key]) return map[key];
+    // Check partial matches for compound values like "On Site/Hybrid/ Remote"
+    if (key.includes('remote') && key.includes('hybrid')) return 'Hybrid/Remote';
+    if (key.includes('remote')) return 'Remote';
+    if (key.includes('hybrid')) return 'Hybrid';
+    if (key.includes('site') || key.includes('onsite')) return 'On-Site';
+    if (key.includes('full')) return 'Full-Time';
+    if (key.includes('part')) return 'Part-Time';
+    // Fallback: Title Case, strip underscores
+    return raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+  };
+
+  const displayJobs = jobs.length > 0 ? jobs : [];
+
+  // Build clean, deduplicated filters from workplaceType + jobType
+  const seen = new Set();
+  const filterMap = new Map(); // normalized label -> original raw value for matching
+  displayJobs.forEach(j => {
+    [j.workplaceType, j.jobType].filter(Boolean).forEach(raw => {
+      const label = normalizeLabel(raw);
+      if (label && !seen.has(label)) { seen.add(label); filterMap.set(label, raw); }
+    });
+  });
+
+  // Only show filters that make sense (max 5 + All)
+  const PRIORITY = ['Remote', 'Hybrid', 'On-Site', 'Full-Time', 'Part-Time', 'Contract', 'Internship', 'Hybrid/Remote'];
+  const sortedFilters = [...filterMap.keys()].sort((a, b) => {
+    const ai = PRIORITY.indexOf(a); const bi = PRIORITY.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  }).slice(0, 5);
+  const filters = ['All', ...sortedFilters];
+
+  const countForFilter = (f) => f === 'All'
+    ? displayJobs.length
+    : displayJobs.filter(j => normalizeLabel(j.workplaceType) === f || normalizeLabel(j.jobType) === f).length;
+
+  const filteredJobs = activeFilter === 'All'
+    ? displayJobs
+    : displayJobs.filter(j => normalizeLabel(j.workplaceType) === activeFilter || normalizeLabel(j.jobType) === activeFilter);
+
+
   return (
-    <div className="ea-modal-overlay" onClick={onClose}>
-      <div className="ea-modal-container" onClick={e => e.stopPropagation()}>
-        <button className="ea-modal-close" onClick={onClose}><FiX size={24} /></button>
-        
-        <div className="ea-modal-header">
-          <h1>{MOCK_EARLY_ROLES.length} Early access roles from top companies</h1>
-          <p>Exclusive opportunities based on what recruiters are searching for, even before they post a job on MavenJobs</p>
+    <div className="ea-overlay" onClick={onClose}>
+      <div className="ea-container" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="ea-header">
+          <div className="ea-header-badge">
+            <FiSend size={14} />
+            <span>EXCLUSIVE ACCESS</span>
+          </div>
+          <h1 className="ea-header-title">
+            <span className="ea-count-highlight">{displayJobs.length}</span> Early Access Roles
+            <br />from Top Companies
+          </h1>
+          <p className="ea-header-sub">
+            Exclusive opportunities discovered before they go public — curated just for you.
+          </p>
+          <div className="ea-header-stats">
+            <div className="ea-hstat">
+              <strong>{displayJobs.length}</strong>
+              <span>Open Roles</span>
+            </div>
+            <div className="ea-hstat-divider" />
+            <div className="ea-hstat">
+              <strong>{sharedInterests.length}</strong>
+              <span>Interests Shared</span>
+            </div>
+            <div className="ea-hstat-divider" />
+            <div className="ea-hstat">
+              <strong>Top 50</strong>
+              <span>Companies</span>
+            </div>
+          </div>
+          <button className="ea-close" onClick={onClose}><FiX size={20} /></button>
         </div>
 
-        <div className="ea-modal-content">
-          {/* Main List */}
-          <div className="ea-roles-list">
-            {MOCK_EARLY_ROLES.map(role => (
-              <div key={role.id} className="ea-role-card">
-                <div className="ea-role-header">
-                  <div className="ea-role-info">
-                    <h3 className="ea-role-title">{role.title}</h3>
-                    <p className="ea-role-company">{role.company}</p>
-                    <div className="ea-role-tags-row">
-                      <span className="ea-rating-pill"><FiStar size={12} /> {role.rating.toFixed(1)}+</span>
-                      {role.tags.map(tag => <span key={tag} className="ea-tag-pill">{tag}</span>)}
+        {/* Filters */}
+        {filters.length > 1 && (
+          <div className="ea-filters">
+            <span className="ea-filters-label">Filter:</span>
+            {filters.map(f => {
+              const count = countForFilter(f);
+              return (
+                <button
+                  key={f}
+                  className={`ea-filter-btn ${activeFilter === f ? 'active' : ''}`}
+                  onClick={() => setActiveFilter(f)}
+                >
+                  {f}
+                  <span className="ea-filter-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Content */}
+        <div className="ea-content">
+          {/* Jobs List */}
+          <div className="ea-jobs-list">
+            {filteredJobs.length > 0 ? filteredJobs.map((job, idx) => {
+              const palette = colorPalette[idx % colorPalette.length];
+              const isShared = sharedInterests.includes(job.id);
+              const salaryText = job.salaryFormatted
+                || (job.salaryMin && job.salaryMax
+                  ? `${Math.round(job.salaryMin / 100000)}L – ${Math.round(job.salaryMax / 100000)}L P.A.`
+                  : 'Salary not disclosed');
+              const expText = job.experience || job.exp || '0–3 Yrs';
+
+              return (
+                <div className={`ea-job-card ${isShared ? 'shared' : ''}`} key={job.id || idx}>
+                  <div className="ea-job-card-top">
+                    <div className="ea-job-logo" style={{ background: palette.bg, color: palette.color }}>
+                      {(job.title || 'J').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="ea-job-title-block">
+                      <h3>{job.title}</h3>
+                      <p>{job.company || job.companyName}</p>
+                    </div>
+                    <div className="ea-job-top-right">
+                      <span className="ea-job-time">
+                        <FiClock size={12} /> {job.ago || job.lastUpdated || 'Recent'}
+                      </span>
+                      {isShared && (
+                        <span className="ea-shared-badge"><FiCheckCircle size={12} /> Shared</span>
+                      )}
                     </div>
                   </div>
-                  <span className="ea-posted-time">{role.posted}</span>
-                </div>
 
-                <div className="ea-role-meta">
-                  <div className="ea-meta-item"><FiBriefcase size={14} /> {role.exp}</div>
-                  <div className="ea-meta-item">₹ {role.salary}</div>
-                  <div className="ea-meta-item"><FiMapPin size={14} /> {role.location}</div>
-                </div>
+                  {/* Tags Row */}
+                  <div className="ea-job-tags-row">
+                    <span className="ea-rating-badge">
+                      <FiStar size={11} /> {job.rating || '4.2'}+
+                    </span>
+                    {(job.tags || []).slice(0, 3).map((t, i) => (
+                      <span key={i} className="ea-tag">{normalizeLabel(t) || t}</span>
+                    ))}
+                  </div>
 
-                <div className="ea-skills-list">
-                  {role.skills.map((s, i) => (
-                    <span key={i} className="ea-skill-dot">{s}</span>
-                  ))}
-                </div>
+                  {/* Meta */}
+                  <div className="ea-job-meta">
+                    <span><FiBriefcase size={13} /> {expText}</span>
+                    <span><FiZap size={13} /> {salaryText}</span>
+                    <span><FiMapPin size={13} /> {job.loc || job.location || 'Remote'}</span>
+                  </div>
 
-                <div className="ea-hiring-row">
-                  <div className="ea-hiring-logos">
-                    <p>Hiring for one of these companies</p>
-                    <div className="ea-logos-wrap">
-                      {role.logos.map((l, i) => (
-                        <div key={i} className="ea-logo-circle">{l}</div>
+                  {/* Skills */}
+                  {(job.skills && job.skills.length > 0) && (
+                    <div className="ea-skills">
+                      {job.skills.slice(0, 6).map((s, i) => (
+                        <span key={i} className="ea-skill-chip">{s}</span>
                       ))}
+                      {job.skills.length > 6 && (
+                        <span className="ea-skill-more">+{job.skills.length - 6}</span>
+                      )}
                     </div>
+                  )}
+
+                  {/* Bottom Row */}
+                  <div className="ea-job-bottom">
+                    <div className="ea-hiring-info">
+                      <p className="ea-hiring-label">Hiring from one of these companies</p>
+                      <div className="ea-logos">
+                        {(job.logos || ['A', 'B', 'C', 'D', 'E']).slice(0, 6).map((l, i) => (
+                          <div key={i} className="ea-logo-avatar">{l}</div>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      className={`ea-share-btn ${isShared ? 'done' : ''}`}
+                      onClick={() => handleShareInterest(job.id || idx)}
+                      disabled={isShared}
+                    >
+                      {isShared ? (
+                        <><FiCheckCircle size={15} /> Interest Shared</>
+                      ) : (
+                        <><FiSend size={15} /> Share Interest</>
+                      )}
+                    </button>
                   </div>
-                  <button 
-                    className={`ea-share-btn ${sharedInterests.includes(role.id) ? 'shared' : ''}`}
-                    onClick={() => handleShareInterest(role.id)}
-                  >
-                    {sharedInterests.includes(role.id) ? (
-                      <><FiCheckCircle size={16} /> Interest shared</>
-                    ) : (
-                      'Share interest'
-                    )}
-                  </button>
                 </div>
+              );
+            }) : (
+              <div className="ea-empty-state">
+                <div className="ea-empty-icon"><FiBriefcase size={28} /></div>
+                <h3>No early access roles right now</h3>
+                <p>We're constantly curating new exclusive roles. Check back soon!</p>
               </div>
-            ))}
+            )}
           </div>
 
           {/* Sidebar */}
-          <div className="ea-modal-sidebar">
+          <aside className="ea-sidebar">
             <div className="ea-sidebar-card">
-              <div className="ea-sidebar-icon-box">
-                <FiSend size={32} color="#2563eb" />
+              <div className="ea-sidebar-top">
+                <div className="ea-sidebar-icon-wrap">
+                  <FiSend size={20} />
+                </div>
                 <div className="ea-sidebar-dot" />
               </div>
-              <h3>What's unique about early access roles?</h3>
-              
-              <div className="ea-feat-list">
-                <div className="ea-feat-item">
-                  <FiCheckCircle size={18} className="ea-feat-check" />
-                  <div>
-                    <h4>Discover hidden roles from top companies</h4>
-                    <p>Share interest for roles that haven't even been posted</p>
+              <h3 className="ea-sidebar-title">What makes Early Access unique?</h3>
+
+              <div className="ea-features">
+                {FEATURES.map((f, i) => (
+                  <div className="ea-feature-item" key={i}>
+                    <div className="ea-feature-icon" style={{ background: f.color + '20', color: f.color }}>
+                      {f.icon}
+                    </div>
+                    <div>
+                      <h4>{f.title}</h4>
+                      <p>{f.desc}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="ea-feat-item">
-                  <FiCheckCircle size={18} className="ea-feat-check" />
-                  <div>
-                    <h4>Share early interest</h4>
-                    <p>Stay ahead in the game by sharing an early interest to fresher recruiter searches</p>
-                  </div>
-                </div>
-                <div className="ea-feat-item">
-                  <FiCheckCircle size={18} className="ea-feat-check" />
-                  <div>
-                    <h4>Get noticed by recruiters</h4>
-                    <p>If your profile is a match, it will get better visibility on their search results</p>
-                  </div>
-                </div>
+                ))}
               </div>
 
               <div className="ea-sidebar-divider" />
-              
-              <div className="ea-sidebar-faq">
-                <h4>Can I know the exact company for these roles?</h4>
-                <p>These roles are confidential, but we can assure you that they're from one of the mentioned companies. The recruiter will share more details if you're shortlisted.</p>
+
+              <div className="ea-faq-box">
+                <div className="ea-faq-icon"><FiLock size={16} /></div>
+                <div>
+                  <h4>Can I know the exact company?</h4>
+                  <p>
+                    These roles are confidential to protect both parties. If you're shortlisted,
+                    the recruiter will personally share full details.
+                  </p>
+                </div>
               </div>
+
+              {displayJobs.length > 0 && (
+                <div className="ea-sidebar-progress">
+                  <div className="ea-progress-label">
+                    <span>Interests shared</span>
+                    <strong>{sharedInterests.length} / {displayJobs.length}</strong>
+                  </div>
+                  <div className="ea-progress-track">
+                    <div
+                      className="ea-progress-fill"
+                      style={{ width: `${(sharedInterests.length / displayJobs.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          </aside>
         </div>
 
-        {/* Success Notification */}
+        {/* Toast Notification */}
         {notification && (
-          <div className="ea-notification">
-            <FiCheckCircle size={18} />
-            {notification}
+          <div className="ea-toast">
+            <FiCheckCircle size={16} />
+            <span>{notification}</span>
           </div>
         )}
       </div>

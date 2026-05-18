@@ -89,17 +89,27 @@ const MOCK_RECOMMENDED_JOBS = [
   }
 ];
 
-export default function RecommendedJobs({ onBack }) {
+export default function RecommendedJobs({ onBack, recommendedJobs = {}, candidateProfile = {} }) {
   const [selectedJobs, setSelectedJobs] = useState([]);
-  const [activeTab, setActiveTab] = useState('Profile (15)');
+  const [activeTabState, setActiveTabState] = useState(null);
   const [isWebinarModalOpen, setIsWebinarModalOpen] = useState(false);
 
-  const tabs = [
-    { name: 'Applies (5)', count: 5 },
-    { name: 'Profile (15)', count: 15 },
-    { name: 'Preferences (3)', count: 3 },
-    { name: 'You might like (6)', count: 6 }
-  ];
+  const availableTabs = Object.keys(recommendedJobs).length > 0
+    ? Object.keys(recommendedJobs).map(key => ({
+        name: key,
+        count: recommendedJobs[key]?.length || 0,
+        jobs: recommendedJobs[key] || []
+      }))
+    : [
+        { name: 'Applies (5)', count: 5, jobs: MOCK_RECOMMENDED_JOBS },
+        { name: 'Profile (15)', count: 15, jobs: MOCK_RECOMMENDED_JOBS },
+        { name: 'Preferences (3)', count: 3, jobs: MOCK_RECOMMENDED_JOBS },
+        { name: 'You might like (6)', count: 6, jobs: MOCK_RECOMMENDED_JOBS }
+      ];
+
+  const activeTab = activeTabState || availableTabs[0]?.name || 'Profile (15)';
+  const currentTabObj = availableTabs.find(t => t.name === activeTab) || availableTabs[0];
+  const displayJobs = currentTabObj?.jobs || [];
 
   const handleToggleJob = (jobId) => {
     setSelectedJobs(prev => {
@@ -132,10 +142,10 @@ export default function RecommendedJobs({ onBack }) {
 
         {/* Tabs */}
         <div className="rj-tabs-wrap">
-          {tabs.map(tab => (
+          {availableTabs.map(tab => (
             <button
               key={tab.name}
-              onClick={() => setActiveTab(tab.name)}
+              onClick={() => setActiveTabState(tab.name)}
               className={`rj-tab ${activeTab === tab.name ? 'active' : ''}`}
             >
               {tab.name}
@@ -148,69 +158,86 @@ export default function RecommendedJobs({ onBack }) {
           
           {/* Left Column */}
           <div className="rj-list">
-            {MOCK_RECOMMENDED_JOBS.map(job => (
-              <div 
-                key={job.id} 
-                className={`rj-job-card ${selectedJobs.includes(job.id) ? 'selected' : ''}`}
-              >
-                <div className="rj-job-row">
-                  <div className="rj-check-col">
-                    <label className="rj-checkbox">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedJobs.includes(job.id)}
-                        onChange={() => handleToggleJob(job.id)}
-                      />
-                      <span className="rj-checkmark"><FiCheck size={12} /></span>
-                    </label>
-                  </div>
+            {displayJobs.map((job, idx) => {
+              const jobId = job.id || job._id || idx;
+              const title = job.title || 'Process Coordinator';
+              const company = job.company || job.companyName || 'Finvin Advisor';
+              const rating = job.rating || '4.2';
+              const reviews = job.reviews || Math.floor(Math.random() * 40) + 2;
+              const exp = job.exp || job.experience || '0-3 Yrs';
+              const salary = job.salaryFormatted || job.salary || 'Not disclosed';
+              const location = job.loc || job.location || 'Remote';
+              const desc = job.desc || job.description || job.responsibilities || 'No description provided.';
+              const tags = job.tags && job.tags.length > 0 ? job.tags : ['Full-Time', 'Corporate'];
+              const posted = job.ago || job.posted || job.lastUpdated || 'Recent';
+              const logoCode = job.code || job.logoCode || title.substring(0, 2).toUpperCase();
+              const logoBg = job.bg || job.logoBg || '#EEF2FF';
+              const logoCol = job.col || job.logoCol || '#4F46E5';
 
-                  <div className="rj-job-content">
-                    <div className="rj-job-header">
-                      <div className="rj-job-info">
-                        <h3 className="rj-job-title">{job.title}</h3>
-                        <div className="rj-company-row">
-                          <span className="rj-company-name">{job.company}</span>
-                          {job.rating && (
-                            <span className="rj-rating-pill">
-                              <FiStar size={10} /> {job.rating} <span>|</span> {job.reviews} Reviews
-                            </span>
-                          )}
+              return (
+                <div 
+                  key={jobId} 
+                  className={`rj-job-card ${selectedJobs.includes(jobId) ? 'selected' : ''}`}
+                >
+                  <div className="rj-job-row">
+                    <div className="rj-check-col">
+                      <label className="rj-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedJobs.includes(jobId)}
+                          onChange={() => handleToggleJob(jobId)}
+                        />
+                        <span className="rj-checkmark"><FiCheck size={12} /></span>
+                      </label>
+                    </div>
+
+                    <div className="rj-job-content">
+                      <div className="rj-job-header">
+                        <div className="rj-job-info">
+                          <h3 className="rj-job-title">{title}</h3>
+                          <div className="rj-company-row">
+                            <span className="rj-company-name">{company}</span>
+                            {rating && (
+                              <span className="rj-rating-pill">
+                                <FiStar size={10} /> {rating} <span>|</span> {reviews} Reviews
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="rj-job-logo" style={{ background: logoBg, color: logoCol }}>
+                          {logoCode}
                         </div>
                       </div>
-                      <div className="rj-job-logo" style={{ background: job.logoBg, color: job.logoCol }}>
-                        {job.logoCode}
+
+                      <div className="rj-job-meta">
+                        <span><FiBriefcase size={13} /> {exp}</span>
+                        <span><FiZap size={13} /> {salary}</span>
+                        <span><FiMapPin size={13} /> {location}</span>
                       </div>
-                    </div>
 
-                    <div className="rj-job-meta">
-                      <span><FiBriefcase size={13} /> {job.exp}</span>
-                      <span><FiZap size={13} /> {job.salary}</span>
-                      <span><FiMapPin size={13} /> {job.location}</span>
-                    </div>
+                      <div className="rj-job-desc">
+                        <FiEdit2 size={13} />
+                        <p>{desc}</p>
+                      </div>
 
-                    <div className="rj-job-desc">
-                      <FiEdit2 size={13} />
-                      <p>{job.desc}</p>
-                    </div>
+                      <div className="rj-job-tags">
+                        {tags.map((tag, i) => (
+                          <span key={i} className="rj-tag">{tag}</span>
+                        ))}
+                      </div>
 
-                    <div className="rj-job-tags">
-                      {job.tags.map(tag => (
-                        <span key={tag} className="rj-tag">{tag}</span>
-                      ))}
-                    </div>
-
-                    <div className="rj-job-footer">
-                      <span className="rj-posted">{job.posted}</span>
-                      <div className="rj-job-actions">
-                        <button className="rj-action-btn"><FiEye size={15} /> Hide</button>
-                        <button className="rj-action-btn"><FiBookmark size={15} /> Save</button>
+                      <div className="rj-job-footer">
+                        <span className="rj-posted">{posted}</span>
+                        <div className="rj-job-actions">
+                          <button className="rj-action-btn"><FiEye size={15} /> Hide</button>
+                          <button className="rj-action-btn"><FiBookmark size={15} /> Save</button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div className="rj-disclaimer">
               IEIL ensures site authenticity. <br />
@@ -229,18 +256,18 @@ export default function RecommendedJobs({ onBack }) {
                 <div className="rj-pref-item">
                   <div className="rj-pref-label">PREFERRED JOB ROLE <FiEdit2 size={12} /></div>
                   <div className="rj-pref-tags">
-                    {['Front End', 'MERN Stack', 'Software Developer'].map(r => <span key={r}>{r}</span>)}
+                    {(candidateProfile?.preferredRoles?.length > 0 ? candidateProfile.preferredRoles : ['Front End', 'MERN Stack', 'Software Developer']).map((r, i) => <span key={i}>{r}</span>)}
                   </div>
                 </div>
                 <div className="rj-pref-item">
                   <div className="rj-pref-label">PREFERRED LOCATION <FiEdit2 size={12} /></div>
                   <div className="rj-pref-tags">
-                    {['Pune', 'Noida', 'Mumbai', 'Bengaluru'].map(l => <span key={l}>{l}</span>)}
+                    {(candidateProfile?.preferredLocations?.length > 0 ? candidateProfile.preferredLocations : ['Pune', 'Noida', 'Mumbai', 'Bengaluru']).map((l, i) => <span key={i}>{l}</span>)}
                   </div>
                 </div>
                 <div className="rj-pref-item">
                   <div className="rj-pref-label">PREFERRED SALARY <FiEdit2 size={12} /></div>
-                  <div className="rj-pref-val">₹ 5,00,000</div>
+                  <div className="rj-pref-val">{candidateProfile?.expectedSalary ? `₹ ${Number(candidateProfile.expectedSalary).toLocaleString()}` : '₹ 5,00,000'}</div>
                 </div>
               </div>
             </div>

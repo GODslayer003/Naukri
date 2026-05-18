@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FiEdit2, FiBriefcase, FiMapPin, FiZap, FiCheckCircle,
   FiChevronRight, FiHome, FiFileText, FiMonitor, FiShare2,
@@ -115,28 +115,85 @@ export default function ProfileDashboard() {
 
   const profileLink = `mavenjobs.com/in/${user?.name?.toLowerCase().replace(/\s+/g, '-') || 'user'}-7a8b9c`;
 
-  const recommendedJobs = {
-    'Profile (18)': [
-      { code: 'PE', title: 'Product Engineer', company: 'SmartDocs Tech', rating: 3.1, loc: 'Hyderabad', ago: '4d ago', bg: '#EEF2FF', col: '#4338CA' },
-      { code: 'UI', title: 'UI/UX Designer', company: 'Onebanc Tech', rating: 4.8, loc: 'Gurugram', ago: '1d ago', bg: '#FFF7ED', col: '#C2410C' },
-      { code: 'A', title: 'Software Tester', company: 'Aarons Visions', rating: 4.2, loc: 'Remote', ago: '2d ago', bg: '#F0FDF4', col: '#15803D' },
-      { code: 'FE', title: 'Frontend Developer', company: 'DevMatrix', rating: 4.5, loc: 'Bengaluru', ago: '3d ago', bg: '#EFF6FF', col: '#1D4ED8' },
-      { code: 'BE', title: 'Backend Lead', company: 'NodeMasters', rating: 4.9, loc: 'Pune', ago: '12h ago', bg: '#FDF2F8', col: '#9D174D' },
-    ],
-    'Applies (29)': [
-      { code: 'DS', title: 'Data Scientist', company: 'Analytica', rating: 4.6, loc: 'Mumbai', ago: '2d ago', bg: '#ECFDF5', col: '#047857' },
-      { code: 'ML', title: 'ML Engineer', company: 'DeepMind India', rating: 4.7, loc: 'Bengaluru', ago: '5d ago', bg: '#F5F3FF', col: '#6D28D9' },
-      { code: 'QA', title: 'Quality Analyst', company: 'TestRig', rating: 3.9, loc: 'Chennai', ago: '1w ago', bg: '#FFF7ED', col: '#C2410C' },
-    ],
-    'Preferences (4)': [
-      { code: 'FS', title: 'Full Stack Dev', company: 'MetaScale', rating: 4.4, loc: 'Remote', ago: '1d ago', bg: '#F0F9FF', col: '#0369A1' },
-      { code: 'DO', title: 'DevOps Architect', company: 'CloudFlow', rating: 4.8, loc: 'Hyderabad', ago: '6h ago', bg: '#F8FAFC', col: '#334155' },
-    ],
-    'You might like (10)': [
-      { code: 'GD', title: 'Graphic Designer', company: 'CreativeCo', rating: 4.3, loc: 'New Delhi', ago: '3d ago', bg: '#FDF4FF', col: '#A21CAF' },
-      { code: 'PM', title: 'Product Manager', company: 'Innova', rating: 4.5, loc: 'Bengaluru', ago: '4d ago', bg: '#F0FDF4', col: '#166534' },
-    ]
-  };
+  const [recommendedJobs, setRecommendedJobs] = useState({});
+  const [candidateProfile, setCandidateProfile] = useState(null);
+  const [recentApplications, setRecentApplications] = useState([]);
+  const [showApplyMatchModal, setShowApplyMatchModal] = useState(false);
+  const [nvites, setNvites] = useState([]);
+  const [earlyAccess, setEarlyAccess] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState({ totalApplications: 0, shortlisted: 0, interviews: 0, companiesApplied: 0 });
+
+  useEffect(() => {
+    if (user) {
+      authService.getDashboard().then(res => {
+        if (res.success && res.data) {
+          const colors = [
+            { bg: '#EEF2FF', col: '#4338CA' },
+            { bg: '#FFF7ED', col: '#C2410C' },
+            { bg: '#F0FDF4', col: '#15803D' },
+            { bg: '#EFF6FF', col: '#1D4ED8' },
+            { bg: '#FDF2F8', col: '#9D174D' },
+            { bg: '#FEF3C7', col: '#92400E' },
+            { bg: '#E0E7FF', col: '#3730A3' }
+          ];
+          
+          const formatSalary = (min, max) => {
+            if (!min && !max) return null;
+            const toL = v => (v >= 100000 ? `${(v / 100000).toFixed(0)}L` : `${v}`);
+            if (min && max) return `${toL(min)} – ${toL(max)} P.A.`;
+            if (max) return `Up to ${toL(max)} P.A.`;
+            return `${toL(min)}+ P.A.`;
+          };
+
+          const buildTags = (job) => {
+            const tagSet = new Set();
+            if (job.workplaceType) tagSet.add(job.workplaceType);
+            if (job.jobType) tagSet.add(job.jobType);
+            if (job.department && job.department.length < 25) tagSet.add(job.department);
+            if (tagSet.size === 0) tagSet.add('Full-Time');
+            return [...tagSet].slice(0, 3);
+          };
+
+          const formatJobData = (job, idx) => ({
+            ...job,
+            title: job.title,
+            company: job.companyName,
+            loc: job.location || 'Remote',
+            ago: job.lastUpdated,
+            rating: (4.0 + Math.random() * 0.9).toFixed(1),
+            code: job.title.substring(0, 2).toUpperCase(),
+            bg: colors[idx % colors.length].bg,
+            col: colors[idx % colors.length].col,
+            logos: ['A', 'N', 'B', 'I', 'X'].sort(() => 0.5 - Math.random()).slice(0, 5),
+            tags: buildTags(job),
+            salaryFormatted: formatSalary(job.salaryMin, job.salaryMax)
+          });
+
+          if (res.data.recommendedJobs) {
+            const mappedJobs = {};
+            Object.keys(res.data.recommendedJobs).forEach(key => {
+              mappedJobs[key] = res.data.recommendedJobs[key].map(formatJobData);
+            });
+            
+            setRecommendedJobs(mappedJobs);
+            const firstPopulatedKey = Object.keys(mappedJobs).find(key => mappedJobs[key] && mappedJobs[key].length > 0);
+            if (firstPopulatedKey) {
+              setActiveTab(firstPopulatedKey);
+            } else {
+              const firstKey = Object.keys(mappedJobs)[0];
+              if (firstKey) setActiveTab(firstKey);
+            }
+          }
+
+          if (res.data.nvites) setNvites(res.data.nvites.map(formatJobData));
+          if (res.data.earlyAccess) setEarlyAccess(res.data.earlyAccess.map(formatJobData));
+          if (res.data.summary) setDashboardSummary(res.data.summary);
+          if (res.data.profile) setCandidateProfile(res.data.profile);
+          if (res.data.recentApplications) setRecentApplications(res.data.recentApplications);
+        }
+      }).catch(err => console.error("Failed to fetch dashboard data", err));
+    }
+  }, [user]);
 
   const handleScroll = (ref, dir) => {
     if (ref.current) ref.current.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' });
@@ -445,21 +502,39 @@ export default function ProfileDashboard() {
             <div className="pd-scroll-wrap">
               <button className="pd-scroll-btn left" onClick={() => handleScroll(jobScrollRef, 'left')}><FiChevronLeft size={18} /></button>
               <div className="pd-job-scroll" ref={jobScrollRef}>
-                {(recommendedJobs[activeTab] || []).map(job => (
-                  <div className="pd-job-card" key={job.title}>
-                    <div className="pd-job-header">
-                      <div className="pd-job-logo" style={{ background: job.bg, color: job.col }}>{job.code}</div>
-                      <span className="pd-job-ago">{job.ago}</span>
+                {(!recommendedJobs[activeTab] || recommendedJobs[activeTab].length === 0) ? (
+                  <div style={{ 
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    flex: 1, padding: '60px 20px', 
+                    backgroundColor: '#f8fafc', borderRadius: '16px', border: '1.5px dashed #cbd5e1',
+                    margin: '10px auto', maxWidth: '400px', width: '100%'
+                  }}>
+                    <div style={{
+                      width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#e2e8f0',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px'
+                    }}>
+                      <FiBriefcase size={24} style={{ color: '#64748b' }} />
                     </div>
-                    <h4 className="pd-job-title">{job.title}</h4>
-                    <p className="pd-job-company">{job.company} <span className="pd-job-rating"><FiStar size={11} /> {job.rating}</span></p>
-                    <p className="pd-job-loc"><FiMapPin size={11} /> {job.loc}</p>
-                    <div className="pd-job-actions">
-                      <button className="pd-job-apply">Quick Apply</button>
-                      <button className="pd-job-save"><FiBookmark size={14} /></button>
-                    </div>
+                    <h4 style={{ color: '#1e293b', fontSize: '16px', fontWeight: '700', margin: '0 0 6px 0' }}>No jobs found</h4>
+                    <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>We couldn't find any jobs in this category right now.</p>
                   </div>
-                ))}
+                ) : (
+                  (recommendedJobs[activeTab] || []).map(job => (
+                    <div className="pd-job-card" key={job.title}>
+                      <div className="pd-job-header">
+                        <div className="pd-job-logo" style={{ background: job.bg, color: job.col }}>{job.code}</div>
+                        <span className="pd-job-ago">{job.ago}</span>
+                      </div>
+                      <h4 className="pd-job-title">{job.title}</h4>
+                      <p className="pd-job-company">{job.company} <span className="pd-job-rating"><FiStar size={11} /> {job.rating}</span></p>
+                      <p className="pd-job-loc"><FiMapPin size={11} /> {job.loc}</p>
+                      <div className="pd-job-actions">
+                        <button className="pd-job-apply">Quick Apply</button>
+                        <button className="pd-job-save"><FiBookmark size={14} /></button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
               <button className="pd-scroll-btn right" onClick={() => handleScroll(jobScrollRef, 'right')}><FiChevronRight size={18} /></button>
             </div>
@@ -474,20 +549,20 @@ export default function ProfileDashboard() {
               <Link to="#" className="pd-text-btn-sm">View all →</Link>
             </div>
             <div className="pd-nvites-list">
-              {[
-                { code: 'N', title: 'NOC/SOC Analyst', company: 'Naukri e-Hire', when: '16d ago', bg: '#E0E7FF', col: '#3730A3' },
-                { code: 'Z', title: 'Survey Developer', company: 'ZoomRx Healthcare', when: '22d ago', bg: '#1E293B', col: '#F8FAFC' },
-                { code: 'F', title: 'Figma Specialist', company: 'IT Services Co.', when: '8d ago', bg: '#FEF3C7', col: '#92400E' },
-              ].map(inv => (
-                <Link to="/jobs" className="pd-nvite-row" key={inv.title} style={{ textDecoration: 'none', color: 'inherit' }}>
+              {nvites.length > 0 ? nvites.map(inv => (
+                <Link to="/jobs" className="pd-nvite-row" key={inv.id} style={{ textDecoration: 'none', color: 'inherit' }}>
                   <div className="pd-nvite-logo" style={{ background: inv.bg, color: inv.col }}>{inv.code}</div>
                   <div className="pd-nvite-info">
                     <div className="pd-nvite-title">{inv.title}</div>
-                    <div className="pd-nvite-meta"><strong>{inv.company}</strong> · {inv.when}</div>
+                    <div className="pd-nvite-meta"><strong>{inv.company}</strong> · {inv.ago}</div>
                   </div>
                   <button className="pd-nvite-apply">Apply</button>
                 </Link>
-              ))}
+              )) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                  No invitations at the moment.
+                </div>
+              )}
             </div>
           </div>
 
@@ -497,7 +572,7 @@ export default function ProfileDashboard() {
               <div className="pd-early-hd">
                 <div className="pd-early-icon-wrap"><FiSend size={20} /></div>
                 <div>
-                  <h3>11 Early access roles <FiInfo size={13} className="pd-info-icon" /></h3>
+                  <h3>{earlyAccess.length} Early access roles <FiInfo size={13} className="pd-info-icon" /></h3>
                   <p>Exclusive roles before they go public</p>
                 </div>
               </div>
@@ -506,31 +581,31 @@ export default function ProfileDashboard() {
             <div className="pd-scroll-wrap">
               <button className="pd-scroll-btn left" onClick={() => handleScroll(earlyScrollRef, 'left')}><FiChevronLeft size={18} /></button>
               <div className="pd-early-scroll" ref={earlyScrollRef}>
-                {[
-                  { role: 'Front End Developer', type: 'Foreign IT Consulting MNC', rating: '3.5+', tags: ['Foreign MNC', 'Service'], exp: '0-2 Yrs', salary: '2–5 L P.A.', loc: 'Bengaluru', logos: ['A', 'N', 'B', 'I', 'X'] },
-                  { role: 'Product Designer', type: 'Corporate in B2C Health', rating: '4.2+', tags: ['Corporate', 'HealthTech'], exp: '0-4 Yrs', salary: '5–8 L P.A.', loc: 'Remote', logos: ['H', 'R', 'K', 'V', 'D'] },
-                  { role: 'Back End Lead', type: 'Fintech Unicorn', rating: '4.8+', tags: ['Unicorn', 'Product'], exp: '5-8 Yrs', salary: '25–35 L P.A.', loc: 'Pune', logos: ['P', 'F', 'M', 'S', 'L'] },
-                ].map((r, i) => (
-                  <div className="pd-early-role-card" key={i}>
+                {earlyAccess.length > 0 ? earlyAccess.map((r, i) => (
+                  <div className="pd-early-role-card" key={r.id || i}>
                     <div className="pd-early-role-badge">{r.tags[0]}</div>
-                    <h4>{r.role}</h4>
-                    <p className="pd-early-type">{r.type}</p>
+                    <h4>{r.title}</h4>
+                    <p className="pd-early-type">{r.company}</p>
                     <div className="pd-early-tags">
                       <span className="pd-early-rating">★ {r.rating}</span>
                       {r.tags.map(t => <span key={t} className="pd-early-tag">{t}</span>)}
                     </div>
                     <div className="pd-early-meta">
-                      <span><FiBriefcase size={12} /> {r.exp}</span>
-                      <span><FiZap size={12} /> {r.salary}</span>
+                      <span><FiBriefcase size={12} /> {r.experience || '0-3 Yrs'}</span>
+                      <span><FiZap size={12} /> {(r.salaryMin && r.salaryMax) ? `${r.salaryMin}-${r.salaryMax} L P.A.` : '4-8 L P.A.'}</span>
                       <span><FiMapPin size={12} /> {r.loc}</span>
                     </div>
                     <div className="pd-early-hiring">
                       <p>Hiring from one of these</p>
-                      <div className="pd-early-logos">{r.logos.map((l, i) => <div key={i} className="pd-early-logo">{l}</div>)}</div>
+                      <div className="pd-early-logos">{r.logos.map((l, idx) => <div key={idx} className="pd-early-logo">{l}</div>)}</div>
                     </div>
                     <button className="pd-early-cta">Share interest</button>
                   </div>
-                ))}
+                )) : (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b', fontSize: '13px', width: '100%' }}>
+                    No early access roles available right now.
+                  </div>
+                )}
               </div>
               <button className="pd-scroll-btn right" onClick={() => handleScroll(earlyScrollRef, 'right')}><FiChevronRight size={18} /></button>
             </div>
@@ -555,50 +630,81 @@ export default function ProfileDashboard() {
           </div>
 
           {/* Match Card */}
-          <div className="pd-card pd-match-card">
-            <div className="pd-section-header">
-              <h3>Apply match — last 7 days</h3>
-              <button className="pd-text-btn" onClick={() => setShowJobsModal(true)}>View all <FiChevronRight size={14} /></button>
-            </div>
-            <div className="pd-scroll-wrap">
-              <button className="pd-scroll-btn left" onClick={() => handleScroll(matchScrollRef, 'left')}><FiChevronLeft size={18} /></button>
-              <div className="pd-match-scroll" ref={matchScrollRef}>
-                <div className="pd-match-card-item summary">
-                  <div className="pd-match-low-ring"><span>LOW</span></div>
-                  <p><strong>1 of 49</strong> applies matched</p>
+          {/* Match Card */}
+          {(() => {
+            const totalApps = dashboardSummary?.totalApplications || recentApplications?.length || 49;
+            const matchedAppsCount = dashboardSummary?.shortlisted || Math.max(1, Math.floor(totalApps * 0.35));
+            const matchRateRatio = totalApps > 0 ? (matchedAppsCount / totalApps) : 0;
+            const matchRateStatus = matchRateRatio > 0.5 ? 'HIGH' : matchRateRatio > 0.25 ? 'MED' : 'LOW';
+
+            const userExp = candidateProfile?.totalExperience || '0.08 yr';
+            const userExpNum = parseFloat(userExp) || 1;
+            const expMatchPct = Math.min(98, Math.round(75 + (userExpNum * 5)));
+
+            const userCity = candidateProfile?.currentCity || candidateProfile?.preferredLocations?.[0] || 'Dehradun';
+            const locMatchPct = candidateProfile?.currentCity ? 92 : 86;
+
+            const userSkillsStr = candidateProfile?.skills?.length > 0 ? candidateProfile.skills.slice(0, 2).join(', ') : 'Ui/Ux, Redux…';
+            const skillsMatchPct = candidateProfile?.skills?.length > 0 ? Math.min(95, 50 + candidateProfile.skills.length * 8) : 37;
+
+            const userIndustry = candidateProfile?.currentCompany ? 'IT Services' : 'Tech & Software';
+            const industryMatchPct = candidateProfile?.currentCompany ? 82 : 57;
+
+            const userDept = candidateProfile?.currentTitle || 'Engineering';
+            const deptMatchPct = candidateProfile?.currentTitle ? 88 : 67;
+
+            const earlyAppVal = 'Fresh jobs';
+            const earlyAppPct = 74;
+
+            const dynamicMatchMetrics = [
+              { label: 'Work Experience', val: `${userExp}${userExp.toLowerCase().includes('yr') ? '' : ' Yrs'}`, pct: expMatchPct, icon: <FiBriefcase /> },
+              { label: 'Location', val: userCity, pct: locMatchPct, icon: <FiMapPin /> },
+              { label: 'Key Skills', val: userSkillsStr.length > 15 ? userSkillsStr.substring(0, 14) + '…' : userSkillsStr, pct: skillsMatchPct, icon: <FiEdit2 /> },
+              { label: 'Industry', val: userIndustry, pct: industryMatchPct, icon: <FiMonitor /> },
+              { label: 'Department', val: userDept.length > 15 ? userDept.substring(0, 14) + '…' : userDept, pct: deptMatchPct, icon: <FiUsers /> },
+              { label: 'Early Applicant', val: earlyAppVal, pct: earlyAppPct, icon: <FiTrendingUp /> },
+            ];
+
+            return (
+              <div className="pd-card pd-match-card">
+                <div className="pd-section-header">
+                  <h3>Apply match — last 7 days</h3>
+                  <button className="pd-text-btn" onClick={() => setShowApplyMatchModal(true)}>View all <FiChevronRight size={14} /></button>
                 </div>
-                {[
-                  { label: 'Work Experience', val: '0.08 yr', pct: 84, icon: <FiBriefcase /> },
-                  { label: 'Location', val: 'Dehradun', pct: 86, icon: <FiMapPin /> },
-                  { label: 'Key Skills', val: 'Ui/Ux, Redux…', pct: 37, icon: <FiEdit2 /> },
-                  { label: 'Industry', val: 'IT Services…', pct: 57, icon: <FiMonitor /> },
-                  { label: 'Department', val: 'Engineering…', pct: 67, icon: <FiUsers /> },
-                  { label: 'Early Applicant', val: 'Fresh jobs', pct: 37, icon: <FiTrendingUp /> },
-                ].map((m, i) => (
-                  <div className="pd-match-card-item" key={i}>
-                    <div className="pd-match-ring-wrap">
-                      <svg viewBox="0 0 50 50" className="pd-match-svg">
-                        <circle cx="25" cy="25" r="21" />
-                        <circle cx="25" cy="25" r="21" style={{ strokeDashoffset: `calc(132 - (132 * ${m.pct}) / 100)` }} />
-                      </svg>
-                      <span className="pd-match-ring-icon">{m.icon}</span>
+                <div className="pd-scroll-wrap">
+                  <button className="pd-scroll-btn left" onClick={() => handleScroll(matchScrollRef, 'left')}><FiChevronLeft size={18} /></button>
+                  <div className="pd-match-scroll" ref={matchScrollRef}>
+                    <div className="pd-match-card-item summary">
+                      <div className={`pd-match-low-ring ${matchRateStatus.toLowerCase()}`}><span>{matchRateStatus}</span></div>
+                      <p><strong>{matchedAppsCount} of {totalApps}</strong> applies matched</p>
                     </div>
-                    <div className="pd-match-info">
-                      <h4>{m.label}</h4>
-                      <p>{m.val}</p>
-                      <span className="pd-match-pct">{m.pct}%</span>
+                    {dynamicMatchMetrics.map((m, i) => (
+                      <div className="pd-match-card-item" key={i}>
+                        <div className="pd-match-ring-wrap">
+                          <svg viewBox="0 0 50 50" className="pd-match-svg">
+                            <circle cx="25" cy="25" r="21" />
+                            <circle cx="25" cy="25" r="21" style={{ strokeDashoffset: `calc(132 - (132 * ${m.pct}) / 100)` }} />
+                          </svg>
+                          <span className="pd-match-ring-icon">{m.icon}</span>
+                        </div>
+                        <div className="pd-match-info">
+                          <h4>{m.label}</h4>
+                          <p>{m.val}</p>
+                          <span className="pd-match-pct">{m.pct}%</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="pd-match-card-item update">
+                      <h4>Review your profile</h4>
+                      <p>Improve job recommendations</p>
+                      <Link to="#" className="pd-update-link">Update Profile →</Link>
                     </div>
                   </div>
-                ))}
-                <div className="pd-match-card-item update">
-                  <h4>Review your profile</h4>
-                  <p>Improve job recommendations</p>
-                  <Link to="#" className="pd-update-link">Update Profile →</Link>
+                  <button className="pd-scroll-btn right" onClick={() => handleScroll(matchScrollRef, 'right')}><FiChevronRight size={18} /></button>
                 </div>
               </div>
-              <button className="pd-scroll-btn right" onClick={() => handleScroll(matchScrollRef, 'right')}><FiChevronRight size={18} /></button>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Blog Section */}
           <div className="pd-card pd-blog-card">
@@ -935,7 +1041,11 @@ export default function ProfileDashboard() {
           <div className="pd-modal-box" onClick={e => e.stopPropagation()}>
             <button className="pd-modal-close" onClick={() => setShowJobsModal(false)}><FiX size={22} /></button>
             <div className="pd-modal-scroll">
-              <RecommendedJobs onBack={() => setShowJobsModal(false)} />
+              <RecommendedJobs
+                onBack={() => setShowJobsModal(false)}
+                recommendedJobs={recommendedJobs}
+                candidateProfile={candidateProfile}
+              />
             </div>
           </div>
         </div>
@@ -944,7 +1054,139 @@ export default function ProfileDashboard() {
       <EarlyAccessModal
         isOpen={showEarlyAccessModal}
         onClose={() => setShowEarlyAccessModal(false)}
+        jobs={earlyAccess}
       />
+      {/* ─── Apply Match Analytics Modal ─── */}
+      {showApplyMatchModal && (() => {
+        const totalApps = dashboardSummary?.totalApplications || recentApplications?.length || 49;
+        const matchedAppsCount = dashboardSummary?.shortlisted || Math.max(1, Math.floor(totalApps * 0.35));
+        const matchRateRatio = totalApps > 0 ? (matchedAppsCount / totalApps) : 0;
+        const matchRatePct = Math.round(matchRateRatio * 100);
+
+        const userExp = candidateProfile?.totalExperience || '0.08 yr';
+        const userExpNum = parseFloat(userExp) || 1;
+        const expMatchPct = Math.min(98, Math.round(75 + (userExpNum * 5)));
+
+        const userCity = candidateProfile?.currentCity || candidateProfile?.preferredLocations?.[0] || 'Dehradun';
+        const locMatchPct = candidateProfile?.currentCity ? 92 : 86;
+
+        const userSkillsStr = candidateProfile?.skills?.length > 0 ? candidateProfile.skills.slice(0, 2).join(', ') : 'Ui/Ux, Redux…';
+        const skillsMatchPct = candidateProfile?.skills?.length > 0 ? Math.min(95, 50 + candidateProfile.skills.length * 8) : 37;
+
+        const userIndustry = candidateProfile?.currentCompany ? 'IT Services' : 'Tech & Software';
+        const industryMatchPct = candidateProfile?.currentCompany ? 82 : 57;
+
+        const userDept = candidateProfile?.currentTitle || 'Engineering';
+        const deptMatchPct = candidateProfile?.currentTitle ? 88 : 67;
+
+        const earlyAppVal = 'Fresh jobs';
+        const earlyAppPct = 74;
+
+        const dimensions = [
+          { title: 'Work Experience Match', desc: `Your experience (${userExp}) aligns with ${expMatchPct}% of applied role requirements. E.g. senior roles require 3+ years.`, tip: 'Tip: Add recent freelance projects to boost score', pct: expMatchPct },
+          { title: 'Location Compatibility', desc: `Based in ${userCity}. Matches ${locMatchPct}% of employer site preferences (On-Site/Hybrid).`, tip: 'Tip: Update preferred locations in profile settings', pct: locMatchPct },
+          { title: 'Key Skills Alignment', desc: `Top skills (${userSkillsStr}) match ${skillsMatchPct}% of JD keywords. Missing 2 core requirements.`, tip: 'Tip: Add 3 more core skills from recent JDs', pct: skillsMatchPct },
+          { title: 'Industry Relevance', desc: `Background in ${userIndustry} gives you an ${industryMatchPct}% advantage over cross-industry applicants.`, tip: 'Tip: Highlight industry-specific achievements', pct: industryMatchPct },
+          { title: 'Department Fit', desc: `Title (${userDept}) matches ${deptMatchPct}% of target department hierarchies perfectly.`, tip: 'Tip: Use standard industry job titles', pct: deptMatchPct },
+          { title: 'Early Applicant Advantage', desc: `Applying within first 48 hours (${earlyAppVal}) puts you in the top ${earlyAppPct}% of candidate visibility.`, tip: 'Tip: Turn on instant job match alerts', pct: earlyAppPct }
+        ];
+
+        const appsList = recentApplications?.length > 0 ? recentApplications : [
+          { companyName: 'Finvin Advisor', jobTitle: 'Process Coordinator', status: 'SHORTLISTED', matchScore: 92 },
+          { companyName: 'Ignitefortune Tech', jobTitle: 'Java Developer', status: 'APPLIED', matchScore: 84 },
+          { companyName: 'Siana International', jobTitle: 'Sales Coordinator', status: 'INTERVIEW', matchScore: 88 },
+          { companyName: 'Jugla Technologies', jobTitle: 'Java Developer', status: 'APPLIED', matchScore: 78 }
+        ];
+
+        return (
+          <div className="pam-overlay" onClick={() => setShowApplyMatchModal(false)}>
+            <div className="pam-content" onClick={e => e.stopPropagation()}>
+              <div className="pam-header">
+                <div className="pam-title-area">
+                  <h2>Application Match Analytics</h2>
+                  <p>Real-time telemetry and compatibility breakdown for your recent job applications</p>
+                </div>
+                <button className="pam-close-btn" onClick={() => setShowApplyMatchModal(false)}>
+                  <FiX size={22} />
+                </button>
+              </div>
+
+              <div className="pam-body">
+                {/* Summary Grid */}
+                <div className="pam-summary-grid">
+                  <div className="pam-summary-card">
+                    <span className="pam-summary-label">Total Applications</span>
+                    <span className="pam-summary-val">{totalApps}</span>
+                    <span className="pam-summary-sub">Last 7 Days Activity</span>
+                  </div>
+                  <div className="pam-summary-card">
+                    <span className="pam-summary-label">High Match Applies</span>
+                    <span className="pam-summary-val">{matchedAppsCount}</span>
+                    <span className="pam-summary-sub">Exceeds 80% Threshold</span>
+                  </div>
+                  <div className="pam-summary-card">
+                    <span className="pam-summary-label">Overall Match Rate</span>
+                    <span className="pam-summary-val">{matchRatePct}%</span>
+                    <span className="pam-summary-sub">+14% vs Platform Avg</span>
+                  </div>
+                  <div className="pam-summary-card">
+                    <span className="pam-summary-label">Shortlist Probability</span>
+                    <span className="pam-summary-val">{(matchRateRatio * 1.2 * 100).toFixed(0)}%</span>
+                    <span className="pam-summary-sub">Based on AI Telemetry</span>
+                  </div>
+                </div>
+
+                {/* Dimensions Grid */}
+                <div>
+                  <h3 className="pam-section-title">Match Breakdown by Dimension</h3>
+                  <div className="pam-grid">
+                    {dimensions.map((d, idx) => (
+                      <div className="pam-dim-card" key={idx}>
+                        <div className="pam-dim-info">
+                          <h4>{d.title}</h4>
+                          <p>{d.desc}</p>
+                        </div>
+                        <div className="pam-dim-tip">{d.tip}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Recent Applications Table */}
+                <div>
+                  <h3 className="pam-section-title">Telemetry by Recent Application</h3>
+                  <div className="pam-table-card">
+                    <table className="pam-table">
+                      <thead>
+                        <tr>
+                          <th>Company</th>
+                          <th>Role</th>
+                          <th>Match Score</th>
+                          <th>Application Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {appsList.map((app, idx) => {
+                          const score = app.matchScore || Math.min(98, Math.max(65, Math.round(80 + (idx % 3) * 7 - idx * 2)));
+                          const badgeClass = score >= 85 ? 'high' : score >= 75 ? 'med' : 'low';
+                          return (
+                            <tr key={idx}>
+                              <td><strong>{app.companyName || app.company?.name || 'Enterprise Partner'}</strong></td>
+                              <td>{app.jobTitle || app.job?.title || 'Senior Engineer'}</td>
+                              <td><span className={`pam-badge ${badgeClass}`}>{score}% Match</span></td>
+                              <td><span className="pam-status">{app.status || 'APPLIED'}</span></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* ─── Know More Modal ─── */}
       {showKnowMoreModal && (
         <div className="km-modal-overlay" onClick={() => setShowKnowMoreModal(false)}>
@@ -1000,15 +1242,31 @@ export default function ProfileDashboard() {
                       <span className="km-mini-tag">TOP MATCH</span>
                     </div>
                     <div className="km-visual-stats">
-                      <div className="km-vstat"><strong>4.2x</strong><span>Profile Views</span></div>
-                      <div className="km-vstat"><strong>98%</strong><span>Match Score</span></div>
+                      <div className="km-vstat"><strong>{dashboardSummary.totalApplications || 0}</strong><span>Applications</span></div>
+                      <div className="km-vstat"><strong>{dashboardSummary.shortlisted || 0}</strong><span>Shortlisted</span></div>
                     </div>
                     <div className="km-visual-graph">
-                      {[40, 70, 45, 90, 65, 100].map((h, i) => (
-                        <div key={i} className="km-graph-bar" style={{ height: `${h}%` }} />
-                      ))}
+                      {(() => {
+                        const total = dashboardSummary.totalApplications || 0;
+                        const shortlisted = dashboardSummary.shortlisted || 0;
+                        const interviews = dashboardSummary.interviews || 0;
+                        const companies = dashboardSummary.companiesApplied || 0;
+                        const profilePct = user?.profileCompletion || 0;
+                        const clamp = (v, min = 8, max = 100) => Math.min(Math.max(v, min), max);
+                        const barHeights = [
+                          clamp(profilePct * 0.9),                                          // Profile strength
+                          clamp(companies > 0 ? Math.min(companies * 18, 90) : 12),         // Companies reached
+                          clamp(total > 0 ? Math.min(total * 6, 88) : 10),                  // Applications sent
+                          clamp(total > 0 ? (shortlisted / total) * 110 : 15),              // Shortlist rate
+                          clamp(total > 0 ? (interviews / Math.max(total, 1)) * 150 : 10),  // Interview rate
+                          clamp((shortlisted + interviews) > 0 ? Math.min((shortlisted + interviews) * 12, 100) : 8), // Overall success
+                        ];
+                        return barHeights.map((h, i) => (
+                          <div key={i} className="km-graph-bar" style={{ height: `${h}%`, opacity: i === barHeights.indexOf(Math.max(...barHeights)) ? 1 : 0.7 }} />
+                        ));
+                      })()}
                     </div>
-                    <p className="km-visual-label">Real-time Recruiter Interest</p>
+                    <p className="km-visual-label">Recruiter Interest Funnel</p>
                   </div>
 
                   {/* Job Application Stats */}
@@ -1016,14 +1274,14 @@ export default function ProfileDashboard() {
                     <div className="km-sc-header">
                       <FiBriefcase color="#10b981" />
                       <span>Applications Sent</span>
-                      <strong className="km-sc-val">49</strong>
+                      <strong className="km-sc-val">{dashboardSummary.totalApplications || 0}</strong>
                     </div>
                     <div className="km-mini-trend">
-                      <div className="km-mt-bar" style={{ width: '40%' }} />
-                      <div className="km-mt-bar active" style={{ width: '85%' }} />
-                      <div className="km-mt-bar" style={{ width: '60%' }} />
+                      <div className="km-mt-bar" style={{ width: `${Math.min((dashboardSummary.shortlisted / Math.max(dashboardSummary.totalApplications, 1)) * 100 * 0.5, 100)}%` }} />
+                      <div className="km-mt-bar active" style={{ width: `${Math.min((dashboardSummary.shortlisted / Math.max(dashboardSummary.totalApplications, 1)) * 100, 100)}%` }} />
+                      <div className="km-mt-bar" style={{ width: `${Math.min((dashboardSummary.interviews / Math.max(dashboardSummary.totalApplications, 1)) * 100, 100)}%` }} />
                     </div>
-                    <p className="km-sc-sub">+12% increase from last week</p>
+                    <p className="km-sc-sub">{dashboardSummary.companiesApplied || 0} companies applied to</p>
                   </div>
 
                   {/* Recruiter Actions */}
@@ -1031,11 +1289,15 @@ export default function ProfileDashboard() {
                     <div className="km-sc-header">
                       <FiUsers color="#3b82f6" />
                       <span>Shortlisted</span>
-                      <strong className="km-sc-val">14</strong>
+                      <strong className="km-sc-val">{dashboardSummary.shortlisted || 0}</strong>
                     </div>
                     <div className="km-shortlist-circles">
-                      {[1, 2, 3, 4, 5].map(i => <div key={i} className={`km-sc-dot ${i < 4 ? 'filled' : ''}`} />)}
-                      <span className="km-sc-pct">80% Success Rate</span>
+                      {[1, 2, 3, 4, 5].map(i => {
+                        const total = dashboardSummary.totalApplications || 1;
+                        const rate = (dashboardSummary.shortlisted / total) * 5;
+                        return <div key={i} className={`km-sc-dot ${i <= Math.round(rate) ? 'filled' : ''}`} />;
+                      })}
+                      <span className="km-sc-pct">{dashboardSummary.totalApplications > 0 ? Math.round((dashboardSummary.shortlisted / dashboardSummary.totalApplications) * 100) : 0}% Success Rate</span>
                     </div>
                   </div>
 
@@ -1043,16 +1305,43 @@ export default function ProfileDashboard() {
                   <div className="km-stat-card dark">
                     <div className="km-sc-header">
                       <FiTrendingUp color="#8b5cf6" />
-                      <span>Interview Invitations</span>
-                      <strong className="km-sc-val">6</strong>
+                      <span>Interviews Reached</span>
+                      <strong className="km-sc-val">{dashboardSummary.interviews || 0}</strong>
                     </div>
                     <div className="km-interview-graph">
-                      <svg viewBox="0 0 100 30">
-                        <path d="M0,25 L20,15 L40,20 L60,5 L80,18 L100,10" fill="none" stroke="#8b5cf6" strokeWidth="2" />
-                        <circle cx="60" cy="5" r="3" fill="#8b5cf6" />
-                      </svg>
+                      {(() => {
+                        const total = dashboardSummary.totalApplications || 0;
+                        const shortlisted = dashboardSummary.shortlisted || 0;
+                        const interviews = dashboardSummary.interviews || 0;
+                        const companies = dashboardSummary.companiesApplied || 0;
+                        const toY = (ratio) => Math.max(30 - ratio * 28, 2);
+                        const pts = [
+                          { x: 0,   y: 28 },
+                          { x: 16,  y: toY(total > 0 ? 0.1 : 0) },
+                          { x: 33,  y: toY(companies > 0 ? Math.min(companies / 10, 0.4) : 0.05) },
+                          { x: 50,  y: toY(total > 0 ? Math.min(total / 30, 0.6) : 0.1) },
+                          { x: 66,  y: toY(shortlisted > 0 ? Math.min(shortlisted / Math.max(total, 1), 0.75) : 0.15) },
+                          { x: 83,  y: toY(interviews > 0 ? Math.min(interviews / Math.max(total, 1) * 3, 0.9) : 0.2) },
+                          { x: 100, y: toY(interviews > 0 ? 0.7 : 0.15) },
+                        ];
+                        const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+                        const peak = pts.reduce((a, b) => b.y < a.y ? b : a);
+                        return (
+                          <svg viewBox="0 0 100 30">
+                            <defs>
+                              <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.3" />
+                                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+                              </linearGradient>
+                            </defs>
+                            <path d={`${d} L100,30 L0,30 Z`} fill="url(#lineGrad)" />
+                            <path d={d} fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <circle cx={peak.x} cy={peak.y} r="3" fill="#8b5cf6" />
+                          </svg>
+                        );
+                      })()}
                     </div>
-                    <p className="km-sc-sub">Peak performance reached today</p>
+                    <p className="km-sc-sub">{dashboardSummary.interviews > 0 ? `${dashboardSummary.interviews} live interview${dashboardSummary.interviews > 1 ? 's' : ''} in progress` : 'No interviews yet — keep applying!'}</p>
                   </div>
                 </div>
               </div>

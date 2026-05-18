@@ -46,6 +46,42 @@ const authService = {
     } catch (error) {
       throw error.response?.data || { message: 'Image upload failed' };
     }
+  },
+
+  getDashboard: async () => {
+    try {
+      const response = await api.get('/candidate/dashboard');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to fetch dashboard data' };
+    }
+  },
+
+  getJobs: async (params) => {
+    try {
+      const response = await api.get('/candidate/jobs', { params });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to fetch jobs' };
+    }
+  },
+
+  getJobDetail: async (jobId) => {
+    try {
+      const response = await api.get(`/candidate/jobs/${jobId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to fetch job details' };
+    }
+  },
+
+  createApplication: async (applicationData) => {
+    try {
+      const response = await api.post('/candidate/applications', applicationData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Application failed' };
+    }
   }
 };
 
